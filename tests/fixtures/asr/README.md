@@ -3,7 +3,7 @@
 `jfk.wav` is the 11-second excerpt of President John F. Kennedy's official US
 government inaugural address, 20 January 1961. The speech is a US government
 work, public domain in the United States. It is included in upstream whisper.cpp
-as its standard speech-recognition sample. Eagle did not record or synthesize it.
+as its standard speech-recognition sample. Onda did not record or synthesize it.
 
 - Original speech/transcript: [JFK Presidential Library](https://www.jfklibrary.org/archives/other-resources/john-f-kennedy-speeches/inaugural-address-19610120).
 - Fixture provenance: [whisper.cpp sample at the commit that last changed this asset](https://github.com/ggml-org/whisper.cpp/blob/b0a11594aec50892a02cd8d129eee2dfe93a8bb8/samples/jfk.wav).

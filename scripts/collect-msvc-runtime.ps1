@@ -124,7 +124,7 @@ function Copy-VulkanHeaderEvidence {
     $includeDirectory = Join-Path $SdkDirectory 'Include'
     if (-not (Test-Path -LiteralPath (Join-Path $includeDirectory 'vulkan/vulkan.h'))) { throw 'The selected Vulkan SDK header root is missing.' }
     $notices = [System.Collections.Generic.List[string]]::new()
-    $notices.Add('Vulkan headers used by Eagle optional acceleration; SDK compiler/tools are not redistributed.')
+    $notices.Add('Vulkan headers used by Onda optional acceleration; SDK compiler/tools are not redistributed.')
     $notices.Add('Per-file copyright and SPDX notices follow from the actual installed header bytes. Apache-2.0 OR MIT files may be used under Apache-2.0; the complete Apache text accompanies this notice.')
     foreach ($directory in @('vulkan', 'vk_video')) {
         $sourceDirectory = Join-Path $includeDirectory $directory
@@ -213,8 +213,8 @@ if ($WithVulkan) {
 }
 
 if ($ExecutablePaths.Count -eq 0) {
-    $binaryNames = @('eagle.exe', 'eagle-input.exe', 'eagle-asr-worker.exe')
-    if ($WithVulkan) { $binaryNames += 'eagle-asr-vulkan-worker.exe' }
+    $binaryNames = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe')
+    if ($WithVulkan) { $binaryNames += 'onda-asr-vulkan-worker.exe' }
     $ExecutablePaths = @($binaryNames | ForEach-Object { Join-Path $repositoryDirectory "target/release/$_" } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
 }
 if ($ExecutablePaths.Count -eq 0) { throw 'Build the real release workers before collecting their runtime dependency closure.' }
@@ -228,7 +228,7 @@ $manifest = [ordered]@{
     license = 'Microsoft Visual Studio / Visual C++ Runtime software license terms; not Apache-2.0'
     redistributionReference = $redistributionReference
     publisherEligibility = 'Redistribution requires applicable valid Visual Studio licensing; installed Build Tools alone does not prove publisher eligibility.'
-    servicing = 'App-local DLLs must be updated and redistributed by the Eagle publisher.'
+    servicing = 'App-local DLLs must be updated and redistributed by the Onda publisher.'
     files = $files.ToArray()
     inspectedImports = $inspections
 }

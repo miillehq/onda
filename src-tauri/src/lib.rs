@@ -3,7 +3,7 @@ pub mod api;
 mod errors;
 mod pill;
 mod runtime;
-use eagle_core::{
+use onda_core::{
     contracts::ThemePreference,
     error::{AppError, AppResult, ErrorCode},
 };
@@ -30,7 +30,7 @@ struct LogGuard(Mutex<Option<tracing_appender::non_blocking::WorkerGuard>>);
 
 /// Production builds never honor the isolated desktop-test profile.
 fn debug_smoke_directory() -> Option<PathBuf> {
-    debug_directory("EAGLE_SMOKE_DIRECTORY")
+    debug_directory("ONDA_SMOKE_DIRECTORY")
 }
 
 /// Debug-only interactive profile: its own data folder, with no global shortcut hook,
@@ -73,7 +73,7 @@ fn is_dark(theme: ThemePreference) -> bool {
     match theme {
         ThemePreference::Dark => true,
         ThemePreference::Light => false,
-        ThemePreference::System => !eagle_platform::apps_use_light_theme(),
+        ThemePreference::System => !onda_platform::apps_use_light_theme(),
     }
 }
 
@@ -101,7 +101,7 @@ pub(crate) fn apply_theme(app: &tauri::AppHandle, theme: ThemePreference) {
     let _ = window.set_background_color(Some(chrome_color(dark)));
     let (caption, text) = if dark { DARK_CHROME } else { LIGHT_CHROME };
     if let Ok(hwnd) = window.hwnd() {
-        eagle_platform::set_caption_colors(hwnd.0 as isize, caption, text);
+        onda_platform::set_caption_colors(hwnd.0 as isize, caption, text);
     }
 }
 
@@ -121,7 +121,7 @@ pub(crate) fn apply_launch_at_login(enabled: bool) -> AppResult<()> {
     } else {
         None
     };
-    eagle_platform::set_launch_at_login(eagle_core::APP_NAME, command.as_deref()).map_err(|_| {
+    onda_platform::set_launch_at_login(onda_core::APP_NAME, command.as_deref()).map_err(|_| {
         AppError::new(
             ErrorCode::Internal,
             "Windows didn't allow changing the startup setting.",
@@ -150,7 +150,7 @@ fn resolve_data_directory(app: &tauri::App) -> tauri::Result<PathBuf> {
 
 fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
     // The flat mark below 32 px, following the brand guide; white on dark taskbars.
-    let bytes: &'static [u8] = if eagle_platform::system_uses_light_theme() {
+    let bytes: &'static [u8] = if onda_platform::system_uses_light_theme() {
         include_bytes!("../icons/tray-light.png")
     } else {
         include_bytes!("../icons/tray-dark.png")
@@ -159,7 +159,7 @@ fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
 }
 
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    eagle_platform::harden_dll_search()?;
+    onda_platform::harden_dll_search()?;
     let smoke_directory = debug_smoke_directory();
     let data_directory = match smoke_directory.clone().or_else(debug_dev_profile) {
         Some(directory) => directory,
@@ -206,7 +206,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .or_else(debug_dev_profile)
         .map(|directory| directory.join("EBWebView"));
     let mut window = tauri::WebviewWindowBuilder::from_config(app, &window_configuration)?
-        .title(eagle_core::APP_NAME)
+        .title(onda_core::APP_NAME)
         .theme(window_theme(settings.theme))
         .background_color(chrome_color(is_dark(settings.theme)));
     if let Some(directory) = webview_data.clone() {
@@ -218,9 +218,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if smoke_directory.is_some() {
         window = window
             .visible(false)
-            .initialization_script("window.__EAGLE_SMOKE__ = true;");
-        if std::env::var("EAGLE_SMOKE_REPLAY").as_deref() == Ok("1") {
-            window = window.initialization_script("window.__EAGLE_REPLAY__ = true;");
+            .initialization_script("window.__ONDA_SMOKE__ = true;");
+        if std::env::var("ONDA_SMOKE_REPLAY").as_deref() == Ok("1") {
+            window = window.initialization_script("window.__ONDA_REPLAY__ = true;");
         }
     }
     window.build()?;
@@ -234,7 +234,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         pill_window = pill_window.data_directory(directory);
     }
     pill_window
-        .title(format!("{} dictation", eagle_core::APP_NAME))
+        .title(format!("{} dictation", onda_core::APP_NAME))
         .inner_size(pill::WIDTH, pill::HEIGHT)
         .decorations(false)
         .transparent(true)
@@ -261,7 +261,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let open = MenuItem::with_id(
         app,
         "open",
-        format!("Open {}", eagle_core::APP_NAME),
+        format!("Open {}", onda_core::APP_NAME),
         true,
         None::<&str>,
     )?;
@@ -269,14 +269,14 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let quit = MenuItem::with_id(
         app,
         "quit",
-        format!("Quit {}", eagle_core::APP_NAME),
+        format!("Quit {}", onda_core::APP_NAME),
         true,
         None::<&str>,
     )?;
     let menu = Menu::with_items(app, &[&open, &cancel, &quit])?;
     TrayIconBuilder::with_id("main")
         .icon(tray_icon()?)
-        .tooltip(format!("{} · Ready", eagle_core::APP_NAME))
+        .tooltip(format!("{} · Ready", onda_core::APP_NAME))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -305,7 +305,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .build(app)?;
     tracing::info!(
         subsystem = "application",
-        version = eagle_core::APP_VERSION,
+        version = onda_core::APP_VERSION,
         "application started"
     );
     Ok(())
@@ -370,11 +370,11 @@ pub fn run() {
                 ErrorCode::Internal,
                 format!(
                     "{} could not start. Reinstall the complete application with its helper executables.",
-                    eagle_core::APP_NAME
+                    onda_core::APP_NAME
                 ),
                 false,
             );
-            eagle_platform::show_startup_error(&error.message);
+            onda_platform::show_startup_error(&error.message);
         }
     }
 }

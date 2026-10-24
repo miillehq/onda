@@ -8,7 +8,7 @@ Speech models take spelling hints, not pronunciations: vocabulary only nudges Wh
 
 ## Deterministic correction
 
-`eagle-core/src/dictionary.rs` compiles enabled triggers into Aho–Corasick indexes. Matching uses NFKC normalization, Unicode lowercase, and collapsed non-linebreak whitespace while mapping every normalized byte back to its complete source grapheme. Emitted spelling always comes from the configured expansion.
+`onda-core/src/dictionary.rs` compiles enabled triggers into Aho–Corasick indexes. Matching uses NFKC normalization, Unicode lowercase, and collapsed non-linebreak whitespace while mapping every normalized byte back to its complete source grapheme. Emitted spelling always comes from the configured expansion.
 
 A match must consume complete graphemes. A partial normalized `f` match cannot consume a source `ﬃ` ligature, and a partial `i` match cannot consume `İ`. Combining marks remain part of word boundaries, preventing a `café` trigger from changing `caféteria`. Latin/alphanumeric/underscore word boundaries prevent substring corruption. CJK and Hangul matching also supports scripts without whitespace and decomposed Hangul.
 
@@ -32,7 +32,7 @@ Index construction uses hash-based output deduplication rather than repeatedly s
 
 ## Enhancement preservation
 
-`eagle-core/src/text.rs` rejects empty/oversized/NUL output, excessive cleanup expansion or contraction, changed protected-token multisets, model refusal prefixes, added headings/bold/fences in ordinary cleanup, and loss of explicitly present dictionary terms. Terms use word boundaries rather than arbitrary substring search. URL-ending punctuation is preserved exactly because it may be part of real path/query data; an ambiguous punctuation edit falls back to local text.
+`onda-core/src/text.rs` rejects empty/oversized/NUL output, excessive cleanup expansion or contraction, changed protected-token multisets, model refusal prefixes, added headings/bold/fences in ordinary cleanup, and loss of explicitly present dictionary terms. Terms use word boundaries rather than arbitrary substring search. URL-ending punctuation is preserved exactly because it may be part of real path/query data; an ambiguous punctuation edit falls back to local text.
 
 The prompt treats source, context, and dictionary spellings as untrusted string data. JSON encoding prevents a term from closing application-created delimiters. Relevant spellings are capped at 32 and 8 KiB of JSON; valid large candidate sets retain a fitting prefix. Explicit word self-corrections and bullet formatting can pass; removal of a numerical value still fails the conservative protected-token gate, including an ambiguous numeric self-correction. These checks provide useful mechanical preservation gates, not a semantic proof that every model edit preserves intent. The runtime must preserve local text on any enhancement failure.
 
@@ -44,6 +44,6 @@ The Windows runtime additionally owns focus/password/scope checks and observatio
 
 ## Tests and measured performance
 
-`cargo test -p eagle-core` exercises Unicode compatibility expansion, combining marks, Hangul, boundaries, longest-match behavior, no cascading, protected spans, alias retrieval beyond common posting limits, canonical deduplication/star status, common-word filtering, prompt injection quoting, numeric/URL preservation, and conservative learning. Existing SQLite restart/import/migration and state-machine tests run in the same suite.
+`cargo test -p onda-core` exercises Unicode compatibility expansion, combining marks, Hangul, boundaries, longest-match behavior, no cascading, protected spans, alias retrieval beyond common posting limits, canonical deduplication/star status, common-word filtering, prompt injection quoting, numeric/URL preservation, and conservative learning. Existing SQLite restart/import/migration and state-machine tests run in the same suite.
 
-`cargo run -p eagle-core --bin eagle-quality` runs the committed deterministic quality corpus and a 10,000-term retrieval workload. On this Windows development machine (Intel Core i5-14400F, 10 cores/16 logical processors), a **debug** run on 2026-10-03 reported **796.8 ms index construction** and **0.0475 ms mean exact candidate retrieval** over 1,000 iterations. The timing excludes compilation, uses synthetic dictionary entries, and is not a speech-recognition accuracy, cloud latency, or production-hardware claim. Re-run the harness for release measurements and representative device/corpus distributions.
+`cargo run -p onda-core --bin onda-quality` runs the committed deterministic quality corpus and a 10,000-term retrieval workload. On this Windows development machine (Intel Core i5-14400F, 10 cores/16 logical processors), a **debug** run on 2026-10-03 reported **796.8 ms index construction** and **0.0475 ms mean exact candidate retrieval** over 1,000 iterations. The timing excludes compilation, uses synthetic dictionary entries, and is not a speech-recognition accuracy, cloud latency, or production-hardware claim. Re-run the harness for release measurements and representative device/corpus distributions.

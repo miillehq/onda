@@ -1,11 +1,11 @@
 # Product behavior
 
-Eagle operates from the tray. Closing the main diagnostics window hides it; quitting cancels work and releases native handles. A second launch opens the existing window rather than registering another hook. Branding's canonical desktop identity is `src-tauri/tauri.conf.json`; the core build reads its product name/identifier and verifies its version matches Cargo.
+Onda operates from the tray. Closing the main diagnostics window hides it; quitting cancels work and releases native handles. A second launch opens the existing window rather than registering another hook. Branding's canonical desktop identity is `src-tauri/tauri.conf.json`; the core build reads its product name/identifier and verifies its version matches Cargo.
 
 ## Default dictation
 
 1. Focus a supported editable control and hold Ctrl + Win + Space.
-2. Eagle snapshots the exact target, starts the selected/default microphone and records locally. Maximum duration is 180 seconds by default, configurable up to 600.
+2. Onda snapshots the exact target, starts the selected/default microphone and records locally. Maximum duration is 180 seconds by default, configurable up to 600.
 3. Release the shortcut. Recording is finalized and local ASR runs using the chosen profile and language.
 4. Conservative local whitespace/filler normalization, exact vocabulary/replacements and snippets produce usable text. Meaningful repetition stays intact; protected URL/email/number/code spans are preserved.
 5. If text enhancement was explicitly enabled, send transcript and permitted bounded context through the active ChatGPT profile. Invalid output, quota, loss of connection and timeout fall back to local text.
@@ -35,7 +35,7 @@ Ctrl + Alt + C records an editing instruction and applies its local transcript t
 
 A failed cloud transformation can retry its frozen instruction/model policy while preserving its original. Preview retries remain previews; selection retries revalidate the original selection after a minimum three-second focus-return opportunity. Completed inserted transforms require a new user selection to avoid duplicate writes.
 
-The result includes original/output and a linear Unicode-safe prefix/suffix diff. Copy intentionally changes the clipboard because the user requested it. Retry paste and Undo give three seconds to return focus to the original control, then revalidate. Undo selects a uniquely identifiable inserted range only if the bounded post-paste document is unchanged. Duplicated text, intervening edits or inaccessible controls refuse undo. Eagle does not issue blind Ctrl+Z.
+The result includes original/output and a linear Unicode-safe prefix/suffix diff. Copy intentionally changes the clipboard because the user requested it. Retry paste and Undo give three seconds to return focus to the original control, then revalidate. Undo selects a uniquely identifiable inserted range only if the bounded post-paste document is unchanged. Duplicated text, intervening edits or inaccessible controls refuse undo. Onda does not issue blind Ctrl+Z.
 
 ## Privacy and failures
 

@@ -1,6 +1,6 @@
-param([Parameter(Mandatory=$true)][string]$Path, [string]$CertificateThumbprint=$env:EAGLE_WINDOWS_CERT_THUMBPRINT)
+param([Parameter(Mandatory=$true)][string]$Path, [string]$CertificateThumbprint=$env:ONDA_WINDOWS_CERT_THUMBPRINT)
 $ErrorActionPreference='Stop'
-if ($CertificateThumbprint -notmatch '^[0-9a-fA-F]{40}$') { throw 'Set EAGLE_WINDOWS_CERT_THUMBPRINT to a valid publisher certificate thumbprint in the Windows certificate store.' }
+if ($CertificateThumbprint -notmatch '^[0-9a-fA-F]{40}$') { throw 'Set ONDA_WINDOWS_CERT_THUMBPRINT to a valid publisher certificate thumbprint in the Windows certificate store.' }
 $signedPath=(Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
 $sdkDirectory=Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
 $signTool=Get-ChildItem -LiteralPath $sdkDirectory -Directory | Sort-Object Name -Descending | ForEach-Object { Join-Path $_.FullName 'x64/signtool.exe' } | Where-Object {Test-Path -LiteralPath $_ -PathType Leaf} | Select-Object -First 1

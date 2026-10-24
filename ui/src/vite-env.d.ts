@@ -1,3 +1,3 @@
 /// <reference types="vite/client" />
 
-interface Window { __EAGLE_SMOKE__?: boolean; __EAGLE_REPLAY__?:boolean; }
+interface Window { __ONDA_SMOKE__?: boolean; __ONDA_REPLAY__?:boolean; }

@@ -42,11 +42,11 @@ try {
         $inventory.Add([ordered]@{ name = $package.name; version = $package.version; license = 'MPL-2.0'; source = $package.source })
     }
     $readme = @'
-Corresponding MPL dependency source for Eagle
+Corresponding MPL dependency source for Onda
 
 These directories contain unmodified package sources from the exact Cargo.lock revisions.
 They remain available under the Mozilla Public License 2.0; see each package's notices/license.
-Eagle's own separate source files are licensed Apache-2.0. This ZIP supplies the MPL source
+Onda's own separate source files are licensed Apache-2.0. This ZIP supplies the MPL source
 associated with the distributed runtime/build dependencies and must remain available to recipients.
 '@
     [System.IO.File]::WriteAllText((Join-Path $stagingDirectory 'README.txt'), $readme, [System.Text.UTF8Encoding]::new($false))

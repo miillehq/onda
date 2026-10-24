@@ -1,8 +1,8 @@
 //! OS and remote diagnostics are mapped to content-free UI errors.
-use eagle_core::error::{AppError, ErrorCode};
+use onda_core::error::{AppError, ErrorCode};
 
-pub fn platform(error: eagle_platform::PlatformError) -> AppError {
-    use eagle_platform::PlatformError as E;
+pub fn platform(error: onda_platform::PlatformError) -> AppError {
+    use onda_platform::PlatformError as E;
     // Fixed phrases, HRESULT numbers or clipboard format numbers only; never text.
     match &error {
         E::TargetUnavailable(detail) => {
@@ -40,8 +40,8 @@ pub fn platform(error: eagle_platform::PlatformError) -> AppError {
 }
 
 /// Describes driver failure categories without exposing device/backend diagnostic strings.
-fn audio_backend(kind: eagle_platform::AudioBackendFailure) -> AppError {
-    use eagle_platform::AudioBackendFailure as E;
+fn audio_backend(kind: onda_platform::AudioBackendFailure) -> AppError {
+    use onda_platform::AudioBackendFailure as E;
     let message = match kind {
         E::DeviceBusy => "The microphone is busy. Close apps using it exclusively and retry.",
         E::HostUnavailable => "Windows audio is unavailable. Check the audio service and retry.",
@@ -52,8 +52,8 @@ fn audio_backend(kind: eagle_platform::AudioBackendFailure) -> AppError {
     AppError::new(ErrorCode::AudioBackend, message, true)
 }
 
-pub fn asr(error: eagle_asr::AsrError) -> AppError {
-    use eagle_asr::AsrError as E;
+pub fn asr(error: onda_asr::AsrError) -> AppError {
+    use onda_asr::AsrError as E;
     let (code, message) = match error {
         E::Cancelled => (ErrorCode::Cancelled, "Local transcription was cancelled."),
         E::Busy | E::DownloadBusy => (
@@ -92,8 +92,8 @@ pub fn asr(error: eagle_asr::AsrError) -> AppError {
     AppError::new(code, message, true)
 }
 
-pub fn cloud(error: eagle_cloud::CloudError) -> AppError {
-    use eagle_cloud::CloudError as E;
+pub fn cloud(error: onda_cloud::CloudError) -> AppError {
+    use onda_cloud::CloudError as E;
     if !matches!(error, E::Cancelled) {
         // API error codes and parameter names identify the cause; bodies are never logged.
         let (status, code, parameter) = match &error {
@@ -149,7 +149,7 @@ mod audio_error_tests {
 
     #[test]
     fn audio_failure_categories_have_distinct_actionable_errors() {
-        use eagle_platform::{AudioBackendFailure, PlatformError};
+        use onda_platform::{AudioBackendFailure, PlatformError};
         for (failure, expected_code, recovery_hint) in [
             (
                 PlatformError::EmptySelection,

@@ -4,10 +4,10 @@ Checked against official OpenAI documentation on **2026-10-03**. This implementa
 
 ## Native API
 
-`eagle-cloud` owns authorization, credentials, account selection, model discovery, and streamed text inference. The Tauri layer may serialize only its public account/model/result/error types. `ChatGptService` and `PendingSignIn` deliberately implement neither `Serialize` nor `Debug`.
+`onda-cloud` owns authorization, credentials, account selection, model discovery, and streamed text inference. The Tauri layer may serialize only its public account/model/result/error types. `ChatGptService` and `PendingSignIn` deliberately implement neither `Serialize` nor `Debug`.
 
 ```rust
-use eagle_cloud::{ChatGptService, CloudConfig, CancellationToken, ResponseRequest};
+use onda_cloud::{ChatGptService, CloudConfig, CancellationToken, ResponseRequest};
 
 let service = ChatGptService::new(CloudConfig {
     data_directory: absolute_application_data_directory.join("chatgpt"),
@@ -48,6 +48,6 @@ The SSE decoder accepts UTF-8 split across arbitrary chunks, LF/CRLF/CR, multili
 
 ## Verification and release checks
 
-`cargo test -p eagle-cloud` covers protected storage, callback attacks, JWT signature/claims/nonce, permission-only identities, account mismatch, registration reuse, account models, actual mocked HTTP/SSE inference, sign-out, concurrent rotating refresh, and crash recovery. Tests use a generated test-only RSA key and a loopback fixture. Production code exposes no network endpoint override and refuses redirects; fixture endpoint validation exists only under `cfg(test)`.
+`cargo test -p onda-cloud` covers protected storage, callback attacks, JWT signature/claims/nonce, permission-only identities, account mismatch, registration reuse, account models, actual mocked HTTP/SSE inference, sign-out, concurrent rotating refresh, and crash recovery. Tests use a generated test-only RSA key and a loopback fixture. Production code exposes no network endpoint override and refuses redirects; fixture endpoint validation exists only under `cfg(test)`.
 
 Release validation still requires a human to complete real browser consent with an eligible account, verify live account-specific models, perform inference, switch workspace registrations, and disconnect/reconnect through ChatGPT settings. Mocked tests cannot establish live entitlement, serving-region policy, or account limits.

@@ -1,6 +1,6 @@
 # Security and privacy model
 
-Eagle handles microphone audio, transcripts, selected text and optional account credentials as sensitive data. The trusted components are the Rust application/domain services, the packaged shortcut/ASR workers, Windows audio/accessibility/clipboard APIs, and explicitly enabled OpenAI endpoints. The WebView is a view/controller and must be treated as a less-trusted boundary. This document describes implemented controls, not a claim of third-party certification.
+Onda handles microphone audio, transcripts, selected text and optional account credentials as sensitive data. The trusted components are the Rust application/domain services, the packaged shortcut/ASR workers, Windows audio/accessibility/clipboard APIs, and explicitly enabled OpenAI endpoints. The WebView is a view/controller and must be treated as a less-trusted boundary. This document describes implemented controls, not a claim of third-party certification.
 
 ## Data flows and retention
 

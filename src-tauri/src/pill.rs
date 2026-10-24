@@ -3,8 +3,8 @@
 //! user is dictating into, so visibility bypasses tao (whose show() activates after
 //! creation): the window is created visible and unfocusable, hidden natively at once,
 //! and from then on shown and hidden only with non-activating Win32 calls.
-use eagle_core::contracts::{OperationMode, OperationState, Phase};
-use eagle_platform::Cue;
+use onda_core::contracts::{OperationMode, OperationState, Phase};
+use onda_platform::Cue;
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -67,7 +67,7 @@ impl Pill {
 
     fn cue(&self, cue: Cue) {
         if self.sounds.load(Ordering::Acquire) {
-            eagle_platform::play_cue(cue);
+            onda_platform::play_cue(cue);
         }
     }
 
@@ -164,7 +164,7 @@ impl Pill {
         }
         let _ = window.set_ignore_cursor_events(true);
         if let Ok(hwnd) = window.hwnd() {
-            eagle_platform::show_without_activation(hwnd.0 as isize);
+            onda_platform::show_without_activation(hwnd.0 as isize);
         }
     }
 
@@ -190,6 +190,6 @@ impl Pill {
 /// style updates from re-hiding or activating it.
 pub fn hide(app: &AppHandle) {
     if let Some(Ok(hwnd)) = app.get_webview_window(LABEL).map(|window| window.hwnd()) {
-        eagle_platform::hide_window(hwnd.0 as isize);
+        onda_platform::hide_window(hwnd.0 as isize);
     }
 }

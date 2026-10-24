@@ -38,7 +38,7 @@ impl Runtime {
                 {
                     return Err(AppError::invalid("Smoke report was invalid."));
                 }
-                let report=serde_json::to_vec_pretty(&serde_json::json!({"passed":passed,"checks":checks,"version":eagle_core::APP_VERSION})).map_err(|_|AppError::storage())?;
+                let report=serde_json::to_vec_pretty(&serde_json::json!({"passed":passed,"checks":checks,"version":onda_core::APP_VERSION})).map_err(|_|AppError::storage())?;
                 std::fs::write(directory.join("report.json"), report)
                     .map_err(|_| AppError::storage())?;
                 self.app.exit(if passed { 0 } else { 1 });
@@ -199,7 +199,7 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::GetModelCatalog => Ok(O::ModelCatalog(
-                eagle_asr::builtin_models()
+                onda_asr::builtin_models()
                     .iter()
                     .map(|model| ModelInfo {
                         id: model.id.into(),
@@ -335,7 +335,7 @@ impl Runtime {
                     .map(|result| result.result.clone())
                     .ok_or_else(|| AppError::invalid("No result is available to copy."))?;
                 let text = saved.output.clone();
-                tokio::task::spawn_blocking(move || eagle_platform::copy_text_to_clipboard(&text))
+                tokio::task::spawn_blocking(move || onda_platform::copy_text_to_clipboard(&text))
                     .await
                     .map_err(|_| AppError::new(ErrorCode::Internal, "Copy worker stopped.", true))?
                     .map_err(errors::platform)?;
@@ -376,7 +376,7 @@ impl Runtime {
             }
             R::ExportDiagnostics => Ok(O::Text(self.diagnostics()?)),
             R::GetUsage => Ok(O::Usage(UsageReport {
-                today: eagle_platform::local_date(),
+                today: onda_platform::local_date(),
                 days: lock(&self.store)?.daily_usage(MAX_REPORTED_USAGE_DAYS)?,
             })),
             R::OpenMainWindow { section } => {
@@ -409,12 +409,10 @@ impl Runtime {
                     .map(|entry| entry.output.clone())
                     .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
                 let copied = text.clone();
-                tokio::task::spawn_blocking(move || {
-                    eagle_platform::copy_text_to_clipboard(&copied)
-                })
-                .await
-                .map_err(|_| AppError::new(ErrorCode::Internal, "Copy worker stopped.", true))?
-                .map_err(errors::platform)?;
+                tokio::task::spawn_blocking(move || onda_platform::copy_text_to_clipboard(&copied))
+                    .await
+                    .map_err(|_| AppError::new(ErrorCode::Internal, "Copy worker stopped.", true))?
+                    .map_err(errors::platform)?;
                 if let Some(current) = lock(&self.result)?.as_mut() {
                     if current.result.operation_id == id && current.result.output == text {
                         current.copied = true;
@@ -494,8 +492,8 @@ impl Runtime {
             .ok()
             .map(|model| model.id.to_owned());
         Ok(Snapshot {
-            app_name: eagle_core::APP_NAME.into(),
-            version: eagle_core::APP_VERSION.into(),
+            app_name: onda_core::APP_NAME.into(),
+            version: onda_core::APP_VERSION.into(),
             contract_version: CONTRACT_VERSION,
             state: lock(&self.state)?.snapshot(),
             settings,
@@ -542,7 +540,7 @@ impl Runtime {
             directml_library_present: hardware.directml_library_present,
             vulkan_worker_installed: self
                 .worker_directory
-                .join("eagle-asr-vulkan-worker.exe")
+                .join("onda-asr-vulkan-worker.exe")
                 .is_file(),
         }
     }
@@ -693,7 +691,7 @@ impl Runtime {
     }
 
     fn start_download(self: &Arc<Self>, id: String) -> AppResult<()> {
-        if !eagle_asr::builtin_models()
+        if !onda_asr::builtin_models()
             .iter()
             .any(|model| model.id == id)
         {
@@ -720,9 +718,9 @@ impl Runtime {
                     progress_service.event(RuntimeEvent::DownloadProgress(DownloadReport {
                         model_id: progress.model_id,
                         stage: match progress.stage {
-                            eagle_asr::DownloadStage::Downloading => "downloading",
-                            eagle_asr::DownloadStage::Verifying => "verifying",
-                            eagle_asr::DownloadStage::Installed => "installed",
+                            onda_asr::DownloadStage::Downloading => "downloading",
+                            onda_asr::DownloadStage::Verifying => "verifying",
+                            onda_asr::DownloadStage::Installed => "installed",
                         }
                         .into(),
                         completed_bytes: progress.completed_bytes as f64,
@@ -766,7 +764,7 @@ impl Runtime {
             let result = if reconsent {
                 match profile_id {
                     Some(id) => cloud.enable_plan_usage(id, cancellation).await,
-                    None => Err(eagle_cloud::CloudError::UnknownProfile),
+                    None => Err(onda_cloud::CloudError::UnknownProfile),
                 }
             } else {
                 cloud.sign_in(profile_id, cancellation).await
@@ -794,7 +792,7 @@ impl Runtime {
         source: String,
         transform_id: String,
     ) -> AppResult<OperationResult> {
-        eagle_core::text::validate_source(&source, None)?;
+        onda_core::text::validate_source(&source, None)?;
         let transform = lock(&self.store)?
             .transforms()?
             .into_iter()
@@ -830,7 +828,7 @@ impl Runtime {
             output: source.clone(),
             inserted: false,
             fallback_used: false,
-            diff: eagle_core::transforms::diff(&source, &source),
+            diff: onda_core::transforms::diff(&source, &source),
         };
         {
             let state = lock(&self.state)?;
@@ -848,7 +846,7 @@ impl Runtime {
                 target: None,
                 selection: None,
                 after_document: None,
-                shortcut: eagle_platform::PasteShortcut::ControlV,
+                shortcut: onda_platform::PasteShortcut::ControlV,
             });
         }
         self.emit_state();
@@ -871,7 +869,7 @@ impl Runtime {
                 )
                 .await?;
             if transform.preserve_protected_tokens {
-                eagle_core::text::validate_enhancement(&source, &output, &[], false)?;
+                onda_core::text::validate_enhancement(&source, &output, &[], false)?;
             }
             let result = OperationResult {
                 command_text: None,
@@ -880,7 +878,7 @@ impl Runtime {
                 output: output.clone(),
                 inserted: false,
                 fallback_used: false,
-                diff: eagle_core::transforms::diff(&source, &output),
+                diff: onda_core::transforms::diff(&source, &output),
             };
             {
                 let mut state = lock(&self.state)?;
@@ -901,7 +899,7 @@ impl Runtime {
                     target: None,
                     selection: None,
                     after_document: None,
-                    shortcut: eagle_platform::PasteShortcut::ControlV,
+                    shortcut: onda_platform::PasteShortcut::ControlV,
                 });
                 state.transition(&id, Phase::Completed)?;
                 self.domain(AppEvent::ResultReady(result.clone()));
@@ -980,12 +978,7 @@ impl Runtime {
                 )
                 .await?;
             if retry.preserve_tokens {
-                eagle_core::text::validate_enhancement(
-                    &saved.result.original,
-                    &output,
-                    &[],
-                    false,
-                )?;
+                onda_core::text::validate_enhancement(&saved.result.original, &output, &[], false)?;
             }
             self.save_result(&active, &saved.result.original, &output, false, false, None)?;
             if saved.target.is_some() {
@@ -1037,7 +1030,7 @@ impl Runtime {
                 ));
             }
             let window = tokio::task::spawn_blocking(
-                eagle_platform::debug_fixture::OwnedEditWindow::create,
+                onda_platform::debug_fixture::OwnedEditWindow::create,
             )
             .await
             .map_err(|_| {
@@ -1120,7 +1113,7 @@ impl Runtime {
 
     fn diagnostics(&self) -> AppResult<String> {
         let settings = lock(&self.store)?.settings()?;
-        let payload = serde_json::json!({"app":eagle_core::APP_NAME,"version":eagle_core::APP_VERSION,"contractVersion":CONTRACT_VERSION,"hardware":self.hardware_report(),"preferences":{"executionPreference":settings.execution_preference,"qualityProfile":settings.quality_profile,"contextEnabled":settings.context_enabled,"enhancementEnabled":settings.enhancement_enabled,"learningEnabled":settings.learning_enabled},"shortcutStatus":lock(&self.shortcut_status)?.clone(),"operationError":lock(&self.state)?.snapshot().error,"metrics":lock(&self.metrics)?.iter().cloned().collect::<Vec<_>>()});
+        let payload = serde_json::json!({"app":onda_core::APP_NAME,"version":onda_core::APP_VERSION,"contractVersion":CONTRACT_VERSION,"hardware":self.hardware_report(),"preferences":{"executionPreference":settings.execution_preference,"qualityProfile":settings.quality_profile,"contextEnabled":settings.context_enabled,"enhancementEnabled":settings.enhancement_enabled,"learningEnabled":settings.learning_enabled},"shortcutStatus":lock(&self.shortcut_status)?.clone(),"operationError":lock(&self.state)?.snapshot().error,"metrics":lock(&self.metrics)?.iter().cloned().collect::<Vec<_>>()});
         serde_json::to_string_pretty(&payload).map_err(|_| {
             AppError::new(
                 ErrorCode::Internal,
@@ -1132,10 +1125,10 @@ impl Runtime {
 
     fn updater(&self) -> AppResult<tauri_plugin_updater::Updater> {
         use tauri_plugin_updater::UpdaterExt;
-        let endpoint = option_env!("EAGLE_UPDATE_ENDPOINT").ok_or_else(|| {
+        let endpoint = option_env!("ONDA_UPDATE_ENDPOINT").ok_or_else(|| {
             AppError::invalid("This build has no signed update channel configured.")
         })?;
-        let key = option_env!("EAGLE_UPDATE_PUBLIC_KEY").ok_or_else(|| {
+        let key = option_env!("ONDA_UPDATE_PUBLIC_KEY").ok_or_else(|| {
             AppError::invalid("This build has no update verification key configured.")
         })?;
         if !endpoint.starts_with("https://") {
@@ -1204,8 +1197,7 @@ impl Runtime {
 }
 
 pub(super) fn updater_configured() -> bool {
-    option_env!("EAGLE_UPDATE_ENDPOINT").is_some()
-        && option_env!("EAGLE_UPDATE_PUBLIC_KEY").is_some()
+    option_env!("ONDA_UPDATE_ENDPOINT").is_some() && option_env!("ONDA_UPDATE_PUBLIC_KEY").is_some()
 }
 
 struct UpdateReservation<'a>(&'a AtomicBool);

@@ -14,7 +14,7 @@ Build prerequisites: Rust 1.95.0, Node 24, Visual Studio 2022 C++ Build Tools wi
 npm ci
 ./scripts/build.ps1                  # unsigned CPU release
 $env:VULKAN_SDK = 'C:\VulkanSDK\1.4.363.0'
-$env:EAGLE_VULKAN_TARGET_DIR = 'C:\evn'
+$env:ONDA_VULKAN_TARGET_DIR = 'C:\evn'
 ./scripts/build.ps1 -WithVulkan      # CPU plus isolated GPU worker
 ```
 
@@ -30,10 +30,10 @@ After final linking or against installed executables, run `collect-msvc-runtime.
 
 Unsigned builds work without secrets. Authenticode and updater signatures serve different purposes. A public release requires a real publisher certificate/private signing capability, an HTTPS channel and a separate Tauri signing key.
 
-- `EAGLE_WINDOWS_CERT_THUMBPRINT`: accessible publisher certificate/private key in the Windows store. `sign-windows.ps1` signs/validates helpers; Tauri signs the shell/installer with SHA-256 and timestamping. This path awaits a real certificate.
-- `EAGLE_WINDOWS_SIGN_COMMAND`: alternative trusted distributor/HSM command for Tauri's signCommand. Its operator must also sign helpers using its HSM procedure. Never embed passwords/private bytes in this variable.
+- `ONDA_WINDOWS_CERT_THUMBPRINT`: accessible publisher certificate/private key in the Windows store. `sign-windows.ps1` signs/validates helpers; Tauri signs the shell/installer with SHA-256 and timestamping. This path awaits a real certificate.
+- `ONDA_WINDOWS_SIGN_COMMAND`: alternative trusted distributor/HSM command for Tauri's signCommand. Its operator must also sign helpers using its HSM procedure. Never embed passwords/private bytes in this variable.
 - `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: updater signing material, release environment/CI secrets only.
-- `EAGLE_UPDATE_ENDPOINT`, `EAGLE_UPDATE_PUBLIC_KEY`: public build-time channel configuration. Endpoint must be HTTPS.
+- `ONDA_UPDATE_ENDPOINT`, `ONDA_UPDATE_PUBLIC_KEY`: public build-time channel configuration. Endpoint must be HTTPS.
 
 ```powershell
 ./scripts/build.ps1 -SignedUpdates -WithVulkan

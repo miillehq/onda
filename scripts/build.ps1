@@ -18,16 +18,16 @@ try {
     foreach ($runtimeFile in $runtimeFiles.Resources.GetEnumerator()) { $configuration.bundle.resources[$runtimeFile.Key] = $runtimeFile.Value }
     $mplSource = & (Join-Path $PSScriptRoot 'collect-mpl-source.ps1')
     $configuration.bundle.resources[$mplSource] = 'licenses/MPL-source.zip'
-    if ($env:EAGLE_WINDOWS_SIGN_COMMAND) { $configuration.bundle.windows = @{ signCommand = $env:EAGLE_WINDOWS_SIGN_COMMAND } }
-    if ($env:EAGLE_WINDOWS_CERT_THUMBPRINT) {
-        $configuration.bundle.windows = @{ certificateThumbprint=$env:EAGLE_WINDOWS_CERT_THUMBPRINT; digestAlgorithm='sha256'; timestampUrl='http://timestamp.digicert.com' }
-        $helpers = @('eagle-input','eagle-asr-worker')
-        if ($WithVulkan) { $helpers += 'eagle-asr-vulkan-worker' }
+    if ($env:ONDA_WINDOWS_SIGN_COMMAND) { $configuration.bundle.windows = @{ signCommand = $env:ONDA_WINDOWS_SIGN_COMMAND } }
+    if ($env:ONDA_WINDOWS_CERT_THUMBPRINT) {
+        $configuration.bundle.windows = @{ certificateThumbprint=$env:ONDA_WINDOWS_CERT_THUMBPRINT; digestAlgorithm='sha256'; timestampUrl='http://timestamp.digicert.com' }
+        $helpers = @('onda-input','onda-asr-worker')
+        if ($WithVulkan) { $helpers += 'onda-asr-vulkan-worker' }
         foreach($helper in $helpers) { & (Join-Path $PSScriptRoot 'sign-windows.ps1') -Path (Join-Path $repositoryDirectory "src-tauri/binaries/$helper-x86_64-pc-windows-msvc.exe") }
     }
-    if ($WithVulkan) { $configuration.bundle.externalBin = @('binaries/eagle-input', 'binaries/eagle-asr-worker', 'binaries/eagle-asr-vulkan-worker') }
+    if ($WithVulkan) { $configuration.bundle.externalBin = @('binaries/onda-input', 'binaries/onda-asr-worker', 'binaries/onda-asr-vulkan-worker') }
     if ($SignedUpdates) {
-        foreach ($secretName in @('TAURI_SIGNING_PRIVATE_KEY','EAGLE_UPDATE_ENDPOINT','EAGLE_UPDATE_PUBLIC_KEY')) { if (-not [Environment]::GetEnvironmentVariable($secretName)) { throw "Missing release configuration: $secretName" } }
+        foreach ($secretName in @('TAURI_SIGNING_PRIVATE_KEY','ONDA_UPDATE_ENDPOINT','ONDA_UPDATE_PUBLIC_KEY')) { if (-not [Environment]::GetEnvironmentVariable($secretName)) { throw "Missing release configuration: $secretName" } }
         $configuration.bundle.createUpdaterArtifacts = $true
     }
     $overlayDirectory = Join-Path $repositoryDirectory '.artifacts'

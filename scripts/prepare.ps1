@@ -7,13 +7,13 @@ try {
     $buildMode = if ($Release) { 'release' } else { 'debug' }
     [string[]]$releaseArguments = @()
     if ($Release) { $releaseArguments = @('--release') }
-    cargo build --locked -p eagle-input --bin eagle-input @releaseArguments
+    cargo build --locked -p onda-input --bin onda-input @releaseArguments
     if ($LASTEXITCODE -ne 0) { throw 'Shortcut helper build failed.' }
-    cargo build --locked -p eagle-asr --features native-asr --bin eagle-asr-worker @releaseArguments
+    cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker @releaseArguments
     if ($LASTEXITCODE -ne 0) { throw 'CPU ASR worker build failed.' }
     $binaryDirectory = Join-Path $repositoryDirectory 'src-tauri/binaries'
     [System.IO.Directory]::CreateDirectory($binaryDirectory) | Out-Null
-    foreach ($binaryName in @('eagle-input','eagle-asr-worker')) {
+    foreach ($binaryName in @('onda-input','onda-asr-worker')) {
         Copy-Item -LiteralPath (Join-Path $repositoryDirectory "target/$buildMode/$binaryName.exe") -Destination (Join-Path $binaryDirectory "$binaryName-x86_64-pc-windows-msvc.exe") -Force
     }
     if ($WithVulkan) {
@@ -21,12 +21,12 @@ try {
         try {
         . (Join-Path $PSScriptRoot 'vulkan-toolchain.ps1')
         if (-not $env:VULKAN_SDK) { throw 'Set VULKAN_SDK to an installed Vulkan SDK for the optional accelerator build.' }
-        $vulkanTargetDirectory = if ($env:EAGLE_VULKAN_TARGET_DIR) { $env:EAGLE_VULKAN_TARGET_DIR } else { Join-Path ([System.IO.Path]::GetPathRoot($repositoryDirectory)) 'eagle-vulkan-target' }
-        if (-not [System.IO.Path]::IsPathRooted($vulkanTargetDirectory) -or $vulkanTargetDirectory.Length -gt 60) { throw 'EAGLE_VULKAN_TARGET_DIR must be an absolute short path (60 characters maximum) for MSBuild shader compilation.' }
-        cargo build --locked -p eagle-asr --features vulkan --bin eagle-asr-worker --target-dir $vulkanTargetDirectory @releaseArguments
+        $vulkanTargetDirectory = if ($env:ONDA_VULKAN_TARGET_DIR) { $env:ONDA_VULKAN_TARGET_DIR } else { Join-Path ([System.IO.Path]::GetPathRoot($repositoryDirectory)) 'onda-vulkan-target' }
+        if (-not [System.IO.Path]::IsPathRooted($vulkanTargetDirectory) -or $vulkanTargetDirectory.Length -gt 60) { throw 'ONDA_VULKAN_TARGET_DIR must be an absolute short path (60 characters maximum) for MSBuild shader compilation.' }
+        cargo build --locked -p onda-asr --features vulkan --bin onda-asr-worker --target-dir $vulkanTargetDirectory @releaseArguments
         if ($LASTEXITCODE -ne 0) { throw 'Vulkan worker build failed; CPU artifacts are still usable.' }
-        Copy-Item -LiteralPath (Join-Path $vulkanTargetDirectory "$buildMode/eagle-asr-worker.exe") -Destination (Join-Path $binaryDirectory 'eagle-asr-vulkan-worker-x86_64-pc-windows-msvc.exe') -Force
-        Copy-Item -LiteralPath (Join-Path $vulkanTargetDirectory "$buildMode/eagle-asr-worker.exe") -Destination (Join-Path $repositoryDirectory "target/$buildMode/eagle-asr-vulkan-worker.exe") -Force
+        Copy-Item -LiteralPath (Join-Path $vulkanTargetDirectory "$buildMode/onda-asr-worker.exe") -Destination (Join-Path $binaryDirectory 'onda-asr-vulkan-worker-x86_64-pc-windows-msvc.exe') -Force
+        Copy-Item -LiteralPath (Join-Path $vulkanTargetDirectory "$buildMode/onda-asr-worker.exe") -Destination (Join-Path $repositoryDirectory "target/$buildMode/onda-asr-vulkan-worker.exe") -Force
         } finally { $env:CMAKE_GENERATOR=$previousCmakeGenerator }
     }
 } finally { Pop-Location }

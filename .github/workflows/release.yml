@@ -27,8 +27,8 @@ jobs:
     env:
       CARGO_BUILD_JOBS: 2
       CMAKE_BUILD_PARALLEL_LEVEL: 2
-      EAGLE_UPDATE_ENDPOINT: ${{ vars.EAGLE_UPDATE_ENDPOINT }}
-      EAGLE_UPDATE_PUBLIC_KEY: ${{ vars.EAGLE_UPDATE_PUBLIC_KEY }}
+      ONDA_UPDATE_ENDPOINT: ${{ vars.ONDA_UPDATE_ENDPOINT }}
+      ONDA_UPDATE_PUBLIC_KEY: ${{ vars.ONDA_UPDATE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -106,19 +106,19 @@ jobs:
           foreach ($package in $metadata.packages | Where-Object license -EQ 'MPL-2.0') {
             Copy-Item -LiteralPath (Split-Path -Parent $package.manifest_path) -Destination (Join-Path $sourceRoot "$($package.name)-$($package.version)") -Recurse
           }
-          Compress-Archive -LiteralPath $sourceRoot -DestinationPath '.artifacts/eagle-mpl-source.zip' -Force
-          $digest = (Get-FileHash -LiteralPath '.artifacts/eagle-mpl-source.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$digest  eagle-mpl-source.zip" | Set-Content -LiteralPath '.artifacts/eagle-mpl-source.zip.sha256' -Encoding ascii
+          Compress-Archive -LiteralPath $sourceRoot -DestinationPath '.artifacts/onda-mpl-source.zip' -Force
+          $digest = (Get-FileHash -LiteralPath '.artifacts/onda-mpl-source.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest  onda-mpl-source.zip" | Set-Content -LiteralPath '.artifacts/onda-mpl-source.zip.sha256' -Encoding ascii
       - name: Upload candidate for explicit release review
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: eagle-windows-x64-candidate-${{ github.sha }}
+          name: onda-windows-x64-candidate-${{ github.sha }}
           if-no-files-found: error
           path: |
             target/release/bundle/nsis/*
             THIRD_PARTY_NOTICES.txt
             docs/dependency-inventory.json
-            .artifacts/eagle-mpl-source.zip
-            .artifacts/eagle-mpl-source.zip.sha256
+            .artifacts/onda-mpl-source.zip
+            .artifacts/onda-mpl-source.zip.sha256
             .artifacts/MPL-source.zip
             .artifacts/runtime/Microsoft-runtime-manifest.json

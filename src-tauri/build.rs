@@ -4,6 +4,6 @@ fn main() {
     if let Err(error) = tauri_build::try_build(attributes) {
         panic!("Tauri build failed: {error}");
     }
-    println!("cargo:rerun-if-env-changed=EAGLE_UPDATE_ENDPOINT");
-    println!("cargo:rerun-if-env-changed=EAGLE_UPDATE_PUBLIC_KEY");
+    println!("cargo:rerun-if-env-changed=ONDA_UPDATE_ENDPOINT");
+    println!("cargo:rerun-if-env-changed=ONDA_UPDATE_PUBLIC_KEY");
 }

@@ -38,7 +38,7 @@ export async function runSmoke(): Promise<void> {
     const word = { id: "smoke-word", kind: "vocabulary" as const, phrase: "PrivateCanaryToken", replacement: null, enabled: true, starred: false, source: "manual" as const };
     check((await call({ command: "saveDictionaryEntry", args: { entry: word } })).type === "dictionary", "dictionary save through IPC");
     check(await rejected({ command: "saveDictionaryEntry", args: { entry: { ...word, id: "smoke-duplicate" } } }, "invalidInput"), "duplicate phrase refused");
-    const snippet = { id: "smoke-snippet", trigger: "test trigger", expansion: "🦅 Unicode output", enabled: true };
+    const snippet = { id: "smoke-snippet", trigger: "test trigger", expansion: "🌊 Unicode output", enabled: true };
     check((await call({ command: "saveSnippet", args: { snippet } })).type === "snippets", "Unicode snippet save through IPC");
     check(await rejected({ command: "saveSnippet", args: { snippet: { ...snippet, id: "bad-trigger", trigger: "bad\0trigger" } } }, "invalidInput"), "invalid snippet refused before commit");
     check(await rejected({ command: "listAvailableModels" }, cloudFailureCode), "local use works with unavailable cloud");
@@ -84,7 +84,7 @@ export async function runSmoke(): Promise<void> {
     check(await rejected({ command: "teachWord", args: { durationMs: 100 } }, "invalidInput"), "teaching take length is bounded");
     check(await rejected({ command: "teachWord", args: { durationMs: 2500 } }, "noModel"), "teaching a word needs a speech model before recording");
     check((await call({ command: "listAudioDevices" })).type === "audioDevices", "WASAPI device enumeration available");
-    if(window.__EAGLE_REPLAY__){const replay=await call({command:"replayDebugFixture"});check(replay.type==="result"&&replay.payload.inserted,"real CPU fixture reached controlled Windows field");const completed=await call({command:"getSnapshot"});check(completed.type==="snapshot"&&completed.payload.state.phase==="completed"&&completed.payload.state.route==="local","full dictation pipeline completed locally");
+    if(window.__ONDA_REPLAY__){const replay=await call({command:"replayDebugFixture"});check(replay.type==="result"&&replay.payload.inserted,"real CPU fixture reached controlled Windows field");const completed=await call({command:"getSnapshot"});check(completed.type==="snapshot"&&completed.payload.state.phase==="completed"&&completed.payload.state.route==="local","full dictation pipeline completed locally");
       const replayed=replay.type==="result"?replay.payload:null;const kept=await call({command:"getHistory"});const entry=kept.type==="history"?kept.payload.find(item=>item.id===replayed?.operationId):undefined;check(!!entry&&entry.inserted&&entry.mode==="dictation"&&entry.output===replayed?.output&&entry.errorCode===null,"fixture dictation recorded in history");
       check((await call({command:"deleteHistoryEntry",args:{id:entry?.id??""}})).type==="unit","history entry deleted");const cleared=await call({command:"getHistory"});check(cleared.type==="history"&&!cleared.payload.some(item=>item.id===entry?.id),"deleted entry is gone");}
     await call({ command: "clearResult" });

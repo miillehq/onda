@@ -2,7 +2,7 @@
 .SYNOPSIS
 Install, quietly launch, inspect and uninstall a candidate in a fresh owned artifact directory.
 .DESCRIPTION
-Refuses existing Eagle installer registrations/processes. Never deletes application data.
+Refuses existing Onda installer registrations/processes. Never deletes application data.
 Stops only the shell/descendants created by this test, preserving helper EOF exit evidence.
 Returns one report object and saves the report under .artifacts/installed-smoke.
 #>
@@ -63,7 +63,7 @@ function Start-OwnedProcess {
     $info.RedirectStandardOutput = [bool]$RedirectOutput
     $info.RedirectStandardError = [bool]$RedirectOutput
     $info.EnvironmentVariables['PATH'] = (Join-Path $env:SystemRoot 'System32') + ';' + $env:SystemRoot
-    $info.EnvironmentVariables.Remove('EAGLE_SMOKE_DIRECTORY')
+    $info.EnvironmentVariables.Remove('ONDA_SMOKE_DIRECTORY')
     $process = [System.Diagnostics.Process]::Start($info)
     $null = $process.Handle
     $ownedProcesses.Add($process)
@@ -127,7 +127,7 @@ function Wait-OwnedHelper {
     $deadline = [System.DateTime]::UtcNow.AddSeconds(15)
     while ([System.DateTime]::UtcNow -lt $deadline) {
         if ($Parent.HasExited) { throw 'Installed shell exited during startup.' }
-        $candidate = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($Parent.Id)" | Where-Object { $_.Name -eq 'eagle-input.exe' -and $_.ExecutablePath -eq (Join-Path $installDirectory 'eagle-input.exe') } | Select-Object -First 1
+        $candidate = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($Parent.Id)" | Where-Object { $_.Name -eq 'onda-input.exe' -and $_.ExecutablePath -eq (Join-Path $installDirectory 'onda-input.exe') } | Select-Object -First 1
         if ($candidate) {
             $process = [System.Diagnostics.Process]::GetProcessById([int]$candidate.ProcessId)
             $null = $process.Handle
@@ -160,20 +160,20 @@ function Invoke-OwnedUninstaller {
     $process = Start-Process -FilePath $uninstaller -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'Owned installer uninstallation failed.' }
     $deadline = [System.DateTime]::UtcNow.AddSeconds(10)
-    while ((Test-Path -LiteralPath (Join-Path $installDirectory 'eagle.exe')) -and [System.DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
-    if (Test-Path -LiteralPath (Join-Path $installDirectory 'eagle.exe')) { throw 'Owned installation executable survived uninstallation.' }
+    while ((Test-Path -LiteralPath (Join-Path $installDirectory 'onda.exe')) -and [System.DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+    if (Test-Path -LiteralPath (Join-Path $installDirectory 'onda.exe')) { throw 'Owned installation executable survived uninstallation.' }
     return $process.ExitCode
 }
 
 foreach ($registryRoot in @('HKCU:', 'HKLM:')) {
     foreach ($key in @("$registryRoot\Software\Microsoft\Windows\CurrentVersion\Uninstall\$productName", "$registryRoot\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\$productName")) {
-        if (Test-Path -LiteralPath $key) { throw 'An existing Eagle installation is registered; isolated installer smoke refuses to overwrite it.' }
+        if (Test-Path -LiteralPath $key) { throw 'An existing Onda installation is registered; isolated installer smoke refuses to overwrite it.' }
     }
 }
-if (Get-CimInstance Win32_Process | Where-Object Name -EQ 'eagle.exe') { throw 'An existing Eagle shell is running; installer smoke refuses to interrupt it.' }
-if (Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $productName -ErrorAction SilentlyContinue) { throw 'An existing Eagle autostart value occupies the uninstall namespace; smoke refuses to remove it.' }
+if (Get-CimInstance Win32_Process | Where-Object Name -EQ 'onda.exe') { throw 'An existing Onda shell is running; installer smoke refuses to interrupt it.' }
+if (Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $productName -ErrorAction SilentlyContinue) { throw 'An existing Onda autostart value occupies the uninstall namespace; smoke refuses to remove it.' }
 foreach ($shortcut in @((Join-Path ([System.Environment]::GetFolderPath('DesktopDirectory')) "$productName.lnk"), (Join-Path ([System.Environment]::GetFolderPath('Programs')) "$productName.lnk"), (Join-Path ([System.Environment]::GetFolderPath('Programs')) "$productName/$productName.lnk"))) {
-    if (Test-Path -LiteralPath $shortcut) { throw 'An existing Eagle shortcut occupies the installer namespace; isolated smoke refuses to overwrite it.' }
+    if (Test-Path -LiteralPath $shortcut) { throw 'An existing Onda shortcut occupies the installer namespace; isolated smoke refuses to overwrite it.' }
 }
 if (-not $InstallerPath) {
     $candidate = Get-ChildItem -LiteralPath (Join-Path $repositoryDirectory 'target/release/bundle/nsis') -Filter '*setup.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -195,8 +195,8 @@ try {
     $installation = Start-Process -FilePath $InstallerPath -ArgumentList @('/S', "/D=$installDirectory") -WindowStyle Hidden -Wait -PassThru
     if ($installation.ExitCode -ne 0) { throw 'Silent candidate installation failed.' }
     $installed = $true
-    $binaryNames = @('eagle.exe', 'eagle-input.exe', 'eagle-asr-worker.exe')
-    if ($WithVulkan) { $binaryNames += 'eagle-asr-vulkan-worker.exe' }
+    $binaryNames = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe')
+    if ($WithVulkan) { $binaryNames += 'onda-asr-vulkan-worker.exe' }
     foreach ($name in $binaryNames) { if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $name))) { throw "Installed candidate executable missing: $name" } }
     foreach ($name in @('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.txt', 'licenses/MPL-source.zip', 'licenses/Microsoft-Visual-Cpp-Runtime-2015-2022.docx', 'licenses/Microsoft-Build-Tools-2022.docx')) {
         if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $name))) { throw "Installed license/source resource missing: $name" }
@@ -212,11 +212,11 @@ try {
     $installedExecutables = @($binaryNames | ForEach-Object { Join-Path $installDirectory $_ })
     $runtimeAudit = & (Join-Path $PSScriptRoot 'collect-msvc-runtime.ps1') -ExecutablePaths $installedExecutables -WithVulkan:$WithVulkan
     $report.auditedExecutables = $runtimeAudit.AuditedExecutables
-    $report.cpuWorker = Test-InstalledWorker -Name 'eagle-asr-worker.exe'
-    if ($WithVulkan) { $report.vulkanWorker = Test-InstalledWorker -Name 'eagle-asr-vulkan-worker.exe' -Optional }
+    $report.cpuWorker = Test-InstalledWorker -Name 'onda-asr-worker.exe'
+    if ($WithVulkan) { $report.vulkanWorker = Test-InstalledWorker -Name 'onda-asr-vulkan-worker.exe' -Optional }
     $launchUtc = [System.DateTime]::UtcNow
     $report.launchUtc = $launchUtc.ToString('o')
-    $shell = Start-OwnedProcess -Path (Join-Path $installDirectory 'eagle.exe') -Arguments '--background'
+    $shell = Start-OwnedProcess -Path (Join-Path $installDirectory 'onda.exe') -Arguments '--background'
     Remember-OwnedDescendants -Parent $shell
     $helper = Wait-OwnedHelper -Parent $shell
     Remember-OwnedDescendants -Parent $shell

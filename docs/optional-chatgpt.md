@@ -29,6 +29,6 @@ Display-name hints are a selection heuristic. Actual latency comes from first-to
 
 ## Storage-failure verification
 
-`crates/eagle-cloud/src/oauth/availability_tests.rs` exercises four local-only failure cases: an account-directory collision, corrupt host identity, an invalid DPAPI registration, and invalid client metadata. Tests assert redacted errors, unchanged host/profile bytes, preserved unrelated registrations, and no automatic account selection. They use test-only token sentinels and require no live account, browser, or OpenAI request.
+`crates/onda-cloud/src/oauth/availability_tests.rs` exercises four local-only failure cases: an account-directory collision, corrupt host identity, an invalid DPAPI registration, and invalid client metadata. Tests assert redacted errors, unchanged host/profile bytes, preserved unrelated registrations, and no automatic account selection. They use test-only token sentinels and require no live account, browser, or OpenAI request.
 
 The facade smoke harness exercises a fresh profile without an authorized cloud account, actionable cloud errors, local controls, and retention of the original text after a failed transform. Corrupt-storage byte preservation is covered by the native tests above. The release smoke matrix should also exercise an unavailable account store through the actual facade. A real browser consent, eligible account, serving policy, and live inference still require explicit release validation.

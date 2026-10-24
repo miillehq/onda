@@ -46,7 +46,7 @@ await call({command: 'saveDictionaryEntry', args: {entry: {
 
 ## Events and operation states
 
-Subscribe using `onEvent`. The event channel is `eagle://event` and envelopes are typed `RuntimeEvent`. `domain` wraps an `AppEvent`: stateChanged, resultReady, learningProposed, metric, error, cloudDelta. Other envelopes are downloadProgress, oauthChanged, shortcutStatus, audioLevel (short-window RMS about 15–20 times a second while the microphone is open, for recording and the microphone test), navigate, historyUpdated (one entry added or changed) and historyReset (fetch the list again). `OperationState.handsFree` is true when the toggle shortcut started the recording.
+Subscribe using `onEvent`. The event channel is `onda://event` and envelopes are typed `RuntimeEvent`. `domain` wraps an `AppEvent`: stateChanged, resultReady, learningProposed, metric, error, cloudDelta. Other envelopes are downloadProgress, oauthChanged, shortcutStatus, audioLevel (short-window RMS about 15–20 times a second while the microphone is open, for recording and the microphone test), navigate, historyUpdated (one entry added or changed) and historyReset (fetch the list again). `OperationState.handsFree` is true when the toggle shortcut started the recording.
 
 ```json
 {"type":"domain","payload":{"type":"stateChanged","payload":{"operationId":"opaque-uuid","phase":"transcribing","mode":"dictation","route":"local","error":null,"fallbackUsed":false}}}

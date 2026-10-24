@@ -14,6 +14,6 @@ Retrieved and inspected on **2026-10-03**, including each page's Markdown form. 
 | [Website OIDC verification](https://developers.openai.com/siwc/website) | JWKS signature verification, issuer/audience/time/nonce checks |
 | [Production OIDC discovery](https://auth.openai.com/.well-known/openid-configuration) | Exact issuer, authorization, token, JWKS, and revocation endpoints; RS256 |
 
-The website identity-only commercial flow has different client provisioning. Eagle uses its JWT-validation guidance without importing that flow's confidential-client assumptions. No upstream application token format, private ChatGPT backend endpoint, or embedded partner credential is used.
+The website identity-only commercial flow has different client provisioning. Onda uses its JWT-validation guidance without importing that flow's confidential-client assumptions. No upstream application token format, private ChatGPT backend endpoint, or embedded partner credential is used.
 
 For future maintenance, reread the relevant pages before changing OAuth scope, endpoint, revocation, or inference behavior. If an official endpoint changes, update the explicit allowlist and mocked contract together. Never make production endpoint overrides user-configurable to accommodate undocumented protocols.

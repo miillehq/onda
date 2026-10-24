@@ -1,7 +1,7 @@
 param(
     [ValidateSet('whisper-tiny-en', 'whisper-base-en-q5', 'whisper-small-en-q5')]
     [string] $ModelId = 'whisper-tiny-en',
-    [string] $ModelDirectory = (Join-Path $env:LOCALAPPDATA 'Eagle\models'),
+    [string] $ModelDirectory = (Join-Path $env:LOCALAPPDATA 'Onda\models'),
     [ValidateRange(1, 20)]
     [int] $Repetitions = 3,
     [ValidateSet('cpu', 'auto', 'gpu')]
@@ -15,10 +15,10 @@ $repositoryDirectory = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $repositoryDirectory
 try {
     if (-not $SkipBuild) {
-        cargo build -p eagle-asr --release --features native-asr --bins
+        cargo build -p onda-asr --release --features native-asr --bins
         if ($LASTEXITCODE -ne 0) { throw 'Native ASR benchmark build failed. See docs/asr.md for LLVM/CMake requirements.' }
     }
-    $benchmarkExecutable = Join-Path $repositoryDirectory 'target\release\eagle-asr-benchmark.exe'
+    $benchmarkExecutable = Join-Path $repositoryDirectory 'target\release\onda-asr-benchmark.exe'
     $workerDirectory = Join-Path $repositoryDirectory 'target\release'
     if (-not (Test-Path -LiteralPath $benchmarkExecutable -PathType Leaf)) { throw 'ASR benchmark executable is missing.' }
     $fixture = Join-Path $repositoryDirectory 'tests\fixtures\asr\jfk.wav'
@@ -32,12 +32,12 @@ try {
     & $benchmarkExecutable hardware
     & $benchmarkExecutable $modelPath $fixture $workerDirectory $Repetitions $ExecutionPreference
     if ($LASTEXITCODE -ne 0) { throw 'Real-model transcription failed.' }
-    $env:EAGLE_ASR_TEST_MODEL = $modelPath
-    $env:EAGLE_ASR_WORKER_DIR = $workerDirectory
-    cargo test -p eagle-asr --test golden -- --ignored
+    $env:ONDA_ASR_TEST_MODEL = $modelPath
+    $env:ONDA_ASR_WORKER_DIR = $workerDirectory
+    cargo test -p onda-asr --test golden -- --ignored
     if ($LASTEXITCODE -ne 0) { throw 'Semantic transcription golden test failed.' }
     if ($CheckVulkan) {
-        cargo test -p eagle-asr --test gpu_golden -- --ignored
+        cargo test -p onda-asr --test gpu_golden -- --ignored
         if ($LASTEXITCODE -ne 0) { throw 'Physical Vulkan backend recognition acceptance failed.' }
     }
 } finally {

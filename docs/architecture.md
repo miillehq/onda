@@ -7,24 +7,24 @@ Tauri v2 renders a small TypeScript view using the installed WebView2 runtime. R
 ```
 Diagnostics frontend / future polished frontend
              │ generated tagged IPC / events
-         eagle-app (Tauri)
+         onda-app (Tauri)
              │
-         eagle-core (policy + SQLite)
-             ├── eagle-platform (WASAPI / UIA / clipboard / SendInput)
-             ├── eagle-input → isolated keyboard helper
-             ├── eagle-asr → isolated CPU or Vulkan worker
-             └── eagle-cloud → official OAuth / text-only Responses
+         onda-core (policy + SQLite)
+             ├── onda-platform (WASAPI / UIA / clipboard / SendInput)
+             ├── onda-input → isolated keyboard helper
+             ├── onda-asr → isolated CPU or Vulkan worker
+             └── onda-cloud → official OAuth / text-only Responses
 ```
 
-`eagle-core` has no Tauri, microphone or network dependency. It contains the explicit state machine, settings/entities, compiled dictionary index, normalization/validation, bounded diff/learning policy, and migrations. SQLite uses WAL, FULL synchronous durability, parameterized statements, a busy timeout and an explicit schema version. A newer schema is refused instead of reset. Corrupt durable data fails visibly; it is never replaced with an empty dictionary.
+`onda-core` has no Tauri, microphone or network dependency. It contains the explicit state machine, settings/entities, compiled dictionary index, normalization/validation, bounded diff/learning policy, and migrations. SQLite uses WAL, FULL synchronous durability, parameterized statements, a busy timeout and an explicit schema version. A newer schema is refused instead of reset. Corrupt durable data fails visibly; it is never replaced with an empty dictionary.
 
-`eagle-platform` owns recording lifetimes and Windows target identity. Native audio callbacks write to a bounded SPSC buffer and avoid inference, file I/O and locks. A worker mixes samples, resamples incrementally and collects clipping/silence diagnostics. Releasing recording stops the stream and returns mono 16 kHz floats; cancelling drops them. Default input is resolved afresh per recording. Persistent endpoint IDs support explicit selection.
+`onda-platform` owns recording lifetimes and Windows target identity. Native audio callbacks write to a bounded SPSC buffer and avoid inference, file I/O and locks. A worker mixes samples, resamples incrementally and collects clipping/silence diagnostics. Releasing recording stops the stream and returns mono 16 kHz floats; cancelling drops them. Default input is resolved afresh per recording. Persistent endpoint IDs support explicit selection.
 
-`eagle-input` isolates `WH_KEYBOARD_LL` and its message pump from both the renderer and inference. It emits only configured actions, never arbitrary keys. The parent monitors heartbeat/process death, cancels an operation on reset and bounds restart attempts. Escape is armed only while an operation is active. Configured shortcut updates replace the helper. The helper checks stale held-key state and periodically reinstalls its hook because Windows can silently remove a timed-out hook.
+`onda-input` isolates `WH_KEYBOARD_LL` and its message pump from both the renderer and inference. It emits only configured actions, never arbitrary keys. The parent monitors heartbeat/process death, cancels an operation on reset and bounds restart attempts. Escape is armed only while an operation is active. Configured shortcut updates replace the helper. The helper checks stale held-key state and periodically reinstalls its hook because Windows can silently remove a timed-out hook.
 
-`eagle-asr` in the shell is a process client, not native inference. PCM crosses anonymous pipes with bounded framing. Exactly one worker is admitted per engine. Cancellation/timeout kills and reaps the child. CPU workers do not import optional GPU runtimes. A separate optional Vulkan binary probes the driver and falls back to CPU after failure, reserving deadline for recovery. The generic CPU build does not require AVX or AVX2. Six inference threads maximum and BELOW_NORMAL process priority reserve responsiveness. Fresh workers intentionally trade a modest model-load cost for crash isolation and low idle memory.
+`onda-asr` in the shell is a process client, not native inference. PCM crosses anonymous pipes with bounded framing. Exactly one worker is admitted per engine. Cancellation/timeout kills and reaps the child. CPU workers do not import optional GPU runtimes. A separate optional Vulkan binary probes the driver and falls back to CPU after failure, reserving deadline for recovery. The generic CPU build does not require AVX or AVX2. Six inference threads maximum and BELOW_NORMAL process priority reserve responsiveness. Fresh workers intentionally trade a modest model-load cost for crash isolation and low idle memory.
 
-`eagle-cloud` keeps OAuth in Rust. Protected per-profile records use Windows DPAPI and atomic replacement. A stable opaque host ID and issued registration IDs survive restarts. JWKS/issuer/audience/expiry/nonce checks are mandatory. A durable refresh-in-progress marker and cross-process locks handle rotating token races. Network endpoints are fixed in production; loopback mock injection is test-only. The client only accepts text, uses `store:false`, and requires a successful complete stream before output is eligible for insertion.
+`onda-cloud` keeps OAuth in Rust. Protected per-profile records use Windows DPAPI and atomic replacement. A stable opaque host ID and issued registration IDs survive restarts. JWKS/issuer/audience/expiry/nonce checks are mandatory. A durable refresh-in-progress marker and cross-process locks handle rotating token races. Network endpoints are fixed in production; loopback mock injection is test-only. The client only accepts text, uses `store:false`, and requires a successful complete stream before output is eligible for insertion.
 
 ## Concurrency and sensitive lifetimes
 

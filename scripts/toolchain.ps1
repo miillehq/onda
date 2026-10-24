@@ -8,7 +8,7 @@ if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
     }
 }
 if (-not $env:LIBCLANG_PATH) {
-    $clangCandidates = @((Join-Path $env:ProgramFiles 'LLVM/bin'), (Join-Path $env:LOCALAPPDATA 'EagleBuildTools/libclang/clang/native'))
+    $clangCandidates = @((Join-Path $env:ProgramFiles 'LLVM/bin'), (Join-Path $env:LOCALAPPDATA 'OndaBuildTools/libclang/clang/native'))
     foreach ($clangCandidate in $clangCandidates) { if (Test-Path -LiteralPath (Join-Path $clangCandidate 'libclang.dll')) { $env:LIBCLANG_PATH = $clangCandidate; break } }
 }
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) { throw 'CMake is required. See docs/release.md.' }

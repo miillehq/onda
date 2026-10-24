@@ -1,15 +1,15 @@
 //! Serialized user actions and cancellable pipelines over independently testable services.
 use crate::{api::*, errors};
-use eagle_asr::{AsrEngine, ModelManager, TranscriptionOptions};
-use eagle_cloud::{ChatGptService, CloudConfig, ResponseRequest};
-use eagle_core::{
+use onda_asr::{AsrEngine, ModelManager, TranscriptionOptions};
+use onda_cloud::{ChatGptService, CloudConfig, ResponseRequest};
+use onda_core::{
     contracts::*,
     dictionary::DictionaryIndex,
     error::{AppError, AppResult, ErrorCode},
     persistence::Store,
     state::StateMachine,
 };
-use eagle_platform::{AudioCapture, CaptureOptions, TargetSnapshot, WindowsTargetService};
+use onda_platform::{AudioCapture, CaptureOptions, TargetSnapshot, WindowsTargetService};
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
@@ -42,7 +42,7 @@ fn lock<T>(mutex: &Mutex<T>) -> AppResult<MutexGuard<'_, T>> {
             ErrorCode::Internal,
             format!(
                 "An application service stopped unexpectedly. Restart {}.",
-                eagle_core::APP_NAME
+                onda_core::APP_NAME
             ),
             false,
         )
@@ -69,7 +69,7 @@ struct SavedResult {
     target: Option<TargetSnapshot>,
     selection: Option<String>,
     after_document: Option<String>,
-    shortcut: eagle_platform::PasteShortcut,
+    shortcut: onda_platform::PasteShortcut,
 }
 
 #[derive(Clone)]
@@ -102,7 +102,7 @@ pub struct Runtime {
     index: Mutex<DictionaryIndex>,
     state: Mutex<StateMachine>,
     capture: Mutex<AudioCapture>,
-    level_meter: eagle_platform::LevelMeter,
+    level_meter: onda_platform::LevelMeter,
     capture_owner: Mutex<Option<String>>,
     active: Mutex<Option<ActiveOperation>>,
     result: Mutex<Option<SavedResult>>,
@@ -120,7 +120,7 @@ pub struct Runtime {
     downloads: Mutex<HashMap<String, CancellationToken>>,
     oauth: Mutex<Option<CancellationToken>>,
     metrics: Mutex<VecDeque<SpanMetric>>,
-    helper_config: Mutex<eagle_input::HelperConfig>,
+    helper_config: Mutex<onda_input::HelperConfig>,
     helper_generation: AtomicU64,
     shortcut_status: Mutex<String>,
     microphone_testing: AtomicBool,
@@ -140,14 +140,14 @@ impl Runtime {
         worker_directory: PathBuf,
         register_global_shortcuts: bool,
     ) -> AppResult<Arc<Self>> {
-        let mut store = Store::open(&data_directory.join("eagle.db"))?;
+        let mut store = Store::open(&data_directory.join("onda.db"))?;
         let settings = store.settings()?;
         let history = load_history(&mut store, settings.history_days);
         let index = DictionaryIndex::build(&store.dictionary()?, &store.snippets()?)?;
         let helper_config = shortcut_config(&settings, &store.transforms()?)?;
         let cloud_result = ChatGptService::new(CloudConfig {
             data_directory: data_directory.join("accounts"),
-            app_name: eagle_core::APP_NAME.into(),
+            app_name: onda_core::APP_NAME.into(),
         });
         let (cloud, cloud_error) = match cloud_result {
             Ok(service) => (Some(service), None),
@@ -212,7 +212,7 @@ impl Runtime {
         lock(&self.store)?.settings()
     }
     fn event(&self, event: RuntimeEvent) {
-        let _ = self.app.emit("eagle://event", event);
+        let _ = self.app.emit("onda://event", event);
     }
     fn cloud(&self) -> AppResult<&ChatGptService> {
         self.cloud.as_ref().ok_or_else(|| {
@@ -234,7 +234,7 @@ impl Runtime {
             if let Some(tray) = self.app.tray_by_id("main") {
                 let _ = tray.set_tooltip(Some(format!(
                     "{} · {}",
-                    eagle_core::APP_NAME,
+                    onda_core::APP_NAME,
                     tray_status(&current.phase)
                 )));
             }
@@ -414,7 +414,7 @@ impl Runtime {
     fn start_helper(self: &Arc<Self>) -> AppResult<()> {
         let service = self.clone();
         let helper = std::thread::Builder::new()
-            .name("eagle-input-supervisor".into())
+            .name("onda-input-supervisor".into())
             .spawn(move || {
                 let mut supervisor = None;
                 let mut generation = u64::MAX;
@@ -427,8 +427,8 @@ impl Runtime {
                             Ok(config) => config.clone(),
                             Err(_) => break,
                         };
-                        match eagle_input::HelperSupervisor::start(
-                            service.worker_directory.join("eagle-input.exe"),
+                        match onda_input::HelperSupervisor::start(
+                            service.worker_directory.join("onda-input.exe"),
                             config,
                         ) {
                             Ok(value) => {
@@ -456,14 +456,14 @@ impl Runtime {
                         None => continue,
                     };
                     match event {
-                        Ok(Some(eagle_input::HelperEvent::Ready { .. })) => {
+                        Ok(Some(onda_input::HelperEvent::Ready { .. })) => {
                             service.shortcut_status("ready");
                         }
-                        Ok(Some(eagle_input::HelperEvent::Pressed {
+                        Ok(Some(onda_input::HelperEvent::Pressed {
                             action,
                             transform_id,
                         })) => {
-                            use eagle_input::ShortcutAction as A;
+                            use onda_input::ShortcutAction as A;
                             let action = match action {
                                 A::Dictation => Some(Action::Start {
                                     command_mode: false,
@@ -496,17 +496,17 @@ impl Runtime {
                                 }
                             }
                         }
-                        Ok(Some(eagle_input::HelperEvent::Released {
+                        Ok(Some(onda_input::HelperEvent::Released {
                             action:
-                                eagle_input::ShortcutAction::Dictation
-                                | eagle_input::ShortcutAction::Command,
+                                onda_input::ShortcutAction::Dictation
+                                | onda_input::ShortcutAction::Command,
                             ..
                         })) => {
                             service.queue_helper_action(Action::Stop);
                         }
                         Ok(Some(
-                            eagle_input::HelperEvent::Reset { .. }
-                            | eagle_input::HelperEvent::Error { .. },
+                            onda_input::HelperEvent::Reset { .. }
+                            | onda_input::HelperEvent::Error { .. },
                         )) => {
                             service.cancel_immediate();
                             service.shortcut_status("recovering");
@@ -614,7 +614,7 @@ impl Runtime {
             let selection = if command_mode {
                 Some(
                     targets
-                        .selected_text(&target, eagle_platform::MAX_TEXT_CHARACTERS)
+                        .selected_text(&target, onda_platform::MAX_TEXT_CHARACTERS)
                         .map_err(errors::platform)?,
                 )
             } else {
@@ -745,8 +745,8 @@ impl Runtime {
                 })
                 .await;
                 match status {
-                    Ok(Ok(eagle_platform::CaptureCompletion::Running)) => {}
-                    Ok(Ok(eagle_platform::CaptureCompletion::Finished)) => {
+                    Ok(Ok(onda_platform::CaptureCompletion::Running)) => {}
+                    Ok(Ok(onda_platform::CaptureCompletion::Finished)) => {
                         let _ = service.send_action(Action::StopGeneration { id }).await;
                         return;
                     }
@@ -911,7 +911,7 @@ impl Runtime {
             output = self
                 .cloud_text(&active, &source, &instructions, None)
                 .await?;
-            eagle_core::text::validate_enhancement(&source, &output, &[], false)?;
+            onda_core::text::validate_enhancement(&source, &output, &[], false)?;
             self.save_result(&active, &source, &output, false, false, None)?;
         } else {
             self.save_result(&active, &local, &local, false, false, None)?;
@@ -920,7 +920,7 @@ impl Runtime {
                 && app_profile.is_none_or(|profile| profile.enhancement_enabled);
             if enhancement {
                 self.transition(&active.id, Phase::Enhancing)?;
-                let instructions = eagle_core::text::cleanup_prompt(
+                let instructions = onda_core::text::cleanup_prompt(
                     &candidates,
                     app_profile.and_then(|profile| profile.cleanup_instruction.as_deref()),
                 )?;
@@ -928,7 +928,7 @@ impl Runtime {
                     .cloud_text(&active, &local, &instructions, None)
                     .await
                     .and_then(|candidate| {
-                        eagle_core::text::validate_enhancement(
+                        onda_core::text::validate_enhancement(
                             &local,
                             &candidate,
                             &candidates,
@@ -959,8 +959,8 @@ impl Runtime {
         self.insert(&active, &output, fallback).await?;
         if lock(&self.store)?
             .record_usage(
-                &eagle_platform::local_date(),
-                eagle_core::text::word_count(&local),
+                &onda_platform::local_date(),
+                onda_core::text::word_count(&local),
                 transcription.audio_duration_ms,
                 transcription.inference_ms,
                 fallback,
@@ -988,16 +988,16 @@ impl Runtime {
         let mut options = TranscriptionOptions::new(path);
         options.language = settings.language.clone();
         options.preference = match settings.execution_preference {
-            ExecutionPreference::Auto => eagle_asr::ExecutionPreference::Auto,
-            ExecutionPreference::CpuOnly => eagle_asr::ExecutionPreference::CpuOnly,
-            ExecutionPreference::GpuPreferred => eagle_asr::ExecutionPreference::GpuPreferred,
+            ExecutionPreference::Auto => onda_asr::ExecutionPreference::Auto,
+            ExecutionPreference::CpuOnly => onda_asr::ExecutionPreference::CpuOnly,
+            ExecutionPreference::GpuPreferred => onda_asr::ExecutionPreference::GpuPreferred,
         };
         options.initial_prompt = lock(&self.index)?.prompt_terms(context).join(", ");
         Ok(options)
     }
 
     /// Keep pre-recording availability and actual inference selection consistent.
-    fn selected_model(&self, settings: &Settings) -> AppResult<&'static eagle_asr::ModelSpec> {
+    fn selected_model(&self, settings: &Settings) -> AppResult<&'static onda_asr::ModelSpec> {
         resolve_selected_model(settings, self.asr.hardware())
     }
 
@@ -1034,7 +1034,7 @@ impl Runtime {
             output: output.into(),
             inserted,
             fallback_used: fallback,
-            diff: eagle_core::transforms::diff(original, output),
+            diff: onda_core::transforms::diff(original, output),
         };
         let shortcut = paste_shortcut(&active.settings, &active.target.executable_name);
         *lock(&self.result)? = Some(SavedResult {
@@ -1146,7 +1146,7 @@ impl Runtime {
         }
         let sealed = serde_json::to_vec(entry)
             .ok()
-            .and_then(|plain| eagle_platform::protect_user_data(&plain).ok());
+            .and_then(|plain| onda_platform::protect_user_data(&plain).ok());
         let saved = sealed.is_some_and(|sealed| {
             lock(&self.store).is_ok_and(|mut store| {
                 store
@@ -1207,7 +1207,7 @@ impl Runtime {
         instructions: &str,
         preferred: Option<&str>,
     ) -> AppResult<String> {
-        eagle_core::text::validate_source(source, Some(&active.context))?;
+        onda_core::text::validate_source(source, Some(&active.context))?;
         lock(&self.state)?.mark_cloud(&active.id);
         self.emit_state();
         let profiles = self.cloud()?.list_profiles().await.map_err(errors::cloud)?;
@@ -1372,7 +1372,7 @@ impl Runtime {
                 let Some(scope) = observed_inserted_scope(&baseline, &observed, &inserted) else {
                     return;
                 };
-                if let Some(proposal) = eagle_core::learning::propose_correction(&inserted, scope) {
+                if let Some(proposal) = onda_core::learning::propose_correction(&inserted, scope) {
                     let Ok(state) = lock(&service.state) else {
                         return;
                     };
@@ -1412,7 +1412,7 @@ impl Runtime {
             let service = WindowsTargetService::new();
             let target = service.snapshot().map_err(errors::platform)?;
             let selected = service
-                .selected_text(&target, eagle_platform::MAX_TEXT_CHARACTERS)
+                .selected_text(&target, onda_platform::MAX_TEXT_CHARACTERS)
                 .map_err(errors::platform)?;
             Ok::<_, AppError>((target, selected))
         })
@@ -1462,7 +1462,7 @@ impl Runtime {
                     )
                     .await?;
                 if transform.preserve_protected_tokens {
-                    eagle_core::text::validate_enhancement(&selection, &output, &[], false)?;
+                    onda_core::text::validate_enhancement(&selection, &output, &[], false)?;
                 }
                 service.save_result(&active, &selection, &output, false, false, None)?;
                 service.transition(&id, Phase::Inserting)?;
@@ -1678,7 +1678,7 @@ fn load_history(store: &mut Store, days: u32) -> VecDeque<HistoryEntry> {
     let mut history = VecDeque::with_capacity(rows.len());
     let mut unreadable = 0usize;
     for (id, _, payload) in rows {
-        let entry = eagle_platform::unprotect_user_data(&payload)
+        let entry = onda_platform::unprotect_user_data(&payload)
             .ok()
             .and_then(|plain| serde_json::from_slice::<HistoryEntry>(&plain).ok())
             .filter(|entry| entry.id == id);
@@ -1715,15 +1715,15 @@ fn tray_status(phase: &Phase) -> &'static str {
 /// Resolve the same explicit/profile choice for the UI, preflight and inference.
 fn resolve_selected_model(
     settings: &Settings,
-    hardware: &eagle_asr::HardwareInfo,
-) -> AppResult<&'static eagle_asr::ModelSpec> {
+    hardware: &onda_asr::HardwareInfo,
+) -> AppResult<&'static onda_asr::ModelSpec> {
     let profile = match settings.quality_profile {
-        QualityProfile::Fast => eagle_asr::QualityProfile::Fast,
-        QualityProfile::Balanced => eagle_asr::QualityProfile::Balanced,
-        QualityProfile::BestQuality => eagle_asr::QualityProfile::Quality,
-        QualityProfile::Custom => eagle_asr::QualityProfile::Advanced,
+        QualityProfile::Fast => onda_asr::QualityProfile::Fast,
+        QualityProfile::Balanced => onda_asr::QualityProfile::Balanced,
+        QualityProfile::BestQuality => onda_asr::QualityProfile::Quality,
+        QualityProfile::Custom => onda_asr::QualityProfile::Advanced,
     };
-    eagle_asr::recommended_model(
+    onda_asr::recommended_model(
         profile,
         settings.language.as_deref(),
         hardware,
@@ -1734,8 +1734,8 @@ fn resolve_selected_model(
 
 /// Installation is an asset state, distinct from the user's selected profile/model.
 fn require_installed_model(
-    model: &eagle_asr::ModelSpec,
-    installed: &[eagle_asr::InstalledModel],
+    model: &onda_asr::ModelSpec,
+    installed: &[onda_asr::InstalledModel],
 ) -> AppResult<()> {
     if installed
         .iter()
@@ -1755,7 +1755,7 @@ fn validate_transcribed_source(source: &str) -> AppResult<()> {
             true,
         ));
     }
-    eagle_core::text::validate_source(source, None)
+    onda_core::text::validate_source(source, None)
 }
 
 /// Selection-based actions must reject an empty selection before recording or cloud work.
@@ -1767,7 +1767,7 @@ fn validate_selected_source(source: &str) -> AppResult<()> {
             true,
         ));
     }
-    eagle_core::text::validate_source(source, None)
+    onda_core::text::validate_source(source, None)
 }
 
 fn transform_instruction(instruction: &str) -> String {
@@ -1801,22 +1801,22 @@ fn observed_inserted_scope<'a>(
     }
     observed.get(prefix.len()..observed.len() - suffix.len())
 }
-fn paste_shortcut(settings: &Settings, executable: &str) -> eagle_platform::PasteShortcut {
+fn paste_shortcut(settings: &Settings, executable: &str) -> onda_platform::PasteShortcut {
     match settings
         .profile_for(executable)
         .map(|profile| &profile.paste_shortcut)
     {
-        Some(PasteShortcut::ControlShiftV) => eagle_platform::PasteShortcut::ControlShiftV,
-        Some(PasteShortcut::ShiftInsert) => eagle_platform::PasteShortcut::ShiftInsert,
-        _ => eagle_platform::PasteShortcut::ControlV,
+        Some(PasteShortcut::ControlShiftV) => onda_platform::PasteShortcut::ControlShiftV,
+        Some(PasteShortcut::ShiftInsert) => onda_platform::PasteShortcut::ShiftInsert,
+        _ => onda_platform::PasteShortcut::ControlV,
     }
 }
 
 fn shortcut_binding(
-    action: eagle_input::ShortcutAction,
+    action: onda_input::ShortcutAction,
     shortcut: &Shortcut,
-) -> AppResult<eagle_input::ShortcutBinding> {
-    let mut modifiers = eagle_input::Modifiers::default();
+) -> AppResult<onda_input::ShortcutBinding> {
+    let mut modifiers = onda_input::Modifiers::default();
     let mut primary = None;
     for key in &shortcut.keys {
         match key {
@@ -1833,7 +1833,7 @@ fn shortcut_binding(
             }
         }
     }
-    Ok(eagle_input::ShortcutBinding {
+    Ok(onda_input::ShortcutBinding {
         action,
         transform_id: None,
         virtual_key: primary
@@ -1844,8 +1844,8 @@ fn shortcut_binding(
 fn shortcut_config(
     settings: &Settings,
     transforms: &[Transform],
-) -> AppResult<eagle_input::HelperConfig> {
-    use eagle_input::ShortcutAction as A;
+) -> AppResult<onda_input::HelperConfig> {
+    use onda_input::ShortcutAction as A;
     let mut bindings = vec![
         shortcut_binding(A::Dictation, &settings.push_to_talk)?,
         shortcut_binding(A::Command, &settings.command_shortcut)?,
@@ -1862,8 +1862,8 @@ fn shortcut_config(
             bindings.push(binding);
         }
     }
-    let config = eagle_input::HelperConfig {
-        protocol_version: eagle_input::PROTOCOL_VERSION,
+    let config = onda_input::HelperConfig {
+        protocol_version: onda_input::PROTOCOL_VERSION,
         bindings,
     };
     config
@@ -1895,9 +1895,9 @@ mod tests {
     #[test]
     fn installed_small_does_not_silently_override_fast_profile() {
         let settings = Settings::default();
-        let hardware = eagle_asr::HardwareInfo::detect();
+        let hardware = onda_asr::HardwareInfo::detect();
         let selected = resolve_selected_model(&settings, &hardware).unwrap();
-        let installed = vec![eagle_asr::InstalledModel {
+        let installed = vec![onda_asr::InstalledModel {
             model_id: "whisper-small-q5".into(),
             version: "fixture".into(),
             path: "fixture.bin".into(),
@@ -1926,9 +1926,9 @@ mod tests {
         }
         let restored = Store::open(&path).unwrap().settings().unwrap();
         let selected =
-            resolve_selected_model(&restored, &eagle_asr::HardwareInfo::detect()).unwrap();
+            resolve_selected_model(&restored, &onda_asr::HardwareInfo::detect()).unwrap();
         assert_eq!(selected.id, "whisper-small-q5");
-        let installed = vec![eagle_asr::InstalledModel {
+        let installed = vec![onda_asr::InstalledModel {
             model_id: selected.id.into(),
             version: selected.version.into(),
             path: "fixture.bin".into(),
@@ -1971,14 +1971,14 @@ mod tests {
     #[test]
     fn shortcut_bindings_reject_modifier_alias_conflicts_and_multi_primary_keys() {
         let settings = Settings::default();
-        let mut transforms = eagle_core::transforms::builtin_transforms();
+        let mut transforms = onda_core::transforms::builtin_transforms();
         assert!(shortcut_config(&settings, &transforms).is_ok());
         transforms[0].shortcut = Some(Shortcut {
             keys: vec![0xA3, 0x5C, 0x20],
         });
         assert!(shortcut_config(&settings, &transforms).is_err());
         assert!(shortcut_binding(
-            eagle_input::ShortcutAction::Dictation,
+            onda_input::ShortcutAction::Dictation,
             &Shortcut {
                 keys: vec![0x41, 0x42]
             }
@@ -1989,7 +1989,7 @@ mod tests {
     #[test]
     fn custom_transform_identity_crosses_only_configured_shortcut_protocol() {
         let settings = Settings::default();
-        let mut transforms = eagle_core::transforms::builtin_transforms();
+        let mut transforms = onda_core::transforms::builtin_transforms();
         transforms[0].shortcut = Some(Shortcut {
             keys: vec![0xA2, 0xA4, 0x4C],
         });

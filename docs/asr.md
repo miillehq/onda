@@ -1,9 +1,9 @@
 # Local speech recognition and model assets
 
-Eagle uses `whisper-rs 0.16.0`, its `whisper-rs-sys 0.15.0` binding, and the
+Onda uses `whisper-rs 0.16.0`, its `whisper-rs-sys 0.15.0` binding, and the
 binding's vendored `whisper.cpp 1.8.3`. The desktop shell depends on the process
-client in `eagle-asr` with no native feature enabled. Native inference exists
-only in the separately packaged `eagle-asr-worker.exe`. No server, account,
+client in `onda-asr` with no native feature enabled. Native inference exists
+only in the separately packaged `onda-asr-worker.exe`. No server, account,
 API key, Python runtime or GPU is needed for ordinary dictation.
 
 ## Worker boundary
@@ -138,19 +138,19 @@ because the crate's bundled Linux bindings have incompatible Windows ABI layout.
 The optional Vulkan build also needs the official [LunarG SDK](https://vulkan.lunarg.com/sdk/home).
 
 ```powershell
-cargo test -p eagle-asr
-cargo build -p eagle-asr --release --features native-asr --bins
+cargo test -p onda-asr
+cargo build -p onda-asr --release --features native-asr --bins
 .\scripts\asr-benchmark.ps1 -SkipBuild
 ```
 
 The benchmark installs an exact-hash model outside the repository, verifies the
 public speech fixture, emits real timings, and runs semantic golden tests.
-After setting `EAGLE_ASR_WORKER_DIR` to a built worker directory, the controlled
+After setting `ONDA_ASR_WORKER_DIR` to a built worker directory, the controlled
 Windows lifecycle test keeps the real worker's stdin open, closes its private
 job, and confirms prompt process termination:
 
 ```powershell
-cargo test --locked -p eagle-asr --lib closing_job_kills_owned_worker_even_with_stdin_open -- --ignored
+cargo test --locked -p onda-asr --lib closing_job_kills_owned_worker_even_with_stdin_open -- --ignored
 ```
 
 For acceleration, use a short build directory because MSBuild's nested Vulkan
@@ -159,8 +159,8 @@ shader project can exceed MAX_PATH even when normal Rust compilation succeeds:
 ```powershell
 . .\scripts\toolchain.ps1
 . .\scripts\vulkan-toolchain.ps1
-cargo build --locked -p eagle-asr --release --features vulkan --bin eagle-asr-worker --target-dir C:\evn
-Copy-Item -LiteralPath C:\evn\release\eagle-asr-worker.exe -Destination target\release\eagle-asr-vulkan-worker.exe
+cargo build --locked -p onda-asr --release --features vulkan --bin onda-asr-worker --target-dir C:\evn
+Copy-Item -LiteralPath C:\evn\release\onda-asr-worker.exe -Destination target\release\onda-asr-vulkan-worker.exe
 .\scripts\asr-benchmark.ps1 -SkipBuild -ExecutionPreference gpu -CheckVulkan
 ```
 
@@ -171,7 +171,7 @@ The tested production build uses Ninja, configured by `vulkan-toolchain.ps1`.
 That helper imports a verified x64 MSVC developer environment without exposing
 its contents. Nested MSBuild shader projects failed both normal workspace paths
 and a short release target; Ninja passed with the same SDK/source. Keep CPU and
-GPU targets separate and use `EAGLE_VULKAN_TARGET_DIR` for the release helper's
+GPU targets separate and use `ONDA_VULKAN_TARGET_DIR` for the release helper's
 short absolute target. Restore `CMAKE_GENERATOR` after optional builds when
 reusing a shell whose existing CPU cache was generated with MSBuild.
 

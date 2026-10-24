@@ -45,10 +45,10 @@ render(<App />, root);
 
 void init()
   .then(async () => {
-    if (window.__EAGLE_SMOKE__) await (await import("./smoke")).runSmoke();
+    if (window.__ONDA_SMOKE__) await (await import("./smoke")).runSmoke();
   })
   .catch(async (error: unknown) => {
-    if (window.__EAGLE_SMOKE__) {
+    if (window.__ONDA_SMOKE__) {
       const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "unknown";
       await call({ command: "completeDebugSmoke", args: { passed: false, checks: ["frontend startup " + code] } });
     }

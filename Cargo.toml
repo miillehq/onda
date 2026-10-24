@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/eagle-core", "crates/eagle-platform", "crates/eagle-input", "crates/eagle-asr", "crates/eagle-cloud", "src-tauri"]
-default-members = ["crates/eagle-core"]
+members = ["crates/onda-core", "crates/onda-platform", "crates/onda-input", "crates/onda-asr", "crates/onda-cloud", "src-tauri"]
+default-members = ["crates/onda-core"]
 resolver = "2"
 
 [workspace.package]

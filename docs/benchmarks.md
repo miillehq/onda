@@ -12,7 +12,7 @@ have not been benchmarked.
 
 The source is `tests/fixtures/asr/jfk.wav`: actual public-domain speech, mono
 16 kHz PCM16, 176,000 samples, 11.000 seconds. Its checksum and rights/provenance
-are recorded alongside the fixture. Models were downloaded by Eagle's real
+are recorded alongside the fixture. Models were downloaded by Onda's real
 HTTPS/resume/checksum manager outside Git from pinned revision
 `5359861c739e955e79d9a303bcbc70fb988958b1`.
 
@@ -79,7 +79,7 @@ attempt; the GPU inference attempt gets at most half the remaining deadline.
 
 ## Dictionary and deterministic quality
 
-The release `eagle-quality` harness completed its checked-in deterministic cases
+The release `onda-quality` harness completed its checked-in deterministic cases
 for replacements, Unicode/emoji, meaningful repeated words, numbers, URLs,
 emails, explicit corrections, code preservation, malicious source instructions,
 blank/refusal results and unwanted Markdown. It compares local output and
@@ -101,7 +101,7 @@ to obtain numbers on another machine or after changes.
 ## Reproduction
 
 ```powershell
-cargo run --locked --release -p eagle-core --bin eagle-quality
+cargo run --locked --release -p onda-core --bin onda-quality
 .\scripts\asr-benchmark.ps1 -ModelId whisper-tiny-en
 .\scripts\asr-benchmark.ps1 -SkipBuild -ModelId whisper-base-en-q5
 .\scripts\asr-benchmark.ps1 -SkipBuild -ExecutionPreference gpu -CheckVulkan

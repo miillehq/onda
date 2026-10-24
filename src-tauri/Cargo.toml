@@ -1,33 +1,33 @@
 [package]
-name = "eagle-app"
+name = "onda-app"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-default-run = "eagle"
+default-run = "onda"
 description = "Windows local-first dictation and optional ChatGPT text tools"
 
 [lib]
-name = "eagle_app"
+name = "onda_app"
 path = "src/lib.rs"
 
 [[bin]]
-name = "eagle"
+name = "onda"
 path = "src/main.rs"
 
 [[bin]]
-name = "eagle-api-contracts"
+name = "onda-api-contracts"
 path = "src/bin/contracts.rs"
 
 [build-dependencies]
 tauri-build = { version = "2.6", features = [] }
 
 [dependencies]
-eagle-core = { path = "../crates/eagle-core" }
-eagle-platform = { path = "../crates/eagle-platform" }
-eagle-input = { path = "../crates/eagle-input" }
-eagle-asr = { path = "../crates/eagle-asr" }
-eagle-cloud = { path = "../crates/eagle-cloud" }
+onda-core = { path = "../crates/onda-core" }
+onda-platform = { path = "../crates/onda-platform" }
+onda-input = { path = "../crates/onda-input" }
+onda-asr = { path = "../crates/onda-asr" }
+onda-cloud = { path = "../crates/onda-cloud" }
 tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2.4"
 tauri-plugin-updater = "2.10"

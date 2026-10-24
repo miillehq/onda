@@ -26,7 +26,7 @@ export function call(request: ApiRequest): Promise<ApiResponse> {
 }
 
 export function onEvent(callback: (event: RuntimeEvent) => void): Promise<UnlistenFn> {
-  if (isNative) return listen<RuntimeEvent>("eagle://event", ({ payload }) => callback(payload));
+  if (isNative) return listen<RuntimeEvent>("onda://event", ({ payload }) => callback(payload));
   return mock().then((backend) => backend.onEvent(callback));
 }
 
