@@ -20,7 +20,7 @@ $env:ONDA_VULKAN_TARGET_DIR = 'C:\evn'
 
 The Vulkan helper captures/imports only build-relevant MSVC variables, selects Ninja and uses a short separate target. MSBuild shader subprojects exceeded MAX_PATH even in shorter build directories. Preparation restores the prior CMake generator, and builds CPU first. Compiler/SDK tools remain build-only.
 
-Preparation stages genuine release workers with Tauri target-triple names. The build regenerates types and complete locked dependency notices, packages an exact/reproducible MPL source ZIP, and collects verified Microsoft runtime resources/licenses. Local installers include these resources. Model binaries, credentials, signing keys and debug profiles never enter the bundle.
+Preparation stages genuine release workers with Tauri target-triple names: the SSE2 baseline CPU worker, the AVX2 CPU worker that Onda prefers on CPUs that support it, and optionally the Vulkan worker. The build regenerates types and complete locked dependency notices, packages an exact/reproducible MPL source ZIP, and collects verified Microsoft runtime resources/licenses. Local installers include these resources. Model binaries, credentials, signing keys and debug profiles never enter the bundle.
 
 Artifacts are `target/release/bundle/nsis/*setup.exe` with adjacent SHA-256. Installation is per user with shortcuts/uninstaller. Upgrade/reinstall preserves the identifier's local data directory, SQLite schema and model assets. External configured model directories are preserved too. Keep `identifier` stable through branding changes unless implementing an explicit data migration. Uninstall does not destroy user assets by default.
 

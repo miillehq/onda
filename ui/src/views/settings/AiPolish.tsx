@@ -1,4 +1,4 @@
-import { ArrowRight, AudioLines, ExternalLink, FileText, LogOut, Plus, ScanText, Sparkles, TriangleAlert, UserRound } from "lucide-preact";
+import { ArrowRight, AudioLines, ExternalLink, FileText, LogOut, Plus, ScanText, Sparkles, Trash2, TriangleAlert, UserRound } from "lucide-preact";
 import { useEffect, useState } from "preact/hooks";
 import { ask } from "../../api";
 import { Button, Chip, Select, Switch } from "../../components/controls";
@@ -24,6 +24,15 @@ function AccountRow({ account }: { account: AccountInfo }) {
       else toast({ tone: "info", title: "Signed out on this PC", body: "ChatGPT didn't confirm it removed access. You can remove Onda in your ChatGPT account settings." }, 9000);
     } catch (error) {
       toastError(error, "Couldn't sign out");
+    }
+  };
+  const remove = async () => {
+    try {
+      await ask({ command: "removeChatgptProfile", args: { profileId: account.id } }, "signOut");
+      await refresh();
+      toast({ tone: "ok", title: `Removed ${account.label || "account"}` });
+    } catch (error) {
+      toastError(error, "Couldn't remove account");
     }
   };
   const initial = (account.label || account.email || "?").charAt(0).toUpperCase();
@@ -58,9 +67,15 @@ function AccountRow({ account }: { account: AccountInfo }) {
             Use this account
           </Button>
         )}
-        <Button size="sm" variant="ghost" icon={<LogOut size={15} />} onClick={() => void signOut()}>
-          Sign out
-        </Button>
+        {account.signedIn ? (
+          <Button size="sm" variant="ghost" icon={<LogOut size={15} />} onClick={() => void signOut()}>
+            Sign out
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" icon={<Trash2 size={15} />} onClick={() => void remove()} aria-label={`Remove ${account.label || "account"} from Onda`}>
+            Remove
+          </Button>
+        )}
       </div>
     </div>
   );

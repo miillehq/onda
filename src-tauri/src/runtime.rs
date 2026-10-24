@@ -32,6 +32,7 @@ const FOCUS_RETURN_DELAY: Duration = Duration::from_secs(3);
 const LEARNING_SAMPLE_DELAY: Duration = Duration::from_secs(4);
 const HELPER_POLL_TIMEOUT: Duration = Duration::from_millis(100);
 const LEVEL_INTERVAL: Duration = Duration::from_millis(50);
+const PRECEDING_CHARACTERS: usize = 2;
 const FAST_MODEL_NAME_HINTS: &[&str] = &["fast", "mini", "nano"];
 const MAX_HISTORY_ENTRIES: usize = 2000;
 const DAY_MS: i64 = 86_400_000;
@@ -61,6 +62,12 @@ struct ActiveOperation {
     /// User-initiated dictations and edits are kept in history; previews and replays are not.
     history: bool,
 }
+/// A speech worker started with the recording, loading its model while the user speaks.
+struct WarmWorker {
+    id: String,
+    task: tauri::async_runtime::JoinHandle<AppResult<onda_asr::PreparedTranscription>>,
+}
+
 #[derive(Clone)]
 struct SavedResult {
     copied: bool,
@@ -109,6 +116,7 @@ pub struct Runtime {
     proposal: Mutex<Option<LearningProposal>>,
     /// Newest first. Decrypted only in memory; the store holds DPAPI-sealed copies.
     history: Mutex<VecDeque<HistoryEntry>>,
+    warm: Mutex<Option<WarmWorker>>,
     /// Retention in days; 0 keeps history only until Onda quits.
     history_days: AtomicU32,
     cloud: Option<ChatGptService>,
@@ -175,6 +183,7 @@ impl Runtime {
             result: Mutex::new(None),
             proposal: Mutex::new(None),
             history: Mutex::new(history),
+            warm: Mutex::new(None),
             history_days: AtomicU32::new(settings.history_days),
             cloud,
             cloud_error,
@@ -267,6 +276,7 @@ impl Runtime {
             state.fail(id, error.clone());
         }
         tracing::warn!(subsystem="operation",operation_id=id,code=?error.code,"operation failed");
+        self.discard_warm_worker();
         if error.code != ErrorCode::Cancelled {
             self.mark_history_failed(id, error.code.clone());
         }
@@ -549,6 +559,7 @@ impl Runtime {
         self.emit_state();
     }
     fn cancel_owned_operation(&self) -> AppResult<Option<String>> {
+        self.discard_warm_worker();
         let mut state = lock(&self.state)?;
         let id = state.snapshot().operation_id;
         {
@@ -663,6 +674,8 @@ impl Runtime {
             history: true,
         };
         let start_cancellation = operation.cancellation.clone();
+        let warm_context = operation.context.clone();
+        let warm_cancellation = operation.cancellation.clone();
         self.set_active(operation)?;
         if !lock(&self.state)?.matches(&id) {
             return Err(AppError::new(
@@ -705,6 +718,7 @@ impl Runtime {
                 .map(|state| state.matches(&level_id) && state.snapshot().phase == Phase::Recording)
                 .unwrap_or(false)
         });
+        self.start_warm_worker(&id, &settings, &warm_context, warm_cancellation);
         self.monitor_capture(id);
         Ok(())
     }
@@ -854,20 +868,33 @@ impl Runtime {
     ) -> AppResult<()> {
         let started = Instant::now();
         let model = self.selected_model(&active.settings)?;
-        let model_manager = lock(&self.models)?.clone();
-        let path = model_manager
-            .verified_model_path(model.id, &active.cancellation)
-            .await
-            .map_err(errors::asr)?;
-        let options = self.transcription_options(&active.settings, path, &active.context)?;
-        let transcription = self
-            .asr
-            .transcribe(&samples, options, active.cancellation.clone())
-            .await
-            .map_err(errors::asr)?;
+        let prepared = match self.take_warm_worker(&active.id) {
+            Some(task) => task.await.ok().and_then(Result::ok),
+            None => None,
+        };
+        let warm = prepared.is_some();
+        let transcription = match prepared {
+            Some(prepared) => prepared
+                .finish(&samples, active.cancellation.clone())
+                .await
+                .map_err(errors::asr)?,
+            None => {
+                let model_manager = lock(&self.models)?.clone();
+                let path = model_manager
+                    .verified_model_path(model.id, &active.cancellation)
+                    .await
+                    .map_err(errors::asr)?;
+                let options =
+                    self.transcription_options(&active.settings, path, &active.context)?;
+                self.asr
+                    .transcribe(&samples, options, active.cancellation.clone())
+                    .await
+                    .map_err(errors::asr)?
+            }
+        };
         drop(samples);
         self.metric(&active.id, "asr", started, true);
-        tracing::info!(subsystem="asr",operation_id=active.id,model=model.id,backend=?transcription.backend,inference_ms=transcription.inference_ms,model_load_ms=transcription.model_load_ms,accelerator_fallback=transcription.accelerator_fallback,"local transcription complete");
+        tracing::info!(subsystem="asr",operation_id=active.id,model=model.id,warm,backend=?transcription.backend,inference_ms=transcription.inference_ms,model_load_ms=transcription.model_load_ms,accelerator_fallback=transcription.accelerator_fallback,"local transcription complete");
         if active.cancellation.is_cancelled() {
             return Err(AppError::new(
                 ErrorCode::Cancelled,
@@ -975,6 +1002,67 @@ impl Runtime {
         }
         self.transition(&active.id, Phase::Completed)?;
         Ok(())
+    }
+
+    /// Start the speech worker as recording begins: it verifies and loads the model (and sets up
+    /// a GPU) while the user speaks, so transcription starts the moment they stop. Any failure
+    /// here is silent; `process_audio` then runs the one-shot path.
+    fn start_warm_worker(
+        self: &Arc<Self>,
+        id: &str,
+        settings: &Settings,
+        context: &str,
+        cancellation: CancellationToken,
+    ) {
+        let service = self.clone();
+        let settings = settings.clone();
+        let context = context.to_owned();
+        let task = tauri::async_runtime::spawn(async move {
+            let model = service.selected_model(&settings)?;
+            let manager = lock(&service.models)?.clone();
+            let path = manager
+                .verified_model_path(model.id, &cancellation)
+                .await
+                .map_err(errors::asr)?;
+            let options = service.transcription_options(&settings, path, &context)?;
+            service
+                .asr
+                .prepare(options, &cancellation)
+                .await
+                .map_err(errors::asr)
+        });
+        if let Ok(mut warm) = lock(&self.warm) {
+            if let Some(previous) = warm.replace(WarmWorker {
+                id: id.to_owned(),
+                task,
+            }) {
+                previous.task.abort();
+            }
+        }
+    }
+
+    fn take_warm_worker(
+        &self,
+        id: &str,
+    ) -> Option<tauri::async_runtime::JoinHandle<AppResult<onda_asr::PreparedTranscription>>> {
+        let mut warm = lock(&self.warm).ok()?;
+        match warm.take() {
+            Some(worker) if worker.id == id => Some(worker.task),
+            Some(worker) => {
+                worker.task.abort();
+                None
+            }
+            None => None,
+        }
+    }
+
+    /// Dropping the prepared worker kills its process; nothing stays loaded between dictations.
+    fn discard_warm_worker(&self) {
+        if let Ok(mut warm) = lock(&self.warm) {
+            if let Some(worker) = warm.take() {
+                worker.task.abort();
+            }
+        }
     }
 
     /// Dictation's own recognition settings, so anything else that transcribes (teaching a
@@ -1309,7 +1397,13 @@ impl Runtime {
                     cancellation.is_cancelled()
                 })
             } else {
-                targets.paste_guarded(&target, &text, shortcut, || cancellation.is_cancelled())
+                // Two characters tell a closing quote from an opening one; a field that
+                // exposes no caret simply gets the text as dictated.
+                let before = targets
+                    .preceding_text(&target, PRECEDING_CHARACTERS)
+                    .unwrap_or_default();
+                let spaced = onda_core::text::space_after_previous_text(&before, &text);
+                targets.paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
             }
             .map_err(errors::platform)?;
             if !outcome.input_injected || !outcome.clipboard_read_observed {
@@ -1611,6 +1705,7 @@ impl Runtime {
 
     pub fn shutdown(&self) {
         self.shutdown.store(true, Ordering::Release);
+        self.discard_warm_worker();
         self.cancel_immediate();
         if let Ok(mut capture) = lock(&self.capture) {
             let _ = capture.cancel();

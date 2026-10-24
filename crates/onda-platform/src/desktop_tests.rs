@@ -159,6 +159,7 @@ fn real_edit_unicode_paste_preserves_every_seeded_format_and_refuses_password() 
     );
     assert!(matches!(cancelled, Err(PlatformError::Cancelled)));
     assert_eq!(fixture.text(), "");
+    assert_eq!(service.preceding_text(&target, 2).unwrap(), "");
     let outcome = service
         .paste(&target, text, PasteShortcut::ControlV)
         .unwrap();
@@ -166,6 +167,8 @@ fn real_edit_unicode_paste_preserves_every_seeded_format_and_refuses_password() 
     assert!(outcome.clipboard_read_observed);
     assert!(outcome.clipboard_restored);
     assert_eq!(fixture.text(), text);
+    // The caret sits after the pasted text; the last two characters are a CJK pair.
+    assert_eq!(service.preceding_text(&target, 2).unwrap(), "本語");
     {
         let _lease = ClipboardLease::open(_original.owner.hwnd).unwrap();
         let source = unsafe { GetClipboardData(rich_format) };

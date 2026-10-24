@@ -12,7 +12,7 @@ pub mod protocol;
 #[cfg(windows)]
 mod worker_job;
 
-pub use engine::{AsrEngine, TranscriptionOptions, TranscriptionResult};
+pub use engine::{AsrEngine, PreparedTranscription, TranscriptionOptions, TranscriptionResult};
 pub use hardware::{ExecutionBackend, ExecutionPreference, GpuInfo, HardwareInfo};
 pub use manifest::{builtin_models, recommended_model, ModelSpec, QualityProfile};
 pub use models::{DownloadProgress, DownloadStage, InstalledModel, ModelManager};

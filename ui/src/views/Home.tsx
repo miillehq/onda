@@ -82,7 +82,7 @@ function HeroScene() {
         </div>
         <div class="scene-text">
           {SAMPLE.slice(0, typed)}
-          <span class="caret" />
+          <span class={`caret${done ? " is-done" : ""}`} />
         </div>
       </div>
       <span class="pill-capsule scene-pill">

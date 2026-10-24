@@ -62,11 +62,73 @@ async fn application_call(
 }
 
 pub(crate) fn show_main(app: &tauri::AppHandle) {
+    show_main_at(app, None);
+}
+
+/// Show the main window, creating it when it was closed. Returns true when it was created,
+/// in which case it opens at `section` itself and needs no navigate event.
+pub(crate) fn show_main_at(app: &tauri::AppHandle, section: Option<&str>) -> bool {
     if let Some(window) = app.get_webview_window(MAIN_LABEL) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+        return false;
     }
+    match build_main_window(app, section, true) {
+        Ok(window) => {
+            let _ = window.set_focus();
+            true
+        }
+        Err(error) => {
+            tracing::warn!(subsystem = "window", error = %error, "main window could not be created");
+            false
+        }
+    }
+}
+
+/// The main window carries a full WebView renderer (about 100 MB). It exists only while open:
+/// built when shown and destroyed when closed, so Onda in the tray keeps just the pill loaded.
+fn build_main_window(
+    app: &tauri::AppHandle,
+    section: Option<&str>,
+    visible: bool,
+) -> Result<tauri::WebviewWindow, Box<dyn std::error::Error>> {
+    let configuration = app
+        .config()
+        .app
+        .windows
+        .first()
+        .ok_or("Main window configuration missing")?
+        .clone();
+    let theme = app
+        .try_state::<Arc<Runtime>>()
+        .and_then(|service| service.settings().ok())
+        .map_or(ThemePreference::System, |settings| settings.theme);
+    let mut window = tauri::WebviewWindowBuilder::from_config(app, &configuration)?
+        .title(onda_core::APP_NAME)
+        .theme(window_theme(theme))
+        .background_color(chrome_color(is_dark(theme)))
+        .visible(visible);
+    // Isolated profiles keep their own browser data, so they can run beside the real app.
+    if let Some(directory) = debug_smoke_directory().or_else(debug_dev_profile) {
+        window = window.data_directory(directory.join("EBWebView"));
+    }
+    if let Some(section) = section {
+        // The page reads its starting route from the hash before rendering.
+        let hash = serde_json::to_string(&format!("#{section}"))?;
+        window = window.initialization_script(format!(
+            "if (!location.hash) history.replaceState(null, '', {hash});"
+        ));
+    }
+    if debug_smoke_directory().is_some() {
+        window = window.initialization_script("window.__ONDA_SMOKE__ = true;");
+        if std::env::var("ONDA_SMOKE_REPLAY").as_deref() == Ok("1") {
+            window = window.initialization_script("window.__ONDA_REPLAY__ = true;");
+        }
+    }
+    let window = window.build()?;
+    apply_theme(app, theme);
+    Ok(window)
 }
 
 fn is_dark(theme: ThemePreference) -> bool {
@@ -193,38 +255,17 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let settings = runtime.settings()?;
     app.manage(runtime);
-    let window_configuration = app
-        .config()
-        .app
-        .windows
-        .first()
-        .ok_or("Main window configuration missing")?
-        .clone();
-    // Isolated profiles keep their own browser data, so they can run beside the real app.
+    // Starting at login leaves the main window unbuilt until it is opened; the smoke test
+    // needs it running but hidden.
+    if smoke_directory.is_some() {
+        build_main_window(app.handle(), None, false)?;
+    } else if !std::env::args().any(|argument| argument == "--background") {
+        build_main_window(app.handle(), None, true)?;
+    }
     let webview_data = smoke_directory
         .clone()
         .or_else(debug_dev_profile)
         .map(|directory| directory.join("EBWebView"));
-    let mut window = tauri::WebviewWindowBuilder::from_config(app, &window_configuration)?
-        .title(onda_core::APP_NAME)
-        .theme(window_theme(settings.theme))
-        .background_color(chrome_color(is_dark(settings.theme)));
-    if let Some(directory) = webview_data.clone() {
-        window = window.data_directory(directory);
-    }
-    if std::env::args().any(|argument| argument == "--background") {
-        window = window.visible(false);
-    }
-    if smoke_directory.is_some() {
-        window = window
-            .visible(false)
-            .initialization_script("window.__ONDA_SMOKE__ = true;");
-        if std::env::var("ONDA_SMOKE_REPLAY").as_deref() == Ok("1") {
-            window = window.initialization_script("window.__ONDA_REPLAY__ = true;");
-        }
-    }
-    window.build()?;
-    apply_theme(app.handle(), settings.theme);
     let mut pill_window = tauri::WebviewWindowBuilder::new(
         app,
         pill::LABEL,
@@ -325,7 +366,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![application_call])
         .setup(setup)
         .on_window_event(|window, event| match event {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
+            // Closing the main window destroys it to free its renderer; the pill only hides.
+            tauri::WindowEvent::CloseRequested { api, .. } if window.label() != MAIN_LABEL => {
                 api.prevent_close();
                 let _ = window.hide();
             }

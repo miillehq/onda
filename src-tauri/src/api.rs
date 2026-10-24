@@ -82,6 +82,10 @@ pub enum ApiRequest {
     SignOutChatgptProfile {
         profile_id: String,
     },
+    /// Forget an account on this PC, signing it out first if needed.
+    RemoveChatgptProfile {
+        profile_id: String,
+    },
     ListAvailableModels,
     SetChatgptModel {
         profile_id: String,

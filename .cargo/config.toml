@@ -10,3 +10,9 @@ GGML_FMA = { value = "OFF", force = true }
 GGML_F16C = { value = "OFF", force = true }
 GGML_BMI2 = { value = "OFF", force = true }
 GGML_SSE42 = { value = "OFF", force = true }
+
+# cmake-rs replaces CMake's per-configuration flags when building with the Visual Studio
+# generator and drops /O2, so whisper.cpp compiled with optimization disabled (/Od). Defining
+# them here (whisper-rs-sys forwards CMAKE_* to CMake) restores CMake's MSVC Release defaults.
+CMAKE_C_FLAGS_RELEASE = { value = "-nologo -MD -Brepro /O2 /Ob2 /DNDEBUG", force = true }
+CMAKE_CXX_FLAGS_RELEASE = { value = "-nologo -MD -Brepro /O2 /Ob2 /DNDEBUG", force = true }

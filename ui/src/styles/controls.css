@@ -993,6 +993,10 @@
   vertical-align: -0.2em;
   animation: blink 1.1s steps(1) infinite;
 }
+/* A finished sample settles; endless blinking would keep an idle window repainting. */
+.caret.is-done {
+  animation-iteration-count: 3;
+}
 @keyframes blink {
   50% {
     opacity: 0;

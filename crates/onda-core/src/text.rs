@@ -71,6 +71,40 @@ pub(crate) fn protected_ranges(source: &str) -> Vec<Range<usize>> {
         .collect()
 }
 
+/// Characters after which a new dictation continues without a space.
+const OPENING_CHARACTERS: &str = "([{<“‘«„¿¡";
+/// Characters a dictation can start with that attach to the previous word.
+const ATTACHING_CHARACTERS: &str = ".,;:!?)]}>”’»%…";
+
+/// Text typed at the caret, with a separating space when it would otherwise run into the
+/// earlier text: after a sentence's final period, a word or a closing quote, but not after
+/// whitespace, an opening bracket or quote, or between CJK characters. `before` holds the
+/// characters just before the caret (oldest first); empty means the start of the field.
+pub fn space_after_previous_text(before: &str, text: &str) -> String {
+    let mut previous = before.chars().rev();
+    let (Some(last), Some(first)) = (previous.next(), text.chars().next()) else {
+        return text.to_owned();
+    };
+    let straight_quote_opens =
+        matches!(last, '"' | '\'') && previous.next().is_none_or(char::is_whitespace);
+    let joins = last.is_whitespace()
+        || OPENING_CHARACTERS.contains(last)
+        || straight_quote_opens
+        || first.is_whitespace()
+        || ATTACHING_CHARACTERS.contains(first)
+        || (joins_without_space(last) && joins_without_space(first));
+    if joins {
+        text.to_owned()
+    } else {
+        format!(" {text}")
+    }
+}
+
+/// Chinese, Japanese and Thai run words together; Korean separates them with spaces.
+fn joins_without_space(character: char) -> bool {
+    is_unspaced_script(character) && !matches!(character as u32, 0xAC00..=0xD7AF)
+}
+
 /// Unit words that only format a number; "3pm" and "3 p.m." are the same value.
 const FORMAT_SUFFIXES: &[&str] = &[
     "am", "pm", "st", "nd", "rd", "th", "s", "h", "hr", "hrs", "min", "mins", "sec", "secs",
@@ -358,6 +392,30 @@ mod tests {
             assert!(validate_enhancement(source, result, &[], true).is_err());
         }
         assert!(validate_enhancement(source, source, &[], true).is_ok());
+    }
+    #[test]
+    fn dictation_is_spaced_from_earlier_text_only_when_it_would_run_together() {
+        for (before, text, expected) in [
+            ("", "Hello.", "Hello."),
+            ("it.", "Next one.", " Next one."),
+            ("ok?", "Yes.", " Yes."),
+            ("hello", "world", " world"),
+            ("d, ", "then", "then"),
+            ("e\n", "Line", "Line"),
+            ("e (", "aside", "aside"),
+            (" \"", "quoted", "quoted"),
+            ("d\"", "Then", " Then"),
+            ("我们", "你好", "你好"),
+            ("done", ", and more", ", and more"),
+            ("50", "% off", "% off"),
+            ("x.", " already spaced", " already spaced"),
+        ] {
+            assert_eq!(
+                space_after_previous_text(before, text),
+                expected,
+                "{before:?} + {text:?}"
+            );
+        }
     }
     #[test]
     fn number_formatting_and_abbreviations_may_change_but_values_may_not() {

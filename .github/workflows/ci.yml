@@ -110,7 +110,7 @@ jobs:
           $installDirectory = Join-Path $env:RUNNER_TEMP 'onda-install-smoke'
           $installation = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDirectory") -WindowStyle Hidden -Wait -PassThru
           if ($installation.ExitCode -ne 0) { throw 'Silent installation failed' }
-          foreach ($binary in @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe')) {
+          foreach ($binary in @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe', 'onda-asr-avx2-worker.exe')) {
             if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $binary))) { throw "Installed binary missing: $binary" }
           }
           $runtimeManifestPath = Join-Path $installDirectory 'licenses/Microsoft-runtime-manifest.json'
@@ -122,7 +122,7 @@ jobs:
             if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runtimeFile.sha256) { throw 'Installed runtime hash mismatch' }
           }
           if (-not (Test-Path -LiteralPath (Join-Path $installDirectory 'licenses/MPL-source.zip'))) { throw 'Installed MPL source access missing' }
-          $installedExecutables = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe') | ForEach-Object { Join-Path $installDirectory $_ }
+          $installedExecutables = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe', 'onda-asr-avx2-worker.exe') | ForEach-Object { Join-Path $installDirectory $_ }
           $runtimeAudit = & './scripts/collect-msvc-runtime.ps1' -ExecutablePaths $installedExecutables
           $uninstaller = Join-Path $installDirectory 'uninstall.exe'
           if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'Uninstaller missing' }

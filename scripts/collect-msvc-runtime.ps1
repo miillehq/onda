@@ -213,7 +213,7 @@ if ($WithVulkan) {
 }
 
 if ($ExecutablePaths.Count -eq 0) {
-    $binaryNames = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe')
+    $binaryNames = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe', 'onda-asr-avx2-worker.exe')
     if ($WithVulkan) { $binaryNames += 'onda-asr-vulkan-worker.exe' }
     $ExecutablePaths = @($binaryNames | ForEach-Object { Join-Path $repositoryDirectory "target/release/$_" } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
 }

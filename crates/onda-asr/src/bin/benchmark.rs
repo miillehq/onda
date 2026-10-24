@@ -35,8 +35,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string_pretty(&installed)?);
         return Ok(());
     }
-    if arguments.len() < 3 || arguments.len() > 5 {
-        return Err("usage: onda-asr-benchmark <model-path> <mono-16k-pcm16.wav> <worker-directory> [repetitions] [cpu|auto|gpu]; or hardware; or download <directory> <model-id>".into());
+    if arguments.len() < 3 || arguments.len() > 6 {
+        return Err("usage: onda-asr-benchmark <model-path> <mono-16k-pcm16.wav> <worker-directory> [repetitions] [cpu|auto|gpu] [cold|warm]; or hardware; or download <directory> <model-id>".into());
     }
     let mut reader = hound::WavReader::open(&arguments[1])?;
     let specification = reader.spec();
@@ -69,9 +69,30 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             "gpu" => ExecutionPreference::GpuPreferred,
             _ => return Err("execution preference must be cpu, auto or gpu".into()),
         };
-        let result = engine
-            .transcribe(&samples, options, CancellationToken::new())
-            .await?;
+        // Warm: prepare as dictation does when recording starts, wait as long as the clip is
+        // (the user speaking), then time only what happens after they stop.
+        let result = match arguments.get(5).map(String::as_str).unwrap_or("cold") {
+            "cold" => {
+                // Start from the same idle machine as a warm run: the user was speaking.
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    (samples.len() as u64 * 1000) / u64::from(specification.sample_rate),
+                ))
+                .await;
+                engine
+                    .transcribe(&samples, options, CancellationToken::new())
+                    .await?
+            }
+            "warm" => {
+                let cancellation = CancellationToken::new();
+                let prepared = engine.prepare(options, &cancellation).await?;
+                let speaking = std::time::Duration::from_millis(
+                    (samples.len() as u64 * 1000) / u64::from(specification.sample_rate),
+                );
+                tokio::time::sleep(speaking).await;
+                prepared.finish(&samples, cancellation).await?
+            }
+            _ => return Err("mode must be cold or warm".into()),
+        };
         println!(
             "{}",
             serde_json::json!({ "iteration": iteration + 1, "result": result })

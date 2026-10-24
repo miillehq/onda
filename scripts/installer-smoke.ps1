@@ -204,7 +204,7 @@ try {
     $installation = Start-Process -FilePath $InstallerPath -ArgumentList @('/S', "/D=$installDirectory") -WindowStyle Hidden -Wait -PassThru
     if ($installation.ExitCode -ne 0) { throw 'Silent candidate installation failed.' }
     $installed = $true
-    $binaryNames = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe')
+    $binaryNames = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe', 'onda-asr-avx2-worker.exe')
     if ($WithVulkan) { $binaryNames += 'onda-asr-vulkan-worker.exe' }
     foreach ($name in $binaryNames) { if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $name))) { throw "Installed candidate executable missing: $name" } }
     foreach ($name in @('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.txt', 'licenses/MPL-source.zip', 'licenses/Microsoft-Visual-Cpp-Runtime-2015-2022.docx', 'licenses/Microsoft-Build-Tools-2022.docx')) {
@@ -222,6 +222,8 @@ try {
     $runtimeAudit = & (Join-Path $PSScriptRoot 'collect-msvc-runtime.ps1') -ExecutablePaths $installedExecutables -WithVulkan:$WithVulkan
     $report.auditedExecutables = $runtimeAudit.AuditedExecutables
     $report.cpuWorker = Test-InstalledWorker -Name 'onda-asr-worker.exe'
+    # Optional: a CPU without AVX2 cannot run it, and Onda then uses the baseline worker.
+    $report.avx2Worker = Test-InstalledWorker -Name 'onda-asr-avx2-worker.exe' -Optional
     if ($WithVulkan) { $report.vulkanWorker = Test-InstalledWorker -Name 'onda-asr-vulkan-worker.exe' -Optional }
     $launchUtc = [System.DateTime]::UtcNow
     $report.launchUtc = $launchUtc.ToString('o')

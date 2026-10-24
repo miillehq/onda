@@ -133,6 +133,24 @@ impl WindowsTargetService {
     ) -> Result<String, PlatformError> {
         self.field_text(target, max_characters)
     }
+    /// A few characters just before the caret, read immediately before typing so a dictation
+    /// can be spaced from earlier text. Never stored or sent anywhere.
+    pub fn preceding_text(
+        &self,
+        target: &TargetSnapshot,
+        max_characters: usize,
+    ) -> Result<String, PlatformError> {
+        validate_limit(max_characters)?;
+        #[cfg(windows)]
+        {
+            crate::windows_target::preceding_text(target, max_characters)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = target;
+            Err(PlatformError::UnsupportedPlatform)
+        }
+    }
     /// The caller may use this only inside an opt-in, bounded post-insertion correction window.
     pub fn field_text(
         &self,

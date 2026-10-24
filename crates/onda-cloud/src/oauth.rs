@@ -454,6 +454,35 @@ impl ChatGptService {
         })
     }
 
+    /// Forget an account on this PC. A still-signed-in account is signed out first so its
+    /// refresh token is revoked rather than abandoned; an unreadable registration is deleted
+    /// because the user asked for it and it can never be used again.
+    pub async fn remove_profile(&self, profile_id: &str) -> Result<SignOutResult> {
+        let signed_in = match self.inner.store.load(profile_id) {
+            Ok(record) => record.tokens.is_some(),
+            Err(CloudError::UnknownProfile) => return Err(CloudError::UnknownProfile),
+            Err(_) => false,
+        };
+        let result = if signed_in {
+            self.sign_out(profile_id).await?
+        } else {
+            self.session_cancellation(profile_id).await.cancel();
+            SignOutResult {
+                remote_revocation_confirmed: true,
+            }
+        };
+        {
+            let _lock = self.inner.store.lock_profile(profile_id).await?;
+            self.inner.store.remove(profile_id)?;
+        }
+        self.inner.store.remove_lock_file(profile_id);
+        let _host_lock = self.inner.store.lock_host().await?;
+        if self.inner.store.active_profile()?.as_deref() == Some(profile_id) {
+            self.inner.store.select(None)?;
+        }
+        Ok(result)
+    }
+
     pub(crate) async fn resolve_profile(&self, id: Option<String>) -> Result<String> {
         if let Some(id) = id {
             return Ok(id);

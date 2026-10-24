@@ -378,6 +378,59 @@ pub(crate) fn read_text(
     Ok(text)
 }
 
+/// Up to `max_characters` immediately before the caret (or before the selection, which a
+/// paste replaces). Empty at the start of the field or when the control exposes no caret.
+pub(crate) fn preceding_text(
+    target: &TargetSnapshot,
+    max_characters: usize,
+) -> Result<String, PlatformError> {
+    let _apartment = ComApartment::initialize()?;
+    let automation = automation()?;
+    let (actual, element) = snapshot_with(&automation)?;
+    validate_identity(target, &actual)?;
+    let pattern: IUIAutomationTextPattern = unsafe {
+        element
+            .GetCurrentPatternAs(UIA_TextPatternId)
+            .map_err(|_| PlatformError::SelectionUnavailable)?
+    };
+    let ranges = unsafe { pattern.GetSelection().map_err(uia_error)? };
+    if unsafe { ranges.Length().map_err(uia_error)? } != 1 {
+        return Ok(String::new());
+    }
+    let caret = unsafe { ranges.GetElement(0).map_err(uia_error)? };
+    let before = unsafe { caret.Clone().map_err(uia_error)? };
+    let moved = unsafe {
+        before
+            .MoveEndpointByRange(
+                TextPatternRangeEndpoint_End,
+                &caret,
+                TextPatternRangeEndpoint_Start,
+            )
+            .map_err(uia_error)?;
+        before
+            .MoveEndpointByUnit(
+                TextPatternRangeEndpoint_Start,
+                TextUnit_Character,
+                -(max_characters as i32),
+            )
+            .map_err(uia_error)?
+    };
+    if moved == 0 {
+        return Ok(String::new());
+    }
+    // Surrogate pairs count as two UTF-16 units for GetText.
+    let text = unsafe {
+        before
+            .GetText((max_characters * 2) as i32)
+            .map_err(uia_error)?
+    }
+    .to_string();
+    let (after, _) = snapshot_with(&automation)?;
+    validate_identity(target, &after)?;
+    let skip = text.chars().count().saturating_sub(max_characters);
+    Ok(text.chars().skip(skip).collect())
+}
+
 fn uia_error(error: WindowsError) -> PlatformError {
     PlatformError::TargetUnavailable(format!("UI Automation HRESULT {}", error.code().0))
 }

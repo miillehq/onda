@@ -21,11 +21,11 @@ try {
     if ($env:ONDA_WINDOWS_SIGN_COMMAND) { $configuration.bundle.windows = @{ signCommand = $env:ONDA_WINDOWS_SIGN_COMMAND } }
     if ($env:ONDA_WINDOWS_CERT_THUMBPRINT) {
         $configuration.bundle.windows = @{ certificateThumbprint=$env:ONDA_WINDOWS_CERT_THUMBPRINT; digestAlgorithm='sha256'; timestampUrl='http://timestamp.digicert.com' }
-        $helpers = @('onda-input','onda-asr-worker')
+        $helpers = @('onda-input','onda-asr-worker','onda-asr-avx2-worker')
         if ($WithVulkan) { $helpers += 'onda-asr-vulkan-worker' }
         foreach($helper in $helpers) { & (Join-Path $PSScriptRoot 'sign-windows.ps1') -Path (Join-Path $repositoryDirectory "src-tauri/binaries/$helper-x86_64-pc-windows-msvc.exe") }
     }
-    if ($WithVulkan) { $configuration.bundle.externalBin = @('binaries/onda-input', 'binaries/onda-asr-worker', 'binaries/onda-asr-vulkan-worker') }
+    if ($WithVulkan) { $configuration.bundle.externalBin = @('binaries/onda-input', 'binaries/onda-asr-worker', 'binaries/onda-asr-avx2-worker', 'binaries/onda-asr-vulkan-worker') }
     if ($SignedUpdates) {
         foreach ($secretName in @('TAURI_SIGNING_PRIVATE_KEY','ONDA_UPDATE_ENDPOINT','ONDA_UPDATE_PUBLIC_KEY')) { if (-not [Environment]::GetEnvironmentVariable($secretName)) { throw "Missing release configuration: $secretName" } }
         $configuration.bundle.createUpdaterArtifacts = $true

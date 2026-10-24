@@ -19,11 +19,63 @@ returns a bounded JSON transcript and timing metrics; native stderr is discarded
 by the client so upstream logging cannot reveal dictation in application logs.
 The benchmark deliberately prints its public fixture transcript.
 
-The native process runs with `CREATE_NO_WINDOW` and below-normal priority. By
-default, it uses at most six physical cores and reserves one physical core when
-more than one exists. Advanced thread counts are limited to 1–16. It exits after
-one operation, giving up model memory while idle. This adds the measured model
-load/process startup cost to each operation and makes cancellation decisive.
+The native process runs with `CREATE_NO_WINDOW` at normal priority and opts out of
+Windows power throttling (`ProcessPowerThrottling`, execution speed). At below-normal
+priority, Windows parked the windowless worker on efficiency cores after the machine
+idled while the user spoke: on an i5-14400F, warm tiny inference ranged 68–1197 ms
+and small Q5 397–1754 ms, against 69–149 ms and 378–436 ms at normal priority. The
+shortcut helper runs above normal, so the keyboard hook still comes first. By
+default the worker uses every physical core up to six; reserving a core left two-
+and four-core laptops with one or three threads. Advanced thread counts are limited
+to 1–16.
+
+## Speed
+
+Measured on an i5-14400F (6 performance and 4 efficiency cores) with a discrete
+GPU, Windows 11, the public JFK fixture cut to 3 s and its full 11 s:
+
+- **Optimized native build.** The `cmake` crate replaces CMake's per-configuration
+  flags under the Visual Studio generator and dropped `/O2`, so whisper.cpp in every
+  CPU worker compiled with optimization disabled (`/Od`); the Ninja-built Vulkan
+  worker kept CMake's defaults. `.cargo/config.toml` now defines
+  `CMAKE_{C,CXX}_FLAGS_RELEASE` with MSVC's Release defaults, which `whisper-rs-sys`
+  forwards. CPU inference fell from 445 to 89 ms (tiny, 3 s), 1625 to 221 ms (tiny,
+  11 s), 6968 to 924 ms (small Q5, 3 s) and 17069 to 1354 ms (small Q5, 11 s), with the
+  same words. `whisper-rs-sys` does not rerun on these variables, so existing build
+  directories need `cargo clean -p whisper-rs-sys`.
+- **Warm start.** The worker protocol sends setup and audio separately
+  (`WorkerSetup`, then `WorkerAudio` and PCM). Recording start calls
+  `AsrEngine::prepare`, so model verification, worker launch, model load and GPU
+  initialization overlap with speech; `PreparedTranscription::finish` sends the
+  audio. A cancelled or failed recording drops it, which kills the worker, so nothing
+  stays loaded between dictations. With an idle gap equal to the clip, latency after
+  speaking fell from 1640 to 85 ms (tiny, 3 s, Auto on CPU), 893 to 211 ms (small Q5,
+  3 s, Auto on GPU) and 1155 to 383 ms (small Q5, 11 s, Auto on GPU).
+- **Model verification once per session.** The SHA-256 of the model (75–190 MB) is
+  checked the first time each session and again only when its size or modification
+  time changes; it had run before every dictation (86–175 ms here, more on slower
+  disks).
+- **GPU probe once per session.** The Vulkan device probe result is remembered; a
+  failed Vulkan run marks it unavailable for the session.
+- **Auto picks the faster device.** With the optimized CPU build, a GPU worker's
+  device setup outweighs its inference for tiny and base models, so Auto uses the
+  CPU below 150 MB of model and the GPU for small (Quality). GPU preferred still
+  forces the accelerator.
+- **Flash attention stays off.** It was slower on the CPU (tiny, 3 s: 445 to
+  1007 ms before the optimization fix) and saved under 20 ms on the GPU, while
+  shifting punctuation (small Q5 dropped the commas in "And so, my fellow
+  Americans,"). whisper.cpp 1.8 enables it by default; `whisper-rs` 0.16 does not.
+
+Whisper's encoder always covers a 30-second window (1500 frames of 20 ms). The
+
+Whisper's encoder always covers a 30-second window (1500 frames of 20 ms). The
+worker sets `audio_ctx` to the clip's own frames plus a 128-frame margin, and
+keeps the full window from about 27 seconds up. On the public JFK fixture with the
+tiny model this cut a 3-second clip from about 3.2 s to 0.45 s of inference with
+the same words, and the 11-second fixture from 3.3 s to 1.4 s (one comma differed),
+measured before the build fix above. A worker serves one recording and exits,
+giving up model memory while idle; the warm start hides its startup and keeps
+cancellation decisive.
 Cancellation and the 180-second default timeout kill and reap the child. Native
 crashes produce structured failure without crashing the shell or keyboard hook.
 Each Windows child is immediately assigned to a private, unnamed, non-inherited
@@ -54,6 +106,14 @@ the x64 architectural baseline. The CMake cache was inspected to verify those
 flags. A build host's instruction set therefore cannot leak into the distributed
 baseline. Optional accelerator features must be built in a **different target
 directory**, preserving a CPU worker that has no Vulkan loader dependency.
+
+`prepare.ps1` also builds the same worker with AVX, AVX2, FMA, F16C, SSE4.2 and
+BMI2 on (`--config env.GGML_*.value='ON'`, target `target/avx2`) and ships it as
+`onda-asr-avx2-worker.exe`. The engine uses it when the CPU reports AVX2, FMA,
+F16C and BMI2 (Haswell-class, 2013+), and retries the baseline worker if it
+fails. On the JFK fixture with the tiny model and six threads, the baseline took
+about 19 s of inference and the AVX2 build about 3.2 s, before the `audio_ctx`
+change above.
 
 Hardware diagnostics enumerate logical/physical CPUs, available/total RAM,
 runtime SIMD evidence, and DXGI adapters with vendor IDs, dedicated/shared memory
@@ -164,7 +224,7 @@ Copy-Item -LiteralPath C:\evn\release\onda-asr-worker.exe -Destination target\re
 .\scripts\asr-benchmark.ps1 -SkipBuild -ExecutionPreference gpu -CheckVulkan
 ```
 
-Distribute the CPU worker and optional renamed Vulkan worker beside the app.
+Distribute the CPU workers (baseline and AVX2) and optional renamed Vulkan worker beside the app.
 Do not replace the CPU worker with the GPU build. End users need an appropriate
 graphics driver, not the SDK. Test CPU-only launch on a machine without Vulkan.
 The tested production build uses Ninja, configured by `vulkan-toolchain.ps1`.
@@ -207,8 +267,8 @@ were recognized in every successful recorded run.
 | base.en Q5 Vulkan | 25,224 then 2,106 / 1,543 | 13,796 then 224 / 196 | First-use preparation and concurrent build contention; subsequent cache reuse. |
 
 These small samples demonstrate real recognition and backend execution. They
-are not p95 fleet measurements. Under concurrent native/Rust builds, below-normal
-CPU worker latency ranged from 9.7 to 38.2 seconds; preserving desktop input
+are not p95 fleet measurements. Under concurrent native/Rust builds, the earlier
+below-normal, unoptimized CPU worker's latency ranged from 9.7 to 38.2 seconds; preserving desktop input
 availability has a measurable cost under contention. The three real golden tests
 (semantic recognition, honest zero-device probe CPU fallback, native cancellation)
 all passed even during the shader build. The 12 normal tests cover hardware/model

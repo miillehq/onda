@@ -653,3 +653,42 @@ async fn failed_remote_revocation_clears_local_tokens_and_retains_registration()
         3
     );
 }
+
+#[tokio::test]
+#[cfg(windows)]
+async fn removing_an_account_revokes_it_and_forgets_the_registration() {
+    let fixture = Fixture::start().await;
+    let directory = tempfile::tempdir().unwrap();
+    let service = fixture.service(directory.path().to_owned());
+    let profile = fixture.sign_in(&service, None).await;
+    let signed_out = fixture.sign_in(&service, None).await;
+    service.sign_out(&signed_out.id).await.unwrap();
+    assert!(
+        service
+            .remove_profile(&profile.id)
+            .await
+            .unwrap()
+            .remote_revocation_confirmed
+    );
+    service.remove_profile(&signed_out.id).await.unwrap();
+    assert!(service.list_profiles().await.unwrap().is_empty());
+    assert!(matches!(
+        service.inner.store.load(&profile.id),
+        Err(CloudError::UnknownProfile)
+    ));
+    assert!(matches!(
+        service.remove_profile(&profile.id).await,
+        Err(CloudError::UnknownProfile)
+    ));
+    assert_eq!(
+        fixture
+            .state
+            .requests
+            .lock()
+            .await
+            .iter()
+            .filter(|(path, _)| path == "/revoke")
+            .count(),
+        2
+    );
+}

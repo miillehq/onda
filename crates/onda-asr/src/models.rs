@@ -12,10 +12,11 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashMap,
     fs::File,
     path::{Path, PathBuf},
-    sync::Arc,
-    time::{Duration, Instant},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant, SystemTime},
 };
 use tokio::{
     fs::{self, OpenOptions},
@@ -61,6 +62,9 @@ pub struct InstalledModel {
 pub struct ModelManager {
     directory: Arc<PathBuf>,
     client: reqwest::Client,
+    /// Files hashed this session, by size and modification time. Re-hashing a 75–190 MB model
+    /// before every dictation cost 0.1–1.5 s; any change to the file triggers a full check.
+    verified: Arc<Mutex<HashMap<PathBuf, (u64, SystemTime)>>>,
 }
 
 impl ModelManager {
@@ -91,6 +95,7 @@ impl ModelManager {
         Ok(Self {
             directory: Arc::new(directory),
             client,
+            verified: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -128,7 +133,21 @@ impl ModelManager {
         if !path.is_file() {
             return Err(AsrError::ModelMissing);
         }
-        verify_file(&path, model, cancellation).await?;
+        let identity = fs::metadata(&path)
+            .await
+            .ok()
+            .and_then(|metadata| Some((metadata.len(), metadata.modified().ok()?)));
+        let known = identity.is_some_and(|identity| {
+            self.verified
+                .lock()
+                .is_ok_and(|verified| verified.get(&path) == Some(&identity))
+        });
+        if !known {
+            verify_file(&path, model, cancellation).await?;
+            if let (Some(identity), Ok(mut verified)) = (identity, self.verified.lock()) {
+                verified.insert(path.clone(), identity);
+            }
+        }
         Ok(path)
     }
 

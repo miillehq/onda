@@ -63,11 +63,17 @@ impl HardwareInfo {
         hardware
     }
 
-    /// Reserve at least one physical core for the hook, desktop and audio stack.
+    /// Every physical core, so a two- or four-core laptop is not left with one or three. The
+    /// shortcut helper runs above normal priority and stays responsive while they are busy.
     pub fn inference_threads(&self) -> usize {
-        self.physical_cpus
-            .saturating_sub(1)
-            .clamp(1, MAX_INFERENCE_THREADS)
+        self.physical_cpus.clamp(1, MAX_INFERENCE_THREADS)
+    }
+
+    /// The AVX2 worker is compiled for Haswell-class CPUs (2013+): AVX2, FMA, F16C and BMI2.
+    pub fn supports_avx2_worker(&self) -> bool {
+        ["avx2", "fma", "f16c", "bmi2"]
+            .iter()
+            .all(|feature| self.simd.iter().any(|detected| detected == feature))
     }
 
     /// Auto accelerates discrete devices; explicit GPU preference also tries integrated devices.
@@ -98,6 +104,12 @@ fn detected_simd() -> Vec<String> {
         }
         if std::is_x86_feature_detected!("fma") {
             result.push("fma".into());
+        }
+        if std::is_x86_feature_detected!("f16c") {
+            result.push("f16c".into());
+        }
+        if std::is_x86_feature_detected!("bmi2") {
+            result.push("bmi2".into());
         }
         if std::is_x86_feature_detected!("avx512f") {
             result.push("avx512f".into());
@@ -160,14 +172,28 @@ fn inspect_windows(hardware: &mut HardwareInfo) {
 mod tests {
     use super::*;
     #[test]
-    fn threads_preserve_desktop_capacity() {
+    fn threads_use_physical_cores_up_to_the_cap() {
         let mut hardware = HardwareInfo::detect();
         hardware.physical_cpus = 1;
         assert_eq!(hardware.inference_threads(), 1);
+        hardware.physical_cpus = 2;
+        assert_eq!(hardware.inference_threads(), 2);
         hardware.physical_cpus = 4;
-        assert_eq!(hardware.inference_threads(), 3);
+        assert_eq!(hardware.inference_threads(), 4);
         hardware.physical_cpus = 64;
         assert_eq!(hardware.inference_threads(), 6);
+    }
+    #[test]
+    fn avx2_worker_needs_avx2_fma_and_f16c() {
+        let mut hardware = HardwareInfo::detect();
+        hardware.simd = ["sse2", "avx", "avx2", "fma", "f16c", "bmi2"]
+            .map(String::from)
+            .to_vec();
+        assert!(hardware.supports_avx2_worker());
+        hardware.simd.retain(|feature| feature != "f16c");
+        assert!(!hardware.supports_avx2_worker());
+        hardware.simd = vec!["sse2".into()];
+        assert!(!hardware.supports_avx2_worker());
     }
     #[test]
     fn optional_acceleration_never_overrides_cpu_only() {

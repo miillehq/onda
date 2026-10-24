@@ -221,6 +221,8 @@
 .main {
   min-width: 0;
   min-height: 0;
+  /* Inset like the sidebar's first control so the rounded top edge reads as a panel, not a clip. */
+  margin-top: 6px;
   background: var(--panel);
   border-top-left-radius: 12px;
   box-shadow: -1px -1px 0 var(--line);
@@ -276,6 +278,9 @@
 .page-head + .section,
 .section:first-child {
   margin-top: 0;
+}
+.section + .empty {
+  margin-top: 24px;
 }
 .section-head {
   display: flex;

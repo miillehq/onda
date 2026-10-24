@@ -277,6 +277,20 @@ impl Runtime {
                 });
                 Ok(O::Unit)
             }
+            R::RemoveChatgptProfile { profile_id } => {
+                self.cancel().await?;
+                let removed = self
+                    .cloud()?
+                    .remove_profile(&profile_id)
+                    .await
+                    .map_err(errors::cloud)?;
+                self.event(RuntimeEvent::OauthChanged {
+                    status: "removed".into(),
+                });
+                Ok(O::SignOut {
+                    remote_revocation_confirmed: removed.remote_revocation_confirmed,
+                })
+            }
             R::SignOutChatgptProfile { profile_id } => {
                 self.cancel().await?;
                 let signed_out = self
@@ -391,8 +405,8 @@ impl Runtime {
                     }
                 }
                 self.pill.hide_now(&self.app);
-                crate::show_main(&self.app);
-                if let Some(section) = section {
+                let created = crate::show_main_at(&self.app, section.as_deref());
+                if let Some(section) = section.filter(|_| !created) {
                     self.event(RuntimeEvent::Navigate { section });
                 }
                 Ok(O::Unit)

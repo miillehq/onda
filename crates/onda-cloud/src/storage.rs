@@ -161,6 +161,28 @@ impl AccountStore {
         atomic_write(&self.profile_path(&record.id)?, &ciphertext)
     }
 
+    /// Delete one registration; the caller holds its profile lock.
+    pub fn remove(&self, profile_id: &str) -> Result<()> {
+        match fs::remove_file(self.profile_path(profile_id)?) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Err(CloudError::UnknownProfile)
+            }
+            Err(_) => Err(CloudError::Storage),
+        }
+    }
+
+    /// Best-effort cleanup of a removed registration's lock file.
+    pub fn remove_lock_file(&self, profile_id: &str) {
+        if validate_profile_id(profile_id).is_ok() {
+            let _ = fs::remove_file(
+                self.root
+                    .join(PROFILE_DIRECTORY)
+                    .join(format!("{profile_id}.lock")),
+            );
+        }
+    }
+
     pub fn profile_ids(&self) -> Result<Vec<String>> {
         let directory =
             fs::read_dir(self.root.join(PROFILE_DIRECTORY)).map_err(|_| CloudError::Storage)?;

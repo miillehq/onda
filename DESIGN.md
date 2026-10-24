@@ -122,6 +122,12 @@ Graphics explain things wherever a paragraph would otherwise go.
   local model writes instead becomes an opt-out list of replacements, because speech models take
   spelling hints rather than pronunciations (Dragon's spoken-form training has no Whisper
   equivalent).
+- 2026-10-24: The main window is created when opened and destroyed when closed (the pill stays
+  loaded), and the Home caret stops blinking after the sample is typed, because a hidden window
+  kept ~100 MB of WebView renderer and an idle open window kept repainting.
+- 2026-10-24: The main panel starts 6 px below the title bar, level with the sidebar's first
+  control, so its rounded top edge reads as a panel rather than a clipped edge.
+- 2026-10-24: Signed-out ChatGPT accounts show Remove instead of Sign out.
 - 2026-10-24: A focused control re-created in place (same window, process, type and position)
   still counts as the same field, because Chromium-based apps rebuild it during polish and
   every polished dictation into them failed with "You switched fields".
