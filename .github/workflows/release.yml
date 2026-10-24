@@ -1,0 +1,124 @@
+name: Windows release candidate
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      with_vulkan:
+        description: Include the separate Vulkan worker; hosted runners cannot certify GPU inference
+        type: boolean
+        default: false
+      signed_updates:
+        description: Require updater signing secrets and produce signed update artifacts
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_BUILD_JOBS: 2
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
+      EAGLE_UPDATE_ENDPOINT: ${{ vars.EAGLE_UPDATE_ENDPOINT }}
+      EAGLE_UPDATE_PUBLIC_KEY: ${{ vars.EAGLE_UPDATE_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with:
+          toolchain: "1.95.0"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          shared-key: windows-release-cpu-generic
+      - name: Map short build path and verify native toolchain
+        run: |
+          subst R: $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) { throw 'Short build path mapping failed' }
+          Set-Location -LiteralPath 'R:\'
+          . ./scripts/toolchain.ps1
+          "LIBCLANG_PATH=$env:LIBCLANG_PATH" >> $env:GITHUB_ENV
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+      - name: Install verified Vulkan SDK when requested
+        if: ${{ inputs.with_vulkan }}
+        run: |
+          $sdkVersion = '1.4.363.0'
+          $installer = Join-Path $env:RUNNER_TEMP 'vulkan-sdk.exe'
+          $expected = Invoke-RestMethod -Uri "https://sdk.lunarg.com/sdk/sha/$sdkVersion/windows/vulkan_sdk.exe.json"
+          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$sdkVersion/windows/vulkan_sdk.exe" -OutFile $installer
+          if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected.sha) { throw 'Vulkan SDK checksum mismatch' }
+          if ((Get-AuthenticodeSignature -LiteralPath $installer).Status -ne 'Valid') { throw 'Vulkan SDK Authenticode validation failed' }
+          $installation = Start-Process -FilePath $installer -ArgumentList @('--root', 'C:\vk', '--accept-licenses', '--default-answer', '--confirm-command', 'install', 'copy_only=1') -WindowStyle Hidden -Wait -PassThru
+          if ($installation.ExitCode -ne 0) { throw 'Vulkan SDK installation failed' }
+          'VULKAN_SDK=C:\vk' >> $env:GITHUB_ENV
+          'C:\vk\Bin' >> $env:GITHUB_PATH
+      - name: Prepare helpers and verify release candidate
+        run: |
+          Set-Location -LiteralPath 'R:\'
+          ./scripts/prepare.ps1
+          cargo fmt --all --check
+          if ($LASTEXITCODE -ne 0) { throw 'Rust formatting failed' }
+          cargo test --locked --workspace
+          if ($LASTEXITCODE -ne 0) { throw 'Workspace tests failed' }
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Workspace clippy failed' }
+          npm run contracts:check
+          if ($LASTEXITCODE -ne 0) { throw 'Generated contract drift' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
+          npm run quality
+          if ($LASTEXITCODE -ne 0) { throw 'Deterministic quality regression' }
+          cargo install cargo-deny --version 0.19.7 --locked
+          if ($LASTEXITCODE -ne 0) { throw 'cargo-deny installation failed' }
+          cargo deny --locked check licenses advisories sources
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency policy failed' }
+          npm audit --audit-level=high
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency advisory failed' }
+      - name: Build requested bundle without publishing
+        env:
+          BUILD_VULKAN: ${{ inputs.with_vulkan }}
+          SIGNED_UPDATES: ${{ inputs.signed_updates }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          Set-Location -LiteralPath 'R:\'
+          $vulkan = $env:BUILD_VULKAN -eq 'true'
+          $signed = $env:SIGNED_UPDATES -eq 'true'
+          ./scripts/build.ps1 -WithVulkan:$vulkan -SignedUpdates:$signed
+      - name: Bundle exact MPL source and checksums
+        run: |
+          Set-Location -LiteralPath 'R:\'
+          $metadata = (& cargo metadata --locked --format-version 1) | ConvertFrom-Json
+          $sourceRoot = Join-Path $PWD '.artifacts/mpl-source'
+          New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
+          foreach ($package in $metadata.packages | Where-Object license -EQ 'MPL-2.0') {
+            Copy-Item -LiteralPath (Split-Path -Parent $package.manifest_path) -Destination (Join-Path $sourceRoot "$($package.name)-$($package.version)") -Recurse
+          }
+          Compress-Archive -LiteralPath $sourceRoot -DestinationPath '.artifacts/eagle-mpl-source.zip' -Force
+          $digest = (Get-FileHash -LiteralPath '.artifacts/eagle-mpl-source.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest  eagle-mpl-source.zip" | Set-Content -LiteralPath '.artifacts/eagle-mpl-source.zip.sha256' -Encoding ascii
+      - name: Upload candidate for explicit release review
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: eagle-windows-x64-candidate-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            target/release/bundle/nsis/*
+            THIRD_PARTY_NOTICES.txt
+            docs/dependency-inventory.json
+            .artifacts/eagle-mpl-source.zip
+            .artifacts/eagle-mpl-source.zip.sha256
+            .artifacts/MPL-source.zip
+            .artifacts/runtime/Microsoft-runtime-manifest.json

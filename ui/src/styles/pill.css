@@ -1,0 +1,162 @@
+@import "./capsule.css";
+
+/* The window is transparent and click-through except for the error card (see pill.rs). */
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+#pill {
+  height: 100%;
+}
+
+.pill-stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 14px;
+}
+
+.pill-motion {
+  animation: pill-enter 220ms cubic-bezier(0.2, 0.9, 0.25, 1.15);
+  transition: opacity 260ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pill-motion.is-leaving {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+}
+@keyframes pill-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+}
+.pill-capsule > * {
+  animation: pill-content 160ms ease-out;
+}
+@keyframes pill-content {
+  from {
+    opacity: 0;
+  }
+}
+
+.pill-rec {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5a4e;
+  box-shadow: 0 0 0 3px rgba(255, 90, 78, 0.25);
+}
+.pill-time {
+  color: #c4c4ca;
+  font-variant-numeric: tabular-nums;
+}
+.pill-label {
+  color: #ffffff;
+}
+.pill-hint {
+  color: #b4b4bb;
+  font-weight: 500;
+}
+.pill-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.pill-check {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #0f0f10;
+}
+
+.pill-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  width: 340px;
+  padding: 16px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #2a2a2c 0%, #121213 55%, #060606 100%);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.55), 0 14px 34px rgba(0, 0, 0, 0.32);
+}
+.pill-card-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 107, 94, 0.18);
+  color: #ff8a80;
+}
+.pill-card-title {
+  margin: 1px 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.pill-card-body {
+  margin: 0 0 12px;
+  color: #d4d4d9;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.pill-card-actions {
+  display: flex;
+  gap: 8px;
+}
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font: 560 13.5px var(--font-ui);
+}
+.pill-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.pill-button.is-primary {
+  background: #ffffff;
+  color: #0f0f10;
+}
+.pill-button.is-primary:hover {
+  background: #e9e9eb;
+}
+.pill-button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill-motion,
+  .pill-capsule > * {
+    animation: none;
+    transition: none;
+  }
+}

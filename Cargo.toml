@@ -1,0 +1,19 @@
+[workspace]
+members = ["crates/eagle-core", "crates/eagle-platform", "crates/eagle-input", "crates/eagle-asr", "crates/eagle-cloud", "src-tauri"]
+default-members = ["crates/eagle-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.3"
+edition = "2021"
+rust-version = "1.88"
+license = "Apache-2.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+panic = "unwind"
+
+[profile.dev]
+debug = 1

@@ -1,0 +1,143 @@
+name: Windows quality and installer
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_BUILD_JOBS: 2
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with:
+          toolchain: "1.95.0"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          shared-key: windows-msvc-cpu-generic
+      - name: Verify native toolchain
+        run: |
+          . ./scripts/toolchain.ps1
+          "LIBCLANG_PATH=$env:LIBCLANG_PATH" >> $env:GITHUB_ENV
+          cargo --version
+          cmake --version
+          & (Join-Path $env:LIBCLANG_PATH 'clang.exe') --version
+      - name: Install locked frontend and prepare real workers
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+          ./scripts/prepare.ps1
+      - name: Verify formatting and frontend contract
+        run: |
+          cargo fmt --all --check
+          if ($LASTEXITCODE -ne 0) { throw 'Rust format check failed' }
+          npm run contracts:check
+          if ($LASTEXITCODE -ne 0) { throw 'Generated contract drift' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
+      - name: Strict Rust checks including native CPU inference
+        run: |
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Workspace clippy failed' }
+          cargo clippy --locked -p eagle-asr --features native-asr --all-targets -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Native worker clippy failed' }
+          cargo test --locked --workspace
+          if ($LASTEXITCODE -ne 0) { throw 'Workspace tests failed' }
+          npm run quality
+          if ($LASTEXITCODE -ne 0) { throw 'Deterministic quality regression' }
+      - name: Cache pinned golden model
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .artifacts/ci-models
+          key: whisper-tiny-en-921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f
+      - name: Verified real-model transcription, GPU fallback and cancellation
+        run: |
+          $modelDirectory = Join-Path $PWD '.artifacts/ci-models'
+          $installationJson = (& cargo run --locked -p eagle-asr --bin eagle-asr-benchmark -- download $modelDirectory whisper-tiny-en) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw 'Verified model download failed' }
+          $installation = $installationJson | ConvertFrom-Json
+          $env:EAGLE_ASR_TEST_MODEL = $installation.path
+          $env:EAGLE_ASR_WORKER_DIR = Join-Path $PWD 'target/debug'
+          cargo test --locked -p eagle-asr --test golden -- --ignored --test-threads=1
+          if ($LASTEXITCODE -ne 0) { throw 'Real ASR golden tests failed' }
+      - name: Dependency security and licenses
+        run: |
+          cargo install cargo-deny --version 0.19.7 --locked
+          if ($LASTEXITCODE -ne 0) { throw 'cargo-deny installation failed' }
+          cargo deny --locked check licenses advisories sources
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency policy failed' }
+          npm audit --audit-level=high
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency advisory failed' }
+      - name: Build unsigned per-user NSIS installer
+        run: ./scripts/build.ps1
+      - name: Bundle reviewed MPL source
+        run: |
+          $metadata = (& cargo metadata --locked --format-version 1) | ConvertFrom-Json
+          $sourceRoot = Join-Path $PWD '.artifacts/mpl-source'
+          New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
+          foreach ($package in $metadata.packages | Where-Object license -EQ 'MPL-2.0') {
+            $sourceDirectory = Split-Path -Parent $package.manifest_path
+            Copy-Item -LiteralPath $sourceDirectory -Destination (Join-Path $sourceRoot "$($package.name)-$($package.version)") -Recurse
+          }
+          Compress-Archive -LiteralPath $sourceRoot -DestinationPath '.artifacts/eagle-mpl-source.zip' -Force
+      - name: Silent installation and complete sidecar layout smoke test
+        run: |
+          $installer = Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'NSIS installer missing' }
+          $installDirectory = Join-Path $env:RUNNER_TEMP 'eagle-install-smoke'
+          $installation = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDirectory") -WindowStyle Hidden -Wait -PassThru
+          if ($installation.ExitCode -ne 0) { throw 'Silent installation failed' }
+          foreach ($binary in @('eagle.exe', 'eagle-input.exe', 'eagle-asr-worker.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $binary))) { throw "Installed binary missing: $binary" }
+          }
+          $runtimeManifestPath = Join-Path $installDirectory 'licenses/Microsoft-runtime-manifest.json'
+          if (-not (Test-Path -LiteralPath $runtimeManifestPath)) { throw 'Installed runtime provenance missing' }
+          $runtimeManifest = Get-Content -LiteralPath $runtimeManifestPath -Raw | ConvertFrom-Json
+          foreach ($runtimeFile in $runtimeManifest.files) {
+            $dll = Join-Path $installDirectory $runtimeFile.name
+            if (-not (Test-Path -LiteralPath $dll)) { throw "Installed runtime missing: $($runtimeFile.name)" }
+            if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runtimeFile.sha256) { throw 'Installed runtime hash mismatch' }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $installDirectory 'licenses/MPL-source.zip'))) { throw 'Installed MPL source access missing' }
+          $installedExecutables = @('eagle.exe', 'eagle-input.exe', 'eagle-asr-worker.exe') | ForEach-Object { Join-Path $installDirectory $_ }
+          $runtimeAudit = & './scripts/collect-msvc-runtime.ps1' -ExecutablePaths $installedExecutables
+          $uninstaller = Join-Path $installDirectory 'uninstall.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'Uninstaller missing' }
+          $uninstallation = Start-Process -FilePath $uninstaller -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
+          if ($uninstallation.ExitCode -ne 0) { throw 'Silent uninstallation failed' }
+      - name: Upload reviewable installer and notices
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: eagle-windows-x64-cpu-unsigned
+          if-no-files-found: error
+          path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.sha256
+            THIRD_PARTY_NOTICES.txt
+            docs/dependency-inventory.json
+            .artifacts/eagle-mpl-source.zip
+            .artifacts/MPL-source.zip
+            .artifacts/runtime/Microsoft-runtime-manifest.json

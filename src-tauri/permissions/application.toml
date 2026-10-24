@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-api"
+description = "Invoke Onda's validated application facade."
+commands.allow = ["application_call"]

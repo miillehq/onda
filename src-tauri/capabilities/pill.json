@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pill-local",
+  "description": "The dictation pill reads application state and events; it opens the main window only through the validated facade.",
+  "windows": ["pill"],
+  "permissions": ["allow-api", "core:event:allow-listen", "core:event:allow-unlisten"]
+}

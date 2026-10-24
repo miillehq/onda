@@ -1,0 +1,190 @@
+//! OS and remote diagnostics are mapped to content-free UI errors.
+use eagle_core::error::{AppError, ErrorCode};
+
+pub fn platform(error: eagle_platform::PlatformError) -> AppError {
+    use eagle_platform::PlatformError as E;
+    // Fixed phrases, HRESULT numbers or clipboard format numbers only; never text.
+    match &error {
+        E::TargetUnavailable(detail) => {
+            tracing::warn!(subsystem = "target", detail = %detail, "target unavailable")
+        }
+        E::Clipboard(detail) => {
+            tracing::warn!(subsystem = "clipboard", detail = %detail, "clipboard transaction failed")
+        }
+        _ => {}
+    }
+    let (code,message,retryable)=match error {
+        E::Cancelled=>(ErrorCode::Cancelled,"Native insertion was cancelled.",false),
+        E::AlreadyRecording=>(ErrorCode::Busy,"Microphone capture is already active.",true),
+        E::NotRecording=>(ErrorCode::InvalidInput,"No microphone capture is active.",false),
+        E::DeviceDisconnected=>(ErrorCode::AudioDisconnected,"Microphone disconnected. Choose a connected input and retry.",true),
+        E::AudioRouteChanged=>(ErrorCode::AudioRouteChanged,"Windows changed or invalidated the microphone stream. Select your microphone in Settings and retry.",true),
+        E::AudioPermissionDenied=>(ErrorCode::AudioPermissionDenied,"Windows denied microphone access. Enable microphone access for desktop apps in Windows privacy settings and retry.",true),
+        E::AudioBackendFailed(kind)=>return audio_backend(kind),
+        E::RecordingLimit|E::AudioOverflow=>(ErrorCode::AudioLimit,"Recording reached its limit or lost audio; retry a shorter recording.",true),
+        E::TargetChanged=>(ErrorCode::FocusChanged,"The focused app, control, or selection changed. Your text is available to copy.",true),
+        E::SecureField=>(ErrorCode::PasswordField,"Password and secure controls cannot receive dictation.",false),
+        E::ElevatedTarget=>(ErrorCode::ElevatedTarget,"Windows blocked insertion into an elevated app. Copy the result manually.",false),
+        E::TargetUnavailable(_)|E::SelectionUnavailable=>(ErrorCode::UnsupportedControl,"This app did not expose a safe accessible text target.",true),
+        E::EmptySelection=>(ErrorCode::SelectionRequired,"Select text in your target app before using a transform or spoken editing shortcut.",true),
+        E::UnsupportedClipboardFormat(_)=>(ErrorCode::ClipboardUnsupported,"The clipboard contains a format that cannot be preserved safely. Copy the result manually.",true),
+        E::Clipboard(_)=>(ErrorCode::ClipboardBusy,"Clipboard transaction failed. Your result is available to copy.",true),
+        E::InjectionFailed|E::ModifiersHeld=>(ErrorCode::Insertion,"Insertion failed or modifier keys are still held. Release the shortcut and retry.",true),
+        E::TextLimit|E::InvalidParameter(_)=>(ErrorCode::InvalidInput,"Native operation parameters are invalid.",false),
+        E::Audio(_)=>(ErrorCode::NoMicrophone,"The selected microphone is unavailable or could not start.",true),
+        E::Timeout=>(ErrorCode::InferenceTimeout,"A Windows operation timed out.",true),
+        E::UnsupportedPlatform=>(ErrorCode::Internal,"Windows 10 or Windows 11 is required.",false),
+        E::Protection=>return AppError::storage(),
+    };
+    AppError::new(code, message, retryable)
+}
+
+/// Describes driver failure categories without exposing device/backend diagnostic strings.
+fn audio_backend(kind: eagle_platform::AudioBackendFailure) -> AppError {
+    use eagle_platform::AudioBackendFailure as E;
+    let message = match kind {
+        E::DeviceBusy => "The microphone is busy. Close apps using it exclusively and retry.",
+        E::HostUnavailable => "Windows audio is unavailable. Check the audio service and retry.",
+        E::UnsupportedConfig | E::UnsupportedOperation | E::InvalidInput => "The microphone driver rejected its recording format. Select another input in Settings and retry.",
+        E::ResourceExhausted => "Windows could not allocate resources for recording. Close unused apps and retry.",
+        E::BackendError | E::Other => "The microphone driver stopped recording. Check the input or virtual microphone connection and retry.",
+    };
+    AppError::new(ErrorCode::AudioBackend, message, true)
+}
+
+pub fn asr(error: eagle_asr::AsrError) -> AppError {
+    use eagle_asr::AsrError as E;
+    let (code, message) = match error {
+        E::Cancelled => (ErrorCode::Cancelled, "Local transcription was cancelled."),
+        E::Busy | E::DownloadBusy => (
+            ErrorCode::Busy,
+            "A local model operation is already running.",
+        ),
+        E::Timeout => (
+            ErrorCode::InferenceTimeout,
+            "Local transcription timed out; reduce recording length or model size.",
+        ),
+        E::ModelMissing | E::WorkerMissing => (
+            ErrorCode::NoModel,
+            "Install a local model and ensure the packaged ASR worker is present.",
+        ),
+        E::ChecksumMismatch => (
+            ErrorCode::CorruptModel,
+            "The local model is corrupted. Download it again.",
+        ),
+        E::InsufficientDisk { .. } => (
+            ErrorCode::InsufficientDisk,
+            "There is insufficient disk space for the model.",
+        ),
+        E::DownloadNetwork(_) | E::InvalidDownload => (
+            ErrorCode::Download,
+            "The model download failed. Retry to resume or recover it.",
+        ),
+        E::UnknownModel | E::UnsafePath | E::InvalidOptions(_) | E::InvalidAudio(_) => (
+            ErrorCode::InvalidInput,
+            "The model or audio parameters are invalid.",
+        ),
+        E::Io(_) | E::WorkerFailed(_) | E::WorkerProtocol | E::Inference(_) => (
+            ErrorCode::Inference,
+            "Local inference failed; your audio was discarded. Try another model or CPU mode.",
+        ),
+    };
+    AppError::new(code, message, true)
+}
+
+pub fn cloud(error: eagle_cloud::CloudError) -> AppError {
+    use eagle_cloud::CloudError as E;
+    if !matches!(error, E::Cancelled) {
+        // API error codes and parameter names identify the cause; bodies are never logged.
+        let (status, code, parameter) = match &error {
+            E::Remote {
+                status,
+                code,
+                parameter,
+                ..
+            } => (Some(*status), code.as_deref(), parameter.as_deref()),
+            _ => (None, None, None),
+        };
+        tracing::warn!(subsystem = "chatgpt", error = %error, status = ?status, code = ?code, parameter = ?parameter, "ChatGPT request failed");
+    }
+    if matches!(error, E::Storage) {
+        return AppError::new(
+            ErrorCode::Cloud,
+            "Protected ChatGPT storage is unavailable. Local dictation remains available.",
+            true,
+        );
+    }
+    let code = match &error {
+        E::Cancelled => ErrorCode::Cancelled,
+        E::Timeout => ErrorCode::InferenceTimeout,
+        E::NoAccount
+        | E::SignInRequired
+        | E::InterruptedRefresh
+        | E::PlanPermissionRequired
+        | E::AccessDenied
+        | E::InvalidIdentity => ErrorCode::Unauthorized,
+        E::Transport => ErrorCode::Offline,
+        E::Remote { status: 429, .. } => ErrorCode::Quota,
+        E::Remote {
+            status: 401 | 403, ..
+        } => ErrorCode::Unauthorized,
+        _ => ErrorCode::Cloud,
+    };
+    let message = match code {
+        ErrorCode::Cancelled => "ChatGPT operation was cancelled.",
+        ErrorCode::Unauthorized => {
+            "Connect an eligible ChatGPT account and enable plan usage, or sign in again."
+        }
+        ErrorCode::Quota => "ChatGPT plan usage limit reached. Local dictation remains available.",
+        ErrorCode::Offline => "ChatGPT connection failed. Your original text was kept.",
+        ErrorCode::InferenceTimeout => "ChatGPT timed out. Your original text was kept.",
+        _ => "ChatGPT request failed or returned an invalid stream. Your original text was kept.",
+    };
+    AppError::new(code, message, true)
+}
+
+#[cfg(test)]
+mod audio_error_tests {
+    use super::*;
+
+    #[test]
+    fn audio_failure_categories_have_distinct_actionable_errors() {
+        use eagle_platform::{AudioBackendFailure, PlatformError};
+        for (failure, expected_code, recovery_hint) in [
+            (
+                PlatformError::EmptySelection,
+                ErrorCode::SelectionRequired,
+                "Select text",
+            ),
+            (
+                PlatformError::DeviceDisconnected,
+                ErrorCode::AudioDisconnected,
+                "connected input",
+            ),
+            (
+                PlatformError::AudioRouteChanged,
+                ErrorCode::AudioRouteChanged,
+                "Settings",
+            ),
+            (
+                PlatformError::AudioPermissionDenied,
+                ErrorCode::AudioPermissionDenied,
+                "privacy settings",
+            ),
+            (
+                PlatformError::AudioBackendFailed(AudioBackendFailure::DeviceBusy),
+                ErrorCode::AudioBackend,
+                "exclusively",
+            ),
+            (
+                PlatformError::AudioBackendFailed(AudioBackendFailure::BackendError),
+                ErrorCode::AudioBackend,
+                "virtual microphone",
+            ),
+        ] {
+            let error = platform(failure);
+            assert_eq!(error.code, expected_code);
+            assert!(error.message.contains(recovery_hint));
+        }
+    }
+}

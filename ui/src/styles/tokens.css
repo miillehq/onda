@@ -1,0 +1,147 @@
+/* Onda design tokens. Source of truth: DESIGN.md. Colours are black, white and greys from the
+   brand guide; red, amber and green appear only for status. Text tiers keep at least 5.7:1. */
+:root {
+  color-scheme: light dark;
+
+  --font-ui: "Inter Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-voice: "Newsreader Variable", Georgia, serif;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --text-xs: 13px;   /* smallest text anywhere */
+  --text-sm: 14px;   /* buttons, chips, secondary rows */
+  --text-md: 15px;   /* body */
+  --text-lg: 16px;   /* row titles */
+  --text-xl: 20px;   /* section titles */
+  --text-2xl: 30px;  /* page titles */
+  --text-voice: 22px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --radius-sm: 6px;
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-hero: 22px;
+  --radius-pill: 999px;
+
+  --control-h: 38px;
+  --control-h-sm: 32px;
+  --sidebar-w: 252px;
+  --content-max: 920px;
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+
+  /* Light */
+  --base: #f3f3f4;
+  --panel: #ffffff;
+  --raised: #ffffff;
+  --sunken: #f5f5f6;
+  --hover: rgba(15, 15, 16, 0.05);
+  --pressed: rgba(15, 15, 16, 0.09);
+  --selected: #ffffff;
+  --line: #e2e2e5;
+  --line-strong: #cdcdd2;
+  --fg: #0f0f10;
+  --fg-2: #45454b;
+  --fg-3: #66666d;
+  --fg-disabled: #9a9aa1;
+  --on-fg: #ffffff;
+  --scrim: rgba(15, 15, 16, 0.32);
+
+  --ok: #16794a;
+  --ok-bg: #e8f4ed;
+  --warn: #8a5300;
+  --warn-bg: #fdf3e1;
+  --err: #b42318;
+  --err-bg: #fdeceb;
+  --diff-add: #e3f2e9;
+  --diff-remove: #fbe5e3;
+
+  --tile: linear-gradient(180deg, #262628 0%, #0f0f10 55%, #040404 100%);
+  --tile-fg: #ffffff;
+  --tile-fg-2: #cacad0;
+  --tile-fg-3: #a3a3aa;
+  --tile-line: rgba(255, 255, 255, 0.14);
+
+  --shadow-1: 0 1px 2px rgba(15, 15, 16, 0.05), 0 0 0 1px var(--line);
+  --shadow-pop: 0 16px 40px rgba(15, 15, 16, 0.16), 0 2px 8px rgba(15, 15, 16, 0.08), 0 0 0 1px rgba(15, 15, 16, 0.08);
+  --focus-ring: 0 0 0 2px var(--panel), 0 0 0 4px var(--fg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --base: #0b0b0c;
+    --panel: #161618;
+    --raised: #1c1c1f;
+    --sunken: #1d1d20;
+    --hover: rgba(255, 255, 255, 0.06);
+    --pressed: rgba(255, 255, 255, 0.1);
+    --selected: #1f1f22;
+    --line: #2a2a2e;
+    --line-strong: #3b3b41;
+    --fg: #f4f4f5;
+    --fg-2: #c4c4ca;
+    --fg-3: #9d9da5;
+    --fg-disabled: #6a6a72;
+    --on-fg: #0f0f10;
+    --scrim: rgba(0, 0, 0, 0.55);
+    --ok: #4cc98b;
+    --ok-bg: rgba(76, 201, 139, 0.12);
+    --warn: #f0b45a;
+    --warn-bg: rgba(240, 180, 90, 0.12);
+    --err: #ff7b6e;
+    --err-bg: rgba(255, 123, 110, 0.12);
+    --diff-add: rgba(76, 201, 139, 0.16);
+    --diff-remove: rgba(255, 123, 110, 0.16);
+    --tile: linear-gradient(180deg, #2c2c2f 0%, #1a1a1c 60%, #121214 100%);
+    --shadow-1: 0 0 0 1px var(--line);
+    --shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line-strong);
+  }
+}
+
+:root[data-theme="dark"] {
+  --base: #0b0b0c;
+  --panel: #161618;
+  --raised: #1c1c1f;
+  --sunken: #1d1d20;
+  --hover: rgba(255, 255, 255, 0.06);
+  --pressed: rgba(255, 255, 255, 0.1);
+  --selected: #1f1f22;
+  --line: #2a2a2e;
+  --line-strong: #3b3b41;
+  --fg: #f4f4f5;
+  --fg-2: #c4c4ca;
+  --fg-3: #9d9da5;
+  --fg-disabled: #6a6a72;
+  --on-fg: #0f0f10;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --ok: #4cc98b;
+  --ok-bg: rgba(76, 201, 139, 0.12);
+  --warn: #f0b45a;
+  --warn-bg: rgba(240, 180, 90, 0.12);
+  --err: #ff7b6e;
+  --err-bg: rgba(255, 123, 110, 0.12);
+  --diff-add: rgba(76, 201, 139, 0.16);
+  --diff-remove: rgba(255, 123, 110, 0.16);
+  --tile: linear-gradient(180deg, #2c2c2f 0%, #1a1a1c 60%, #121214 100%);
+  --shadow-1: 0 0 0 1px var(--line);
+  --shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}
