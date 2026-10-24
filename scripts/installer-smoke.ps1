@@ -29,7 +29,15 @@ $shell = $null
 $helper = $null
 $installed = $false
 $installerAttempted = $false
+# NSIS remembers the last install folder under HKCU\Software\<publisher>\<product> and offers it next time.
+$rememberedFolderKey = "HKCU:\Software\$($applicationId.Split('.')[1])\$productName"
 $report = [ordered]@{ formatVersion = 1; testId = $testId; hostOnly = $true; status = 'running' }
+
+function Get-RememberedFolder {
+    $key = Get-Item -LiteralPath $rememberedFolderKey -ErrorAction SilentlyContinue
+    if ($key) { return $key.GetValue('') }
+    return $null
+}
 
 function Assert-OwnedInstallPath {
     param([string]$Path)
@@ -185,6 +193,7 @@ $null = Assert-OwnedInstallPath -Path $installDirectory
 if (Test-Path -LiteralPath $installDirectory) { throw 'Fresh installer test directory unexpectedly exists.' }
 [System.IO.Directory]::CreateDirectory($artifactRoot) | Out-Null
 $beforeLaunchHashes = Get-DataHashes -Directory $applicationDataDirectory
+$previousRememberedFolder = Get-RememberedFolder
 $report.installerSha256 = (Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $report.installerBytes = (Get-Item -LiteralPath $InstallerPath).Length
 $report.installDirectory = $installDirectory
@@ -267,6 +276,13 @@ try {
         try { if (-not $process.HasExited) { $process.Kill(); $null = $process.WaitForExit(5000) } } catch [System.InvalidOperationException] {}
     }
     if ($installed -or ($installerAttempted -and (Test-Path -LiteralPath (Join-Path $installDirectory 'uninstall.exe')))) { try { $null = Invoke-OwnedUninstaller } catch { $report.cleanupFailure = $_.Exception.Message } }
+    # Uninstall keeps the remembered folder; the next real installer must not offer this test's folder.
+    try {
+        if ((Get-RememberedFolder) -eq $installDirectory) {
+            if ($previousRememberedFolder) { Set-Item -LiteralPath $rememberedFolderKey -Value $previousRememberedFolder }
+            else { Remove-Item -LiteralPath $rememberedFolderKey -Recurse }
+        }
+    } catch { $report.rememberedFolderCleanupFailure = $_.Exception.Message }
     [System.IO.File]::WriteAllText($reportPath, ($report | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
     foreach ($process in $ownedProcesses) { $process.Dispose() }
 }
