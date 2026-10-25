@@ -65,7 +65,8 @@ struct ActiveOperation {
     context: String,
     settings: Settings,
     cancellation: CancellationToken,
-    /// User-initiated dictations and edits are kept in history; previews and replays are not.
+    /// Dictations and edits, including rewrites tried in the app, are kept in history; pasting
+    /// or undoing a result again, and test replays, are not.
     history: bool,
 }
 /// A speech worker started with the recording, loading its model while the user speaks.

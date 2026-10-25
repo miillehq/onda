@@ -314,8 +314,17 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       return { type: "profiles", payload: profiles };
     case "listAvailableModels":
       return { type: "cloudModels", payload: [{ slug: "thorough-sample", name: "Thorough (sample)", recommended: false }, { slug: "light-sample", name: "Light (sample)", recommended: true }] };
-    case "previewTransform":
-      return { type: "result", payload: { commandText: null, operationId: "preview", original: request.args.source, output: request.args.source.trim().replace(/^./, (c) => c.toUpperCase()), inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: request.args.source }], suggestion: null } };
+    case "previewTransform": {
+      const output = request.args.source.trim().replace(/^./, (c) => c.toUpperCase());
+      const id = `preview-${Date.now()}`;
+      // Like the native runtime, a rewrite tried in the app is kept in History.
+      if (output !== request.args.source) {
+        const entry = sample(id, 0, "", output, { mode: "transform", route: "chatgptPlan", original: request.args.source, inserted: false, app: null });
+        history = [entry, ...history];
+        emit({ type: "historyUpdated", payload: { entry } });
+      }
+      return { type: "result", payload: { commandText: null, operationId: id, original: request.args.source, output, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: request.args.source }], suggestion: null } };
+    }
     case "retryTransformation":
       return { type: "result", payload: snapshot.result as OperationResult };
     case "exportDiagnostics":

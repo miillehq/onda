@@ -856,7 +856,8 @@ impl Runtime {
             context: String::new(),
             settings,
             cancellation,
-            history: false,
+            // Home shows a tried rewrite as the last result, so History keeps it too.
+            history: true,
         };
         self.set_active(active.clone())?;
         let original = OperationResult {
@@ -921,7 +922,7 @@ impl Runtime {
                 diff: onda_core::transforms::diff(&source, &output),
                 suggestion: None,
             };
-            {
+            let route = {
                 let mut state = lock(&self.state)?;
                 if !state.matches(&id) {
                     return Err(AppError::new(
@@ -943,9 +944,12 @@ impl Runtime {
                     after_document: None,
                     shortcut: onda_platform::PasteShortcut::ControlV,
                 });
+                let route = state.snapshot().route;
                 state.transition(&id, Phase::Completed)?;
                 self.domain(AppEvent::ResultReady(result.clone()));
-            }
+                route
+            };
+            self.record_history(&active, &result, route);
             self.emit_state();
             Ok(result)
         }
@@ -988,7 +992,8 @@ impl Runtime {
             context: String::new(),
             settings,
             cancellation: CancellationToken::new(),
-            history: false,
+            // A retry asks ChatGPT again, so its new text is kept like the first attempt's.
+            history: true,
         };
         self.set_active(active.clone())?;
         self.save_result(
