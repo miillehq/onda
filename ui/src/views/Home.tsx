@@ -18,7 +18,7 @@ import {
 } from "lucide-preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Button, Chip, Keys, ProgressBar } from "../components/controls";
-import { Diff } from "../components/feedback";
+import { Diff, Suggestion } from "../components/feedback";
 import { Callout, EmptyState } from "../components/layout";
 import { Wave } from "../components/Wave";
 import { presentError } from "../lib/errors";
@@ -29,8 +29,10 @@ import {
   acceptLearning,
   catalog,
   copyResult,
+  copySuggestion,
   dictionary,
   discardResult,
+  dismissError,
   downloadModel,
   downloads,
   history,
@@ -181,18 +183,29 @@ function OperationError() {
   const dismissed = useSignal<string | null>(null);
   if (!state || state.phase !== "error" || !state.error || state.error.code === "noModel" || dismissed.value === state.operationId) return null;
   const presentation = presentError(state.error);
+  const suggestion = lastResult.value?.operationId === state.operationId ? lastResult.value.suggestion : null;
+  const dismiss = () => {
+    dismissed.value = state.operationId;
+    if (state.operationId) void dismissError(state.operationId);
+  };
   return (
     <Callout
       tone="error"
       title={presentation.title}
       action={
         <div class="button-row">
-          {presentation.action && (
-            <Button variant="primary" size="sm" onClick={() => navigate(presentation.action!.route)}>
-              {presentation.action.label}
+          {suggestion ? (
+            <Button variant="primary" size="sm" icon={<Copy size={15} />} onClick={() => void copySuggestion()}>
+              Copy ChatGPT's version
             </Button>
+          ) : (
+            presentation.action && (
+              <Button variant="primary" size="sm" onClick={() => navigate(presentation.action!.route)}>
+                {presentation.action.label}
+              </Button>
+            )
           )}
-          <Button variant="ghost" size="sm" onClick={() => (dismissed.value = state.operationId)}>
+          <Button variant="ghost" size="sm" onClick={dismiss}>
             Dismiss
           </Button>
         </div>
@@ -371,14 +384,22 @@ function ResultCard() {
   const changed = !!result && result.output !== result.original;
   const cloudFailure = state?.phase === "error" && !!state.error && CLOUD_CODES.has(state.error.code) && !!result && !result.inserted;
   const canUndo = !!result && result.inserted && rewrite && state?.phase !== "error";
+  const skipped = !!result && (result.fallbackUsed || !!result.suggestion);
+  // A skipped rewrite left the selection as it was, so pasting it again changes nothing.
+  const keptSelection = rewrite && !!result && !result.inserted && !changed;
   return (
     <section class="card result" aria-labelledby="result-title">
       <header class="result-head">
         <h3 id="result-title">{rewrite ? "Last rewrite" : "Last dictation"}</h3>
         <div class="chip-row">
-          {state?.route === "chatgptPlan" ? <Chip icon={<Sparkles size={14} />}>Polished with ChatGPT</Chip> : <Chip icon={<Cpu size={14} />}>On this PC</Chip>}
-          {result?.fallbackUsed && <Chip tone="warn">Polish skipped</Chip>}
-          {result && !result.inserted && state?.phase === "error" && <Chip tone="err">Not inserted</Chip>}
+          {skipped ? (
+            <Chip tone="warn">Polish skipped</Chip>
+          ) : state?.route === "chatgptPlan" ? (
+            <Chip icon={<Sparkles size={14} />}>Polished with ChatGPT</Chip>
+          ) : (
+            <Chip icon={<Cpu size={14} />}>On this PC</Chip>
+          )}
+          {result && !result.inserted && state?.phase === "error" && state.error?.code !== "invalidEnhancement" && <Chip tone="err">Not inserted</Chip>}
         </div>
       </header>
       {result?.commandText && <p class="result-command">You asked: “{result.commandText}”</p>}
@@ -392,6 +413,7 @@ function ResultCard() {
       ) : (
         <p class="transcript serif selectable">{result?.output}</p>
       )}
+      {result?.suggestion && <Suggestion kept={result.output} suggestion={result.suggestion} onCopy={() => void copySuggestion()} />}
       {countdown !== null && (
         <p class="result-countdown" role="status">
           Switch to your app now. Pasting in {countdown}…
@@ -404,7 +426,7 @@ function ResultCard() {
           </Button>
           <Button
             icon={<ClipboardPaste size={16} />}
-            disabled={!result || isBusy.value}
+            disabled={!result || isBusy.value || keptSelection}
             onClick={async () => {
               if (await pasteAgain()) setCountdown(3);
             }}

@@ -25,7 +25,7 @@ The selected account's current catalog supplies model slugs, display names, and 
 
 The hint words are centralized in `FAST_MODEL_NAME_HINTS`; no model slug is hard-coded. A missing explicit preference still allows a valid saved account preference. Whole-word matching avoids treating unrelated names such as “Breakfast” or “Administration” as speed labels. An empty catalog remains an actionable error and ordinary dictation keeps its local transcript.
 
-Display-name hints are a selection heuristic. Actual latency comes from first-token and completion measurements for the selected slug. Server names, eligibility, ordering, and access can change. Automatic fallback does not overwrite a user's persisted preference; a later catalog may restore that choice. [Official account model discovery](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference).
+The runtime reuses an account's model list for 30 minutes and refreshes it while the user is still speaking, so polish does not wait on the catalog; before this, looking up the account and its models took one to four seconds before each request. Display-name hints are a selection heuristic. Actual latency comes from first-token and completion measurements for the selected slug. Server names, eligibility, ordering, and access can change. Automatic fallback does not overwrite a user's persisted preference; a later catalog may restore that choice. [Official account model discovery](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference).
 
 ## Storage-failure verification
 

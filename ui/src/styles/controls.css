@@ -248,14 +248,16 @@
 }
 
 /* ------------------------------------------------------------------ select */
+/* Native selects size to their longest option; a long device name would otherwise squeeze
+   the row's text into a narrow column. Long labels end in an ellipsis instead. */
 .select {
   position: relative;
   display: inline-flex;
   min-width: 190px;
+  max-width: min(100%, 320px);
 }
 .select-wide {
-  min-width: 280px;
-  max-width: 100%;
+  width: 300px;
 }
 .select select {
   appearance: none;
@@ -610,6 +612,23 @@
 .row-control {
   justify-self: end;
 }
+/* In a narrow window a wide dropdown moves under its description instead of beside it. */
+.rows {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .row:has(> .row-icon):has(.select-wide) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .row:has(> .row-icon):has(.select-wide) > .row-control {
+    grid-column: 2;
+    justify-self: stretch;
+  }
+  .row:has(.select-wide) .select-wide {
+    width: 100%;
+    max-width: 420px;
+  }
+}
 
 /* ------------------------------------------------------------------ callouts */
 .callout {
@@ -911,10 +930,30 @@
   box-shadow: none;
   background: none;
 }
+/* A compact toggle sized to its label. Padding keeps the hover fill off the text, and the
+   negative margin keeps the label aligned with the description above it. */
 .disclosure.is-inline > summary {
-  padding: 4px 0;
+  display: inline-flex;
+  gap: 8px;
+  margin-left: -8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-control);
   font-size: var(--text-sm);
   font-weight: 560;
+}
+.disclosure.is-inline > summary:hover {
+  border-radius: var(--radius-control);
+}
+.disclosure.is-inline > summary::after {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 4px;
+}
+.disclosure.is-inline[open] > summary::after {
+  margin-top: 3px;
+}
+.disclosure.is-inline > .code {
+  margin-top: 6px;
 }
 .code {
   max-height: 240px;

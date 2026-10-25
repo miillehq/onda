@@ -15,9 +15,10 @@ path = "src/lib.rs"
 name = "onda"
 path = "src/main.rs"
 
-[[bin]]
+# An example rather than a binary: the installer bundles every binary of this package.
+[[example]]
 name = "onda-api-contracts"
-path = "src/bin/contracts.rs"
+path = "examples/api_contracts.rs"
 
 [build-dependencies]
 tauri-build = { version = "2.6", features = [] }

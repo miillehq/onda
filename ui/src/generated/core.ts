@@ -51,8 +51,16 @@ errorCode: ErrorCode | null,
 /**
  * Executable of the app it was typed into, e.g. "slack.exe".
  */
-app: string | null, };
-export type OperationResult = { commandText: string | null, operationId: string, original: string, output: string, inserted: boolean, fallbackUsed: boolean, diff: Array<DiffSegment>, };
+app: string | null, 
+/**
+ * ChatGPT's version when it failed Onda's checks and `output` kept the original.
+ */
+suggestion: string | null, };
+export type OperationResult = { commandText: string | null, operationId: string, original: string, output: string, inserted: boolean, fallbackUsed: boolean, diff: Array<DiffSegment>, 
+/**
+ * ChatGPT's version when it failed Onda's checks, so it can still be copied.
+ */
+suggestion: string | null, };
 export type DiffKind = "equal" | "removed" | "added";
 export type DiffSegment = { kind: DiffKind, text: string, };
 export type LearningProposal = { id: string, original: string, corrected: string, };

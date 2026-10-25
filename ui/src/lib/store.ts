@@ -257,6 +257,12 @@ async function run(label: string, request: Parameters<typeof ask>[0]): Promise<b
 export async function copyResult(): Promise<void> {
   if (await run("Couldn't copy", { command: "copyResult" })) toast({ tone: "ok", title: "Copied" }, 2400);
 }
+/** Copy ChatGPT's version that Onda's checks kept out of the document. */
+export async function copySuggestion(): Promise<void> {
+  if (await run("Couldn't copy", { command: "copySuggestion" })) toast({ tone: "ok", title: "Copied ChatGPT's version" }, 2400);
+}
+/** Acknowledge a failure so Onda reads as ready again; its text stays in History. */
+export const dismissError = (operationId: string) => run("Couldn't dismiss", { command: "dismissError", args: { operationId } });
 export const pasteAgain = () => run("Couldn't paste", { command: "retryResult" });
 export const undoRewrite = () => run("Couldn't undo", { command: "undoLastTransform" });
 /** Forget the visible result, and its History entry too. */
@@ -284,6 +290,9 @@ export async function retryPolish(): Promise<void> {
 
 export async function copyHistoryEntry(id: string): Promise<void> {
   if (await run("Couldn't copy", { command: "copyHistoryEntry", args: { id } })) toast({ tone: "ok", title: "Copied" }, 2400);
+}
+export async function copyHistorySuggestion(id: string): Promise<void> {
+  if (await run("Couldn't copy", { command: "copyHistorySuggestion", args: { id } })) toast({ tone: "ok", title: "Copied ChatGPT's version" }, 2400);
 }
 
 export async function deleteHistoryEntry(id: string): Promise<void> {

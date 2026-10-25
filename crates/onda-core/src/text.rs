@@ -187,8 +187,17 @@ pub fn protected_tokens(source: &str) -> BTreeMap<String, usize> {
     for token in protected_regex().find_iter(source) {
         // URL-ending punctuation can be real path/query data. Preserve it exactly
         // instead of guessing that a question mark or period belongs to prose.
-        let key = token.as_str().to_owned();
-        *tokens.entry(key).or_default() += 1;
+        let mut key = token.as_str();
+        // In "GPT-6" or "COVID-19" the hyphen joins a name to its number; it is not a minus sign.
+        if key.starts_with(['+', '-', '−'])
+            && source[..token.start()]
+                .chars()
+                .next_back()
+                .is_some_and(char::is_alphanumeric)
+        {
+            key = &key[key.chars().next().map_or(0, char::len_utf8)..];
+        }
+        *tokens.entry(key.to_owned()).or_default() += 1;
     }
     tokens
 }
@@ -201,10 +210,11 @@ pub fn validate_enhancement(
     dictionary: &[String],
     strict_cleanup: bool,
 ) -> AppResult<()> {
-    let reject = || {
+    // Messages name the reason without quoting text, so they are safe to log.
+    let reject = |reason: &str| {
         AppError::new(
             ErrorCode::InvalidEnhancement,
-            "The AI result failed preservation checks; the original text was kept.",
+            format!("ChatGPT {reason}, so Onda kept your original words."),
             true,
         )
     };
@@ -215,7 +225,7 @@ pub fn validate_enhancement(
         || enhanced.len() > MAX_TEXT_BYTES
         || enhanced.contains('\0')
     {
-        return Err(reject());
+        return Err(reject("sent back nothing usable"));
     }
     let original_len = original.chars().count();
     let enhanced_len = enhanced.chars().count();
@@ -226,10 +236,10 @@ pub fn validate_enhancement(
             || (original_len >= 20
                 && (enhanced_len as f64) < original_len as f64 * MIN_LENGTH_RATIO))
     {
-        return Err(reject());
+        return Err(reject("rewrote far more than a cleanup should"));
     }
     if !tokens_preserved(original, enhanced) {
-        return Err(reject());
+        return Err(reject("changed a number, link, email or code"));
     }
     let lower = enhanced.trim_start().to_lowercase();
     if [
@@ -242,18 +252,18 @@ pub fn validate_enhancement(
     .iter()
     .any(|refusal| lower.starts_with(refusal))
     {
-        return Err(reject());
+        return Err(reject("replied instead of editing"));
     }
     if strict_cleanup
         && ((enhanced.contains("```") && !original.contains("```"))
             || heading_count(enhanced) > heading_count(original)
             || (enhanced.contains("**") && !original.contains("**")))
     {
-        return Err(reject());
+        return Err(reject("added formatting"));
     }
     for term in dictionary.iter().take(MAX_DICTIONARY_CANDIDATES) {
         if contains_term(original, term) && !contains_term(enhanced, term) {
-            return Err(reject());
+            return Err(reject("changed a word from your dictionary"));
         }
     }
     Ok(())
@@ -449,6 +459,17 @@ mod tests {
                 "{original}"
             );
         }
+    }
+    #[test]
+    fn a_hyphen_joining_a_name_to_its_number_is_not_a_minus_sign() {
+        let spoken = "I have GPT6 Luna selected, not 6.1 Sol or 6 Astra.";
+        let polished = "I have GPT-6 Luna selected, not GPT-6.1 Sol or GPT-6 Astra.";
+        assert!(validate_enhancement(spoken, polished, &[], false).is_ok());
+        assert!(validate_enhancement("Cases of COVID19", "Cases of COVID-19", &[], true).is_ok());
+        let changed =
+            validate_enhancement(spoken, &polished.replace("6.1", "6.2"), &[], false).unwrap_err();
+        assert!(changed.message.contains("number"), "{}", changed.message);
+        assert!(validate_enhancement("Set it to -6", "Set it to 6", &[], true).is_err());
     }
     #[test]
     fn rejects_expansion_refusal_and_dictionary_loss() {

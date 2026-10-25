@@ -375,6 +375,32 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* ChatGPT's version that Onda's checks kept out, on Home and in History. */
+.suggestion {
+  margin-top: 12px;
+  padding: 8px 14px 12px;
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+}
+.suggestion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-right: -8px;
+}
+.suggestion-label {
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.suggestion .diff {
+  margin: 2px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .history-meta {
   display: flex;
   align-items: center;
@@ -1204,18 +1230,24 @@
   height: 48px;
 }
 
+/* Three equal boxes on one line at every window size; wrapping left ChatGPT alone after the arrow. */
 .sent-diagram {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
   gap: 12px;
   margin-bottom: 28px;
+}
+.sent-diagram .flow-sub {
+  max-width: none;
+  white-space: normal;
 }
 .sent-box {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  min-width: 0;
+  padding: 12px 14px;
   border-radius: 14px;
   background: var(--sunken);
   box-shadow: inset 0 0 0 1px var(--line);
@@ -1242,7 +1274,11 @@
 .sent-box.is-cloud .flow-sub {
   color: var(--tile-fg-2);
 }
+.sent-box svg {
+  flex: none;
+}
 .sent-arrow {
+  align-self: center;
   color: var(--fg-3);
 }
 .avatar,

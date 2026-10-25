@@ -38,6 +38,17 @@ impl StateMachine {
             *self = Self::default();
         }
     }
+    /// The user acknowledged this failure; a newer operation's state is left alone. The
+    /// operation keeps its id and mode, so its result still reads as a dictation or a rewrite.
+    pub fn dismiss_error(&mut self, operation_id: &str) -> bool {
+        let dismissed = self.current.phase == Phase::Error
+            && self.current.operation_id.as_deref() == Some(operation_id);
+        if dismissed {
+            self.current.phase = Phase::Idle;
+            self.current.error = None;
+        }
+        dismissed
+    }
     pub fn snapshot(&self) -> OperationState {
         self.current.clone()
     }
@@ -163,6 +174,22 @@ mod tests {
         );
         state.clear_no_model_error();
         assert_eq!(state.snapshot().phase, Phase::Error);
+    }
+    #[test]
+    fn dismissing_clears_only_that_operations_error() {
+        let mut state = StateMachine::default();
+        let first = state.begin(OperationMode::Transform).unwrap();
+        state.fail(
+            &first,
+            AppError::new(ErrorCode::InvalidEnhancement, "kept original", true),
+        );
+        assert!(!state.dismiss_error("another operation"));
+        assert_eq!(state.snapshot().phase, Phase::Error);
+        assert!(state.dismiss_error(&first));
+        assert_eq!(state.snapshot().phase, Phase::Idle);
+        let second = state.begin(OperationMode::Dictation).unwrap();
+        assert!(!state.dismiss_error(&second));
+        assert_eq!(state.snapshot().phase, Phase::Recording);
     }
     #[test]
     fn rejects_overlap_and_late_completion() {

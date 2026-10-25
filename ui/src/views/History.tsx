@@ -6,7 +6,8 @@ import type { HistoryEntry } from "../generated/core";
 import { presentError } from "../lib/errors";
 import { appName, plural } from "../lib/format";
 import { navigate } from "../lib/router";
-import { clearHistory, copyHistoryEntry, deleteHistoryEntry, history, settings, toast } from "../lib/store";
+import { Suggestion } from "../components/feedback";
+import { clearHistory, copyHistoryEntry, copyHistorySuggestion, deleteHistoryEntry, history, settings, toast } from "../lib/store";
 
 const PAGE_SIZE = 60;
 
@@ -33,14 +34,17 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: 
 const MODE_LABEL: Partial<Record<HistoryEntry["mode"], string>> = { spokenCommand: "Voice edit", transform: "Rewrite" };
 
 function failed(entry: HistoryEntry): string | null {
-  if (entry.inserted || !entry.errorCode) return null;
+  // A skipped polish leaves the original where it was, so nothing went missing.
+  if (entry.inserted || !entry.errorCode || entry.errorCode === "invalidEnhancement") return null;
   return presentError({ code: entry.errorCode, message: "", retryable: false }).title;
 }
 
 /** One remembered dictation or edit. Compact rows sit on Home; full rows on the History page. */
 export function HistoryItem({ entry, compact = false }: { entry: HistoryEntry; compact?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const failure = failed(entry);
+  const skipped = entry.fallbackUsed || !!entry.suggestion;
   const edit = entry.mode !== "dictation";
   const changed = entry.original !== entry.output;
   const mode = MODE_LABEL[entry.mode];
@@ -58,6 +62,7 @@ export function HistoryItem({ entry, compact = false }: { entry: HistoryEntry; c
             <p class="serif selectable">{entry.original}</p>
           </div>
         )}
+        {comparing && entry.suggestion && <Suggestion kept={entry.output} suggestion={entry.suggestion} onCopy={() => void copyHistorySuggestion(entry.id)} />}
         <div class="history-meta">
           {failure && (
             <Chip tone="err" title={failure}>
@@ -66,7 +71,7 @@ export function HistoryItem({ entry, compact = false }: { entry: HistoryEntry; c
           )}
           {entry.app && <span>{appName(entry.app)}</span>}
           {mode && <span>{mode}</span>}
-          {entry.route === "chatgptPlan" && !entry.fallbackUsed ? (
+          {entry.route === "chatgptPlan" && !skipped ? (
             <span class="history-route">
               <Sparkles size={13} aria-hidden="true" />
               Polished
@@ -77,10 +82,16 @@ export function HistoryItem({ entry, compact = false }: { entry: HistoryEntry; c
               On this PC
             </span>
           )}
-          {entry.fallbackUsed && <Chip tone="warn">Polish skipped</Chip>}
+          {skipped && <Chip tone="warn">Polish skipped</Chip>}
           {!compact && changed && (
             <button type="button" class="link-button history-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
               {open ? "Hide original" : edit ? "Show original" : "Show before polish"}
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+          )}
+          {!compact && entry.suggestion && (
+            <button type="button" class="link-button history-toggle" aria-expanded={comparing} onClick={() => setComparing(!comparing)}>
+              {comparing ? "Hide ChatGPT's version" : "Show ChatGPT's version"}
               <ChevronDown size={14} aria-hidden="true" />
             </button>
           )}

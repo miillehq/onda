@@ -134,5 +134,16 @@ Graphics explain things wherever a paragraph would otherwise go.
 - 2026-10-24: Settings saves are coalesced and sent one at a time, and the shortcut helper
   restarts only when shortcuts change, because rapid quality switching flickered the cards
   and the sidebar status.
+- 2026-10-25: When ChatGPT's text fails the preservation check, its version is kept beside the
+  original: Copy ChatGPT's version on the pill and Home, and Show ChatGPT's version in History,
+  marked word by word against the kept text. History still leads with the kept text because
+  that is what is in the document, and the marks show whether the flagged change was harmless
+  (GPT6 → GPT-6) or real (1,200 → 1,500).
+- 2026-10-25: Dismiss on the pill or Home acknowledges the error, so the sidebar and tray read
+  Ready again; it used to hide the banner only, and "Needs attention" stayed until the next
+  dictation.
+- 2026-10-25: Dropdowns are capped at 320 px with an ellipsis, and a wide one moves under its
+  description in a narrow window, because a long microphone name squeezed the description
+  into a one-word column on a 125% laptop.
 - 2026-10-23: Quality cards say "In use" only for the model actually running; a card picked
   but downgraded for low memory says "Selected" and the footnote names the model in use.

@@ -52,6 +52,16 @@ impl ControlFingerprint {
             && (top - other_top).abs() <= BOUNDS_TOLERANCE
             && ((right - left) - (other_right - other_left)).abs() <= BOUNDS_TOLERANCE
     }
+
+    /// The largest shift in left edge, top edge or width, for content-free diagnostics.
+    fn distance(&self, other: &Self) -> i32 {
+        let [left, top, right, _] = self.bounds;
+        let [other_left, other_top, other_right, _] = other.bounds;
+        (left - other_left)
+            .abs()
+            .max((top - other_top).abs())
+            .max(((right - left) - (other_right - other_left)).abs())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -330,6 +340,13 @@ pub(crate) fn validate_identity(
                 && expected.process_created_at == actual.process_created_at,
             same_control = expected.focused_runtime_id == actual.focused_runtime_id,
             same_integrity = expected.integrity_level == actual.integrity_level,
+            same_type = expected.focused_control.control_type == actual.focused_control.control_type,
+            same_automation_id =
+                expected.focused_control.automation_id == actual.focused_control.automation_id,
+            framework = %expected.focused_control.framework_id,
+            same_framework =
+                expected.focused_control.framework_id == actual.focused_control.framework_id,
+            moved_px = expected.focused_control.distance(&actual.focused_control),
             "target identity changed"
         );
         return Err(PlatformError::TargetChanged);

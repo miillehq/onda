@@ -321,6 +321,9 @@ pub struct HistoryEntry {
     pub error_code: Option<crate::error::ErrorCode>,
     /// Executable of the app it was typed into, e.g. "slack.exe".
     pub app: Option<String>,
+    /// ChatGPT's version when it failed Onda's checks and `output` kept the original.
+    #[serde(default)]
+    pub suggestion: Option<String>,
 }
 
 /// Content-free daily aggregate keyed by the local calendar day (YYYY-MM-DD).
@@ -344,6 +347,8 @@ pub struct OperationResult {
     pub inserted: bool,
     pub fallback_used: bool,
     pub diff: Vec<DiffSegment>,
+    /// ChatGPT's version when it failed Onda's checks, so it can still be copied.
+    pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]

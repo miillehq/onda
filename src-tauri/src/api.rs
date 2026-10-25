@@ -101,6 +101,8 @@ pub enum ApiRequest {
     RetryResult,
     RetryTransformation,
     CopyResult,
+    /// Copy ChatGPT's version of the current result after Onda's checks kept the original.
+    CopySuggestion,
     UndoLastTransform,
     ClearResult,
     AcceptLearning {
@@ -117,9 +119,17 @@ pub enum ApiRequest {
     },
     /// Hide the dictation pill early, e.g. after reading an error.
     DismissPill,
+    /// Acknowledge a failed operation so Onda reads as ready again. Its text stays in History.
+    DismissError {
+        operation_id: String,
+    },
     /// Retained dictations and edits, newest first.
     GetHistory,
     CopyHistoryEntry {
+        id: String,
+    },
+    /// Copy ChatGPT's version kept with a history entry whose polish was skipped.
+    CopyHistorySuggestion {
         id: String,
     },
     DeleteHistoryEntry {

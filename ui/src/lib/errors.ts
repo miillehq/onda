@@ -34,7 +34,8 @@ const PRESENTATION: Record<ErrorCode, ErrorPresentation> = {
   unauthorized: { title: "Reconnect ChatGPT", action: { label: "Open AI polish", route: "settings/ai" } },
   quota: { title: "ChatGPT limit reached", action: { label: "Open AI polish", route: "settings/ai" } },
   cloud: { title: "ChatGPT didn't respond", action: { label: "Open AI polish", route: "settings/ai" } },
-  invalidEnhancement: { title: "Polish was skipped", hint: "ChatGPT changed something it shouldn't have, so Onda kept your original words." },
+  // The native message names what ChatGPT changed, e.g. a number or a dictionary word.
+  invalidEnhancement: { title: "Polish was skipped" },
   focusChanged: { title: "You switched fields", hint: "Onda didn't type because focus moved. Your words are saved in History.", action: { label: "Open History", route: "history" } },
   targetExited: { title: "The app closed", hint: "Your words are saved in History.", action: { label: "Open History", route: "history" } },
   passwordField: { title: "Password fields are skipped", hint: "For your safety, Onda never types into password fields." },

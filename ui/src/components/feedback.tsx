@@ -1,7 +1,9 @@
 import { useComputed, type ReadonlySignal } from "@preact/signals";
-import { CircleAlert, CircleCheck, Info, X } from "lucide-preact";
+import { CircleAlert, CircleCheck, Copy, Info, X } from "lucide-preact";
 import type { DiffSegment } from "../generated/core";
+import { wordDiff } from "../lib/diff";
 import { dismissToast, toasts } from "../lib/store";
+import { Button } from "./controls";
 
 export function Toasts() {
   return (
@@ -61,5 +63,20 @@ export function Diff({ segments }: { segments: DiffSegment[] }) {
         ),
       )}
     </p>
+  );
+}
+
+/** ChatGPT's version that failed Onda's checks, marked against the text that was kept. */
+export function Suggestion({ kept, suggestion, onCopy }: { kept: string; suggestion: string; onCopy: () => void }) {
+  return (
+    <div class="suggestion">
+      <div class="suggestion-head">
+        <span class="suggestion-label">ChatGPT's version, not used</span>
+        <Button variant="ghost" size="sm" icon={<Copy size={15} />} onClick={onCopy}>
+          Copy
+        </Button>
+      </div>
+      <Diff segments={wordDiff(kept, suggestion)} />
+    </div>
   );
 }

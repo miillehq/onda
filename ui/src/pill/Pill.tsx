@@ -51,18 +51,25 @@ function Timer() {
   return <span class="pill-time tabular">{formatClock(now - startedAt.value)}</span>;
 }
 
-function ErrorCard({ error }: { error: AppError }) {
+function ErrorCard({ error, operation }: { error: AppError; operation: OperationState }) {
   const presentation = presentError(error);
   const mic = MIC_CODES.has(error.code);
   const section = presentation.action?.route;
   const [copied, setCopied] = useState(false);
   const saved = result.value;
-  const copyable = !!saved && !saved.inserted && saved.output.trim().length > 0;
+  const suggestion = saved?.suggestion ?? null;
+  // A failed rewrite leaves the selection in place, so copying it again would do nothing.
+  const keptSelection = operation.mode !== "dictation" && saved?.output === saved?.original;
+  const copyable = !!saved && !saved.inserted && saved.output.trim().length > 0 && !keptSelection;
+  const dismiss = () => {
+    const id = operation.operationId;
+    void ask(id ? { command: "dismissError", args: { operationId: id } } : { command: "dismissPill" }, "unit").catch(() => undefined);
+  };
   const copy = async () => {
     try {
-      await ask({ command: "copyResult" }, "unit");
+      await ask(suggestion ? { command: "copySuggestion" } : { command: "copyResult" }, "unit");
       setCopied(true);
-      window.setTimeout(() => void ask({ command: "dismissPill" }, "unit").catch(() => undefined), 900);
+      window.setTimeout(dismiss, 900);
     } catch {
       setCopied(false);
     }
@@ -74,18 +81,18 @@ function ErrorCard({ error }: { error: AppError }) {
         <p class="pill-card-title">{presentation.title}</p>
         <p class="pill-card-body">{presentation.hint ?? error.message}</p>
         <div class="pill-card-actions">
-          {copyable && (
+          {(copyable || suggestion) && (
             <button type="button" class="pill-button is-primary" onClick={() => void copy()} disabled={copied}>
               {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
-              {copied ? "Copied" : "Copy"}
+              {copied ? "Copied" : suggestion ? "Copy ChatGPT's version" : "Copy"}
             </button>
           )}
           {section && (
-            <button type="button" class={`pill-button${copyable ? "" : " is-primary"}`} onClick={() => void ask({ command: "openMainWindow", args: { section } }, "unit").catch(() => undefined)}>
+            <button type="button" class={`pill-button${copyable || suggestion ? "" : " is-primary"}`} onClick={() => void ask({ command: "openMainWindow", args: { section } }, "unit").catch(() => undefined)}>
               {presentation.action?.label}
             </button>
           )}
-          <button type="button" class="pill-button" onClick={() => void ask({ command: "dismissPill" }, "unit").catch(() => undefined)}>
+          <button type="button" class="pill-button" onClick={dismiss}>
             Dismiss
           </button>
         </div>
@@ -125,7 +132,7 @@ export function Pill() {
   let content = null;
   if (current && phase !== "idle") {
     if (phase === "error" && current.error) {
-      content = <ErrorCard error={current.error} />;
+      content = <ErrorCard error={current.error} operation={current} />;
     } else if (phase === "recording") {
       const handsFree = current.handsFree;
       const command = current.mode === "spokenCommand";

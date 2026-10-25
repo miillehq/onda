@@ -3,9 +3,9 @@
  * Never bundled into production (see api.ts). Data below is clearly fictional sample data.
  *
  * URL parameters:
- *   ?mock=default|empty|onboarding|error   initial scenario
+ *   ?mock=default|empty|onboarding|error|skipped   initial scenario
  *   ?theme=light|dark                      force a theme
- *   ?pill=listening|handsfree|writing|polishing|done|error|nottyped|cycle   pill window state
+ *   ?pill=listening|handsfree|writing|polishing|done|error|nottyped|skipped|cycle   pill window state
  */
 import type { Backend } from "../api";
 import type { AccountInfo, ApiRequest, ApiResponse, ModelInfo, RuntimeEvent, Snapshot } from "../generated/api";
@@ -62,7 +62,11 @@ const transforms: Transform[] = [
   ["prompt", "Prompt engineer", "Improve this as an instruction prompt. Clarify requirements and organize existing information."],
 ].map(([id, name, instruction]) => ({ id: id as string, name: name as string, instruction: instruction as string, shortcut: null, modelPreference: null, preserveProtectedTokens: true, builtIn: true }));
 
-const rich = scenario === "default" || scenario === "error";
+const rich = scenario === "default" || scenario === "error" || scenario === "skipped";
+/** A rewrite whose ChatGPT version changed a number, so Onda kept the selection. */
+const SKIPPED_TEXT = "Send the invoice for 1,200 by Friday and copy finance.";
+const SKIPPED_SUGGESTION = "Please send the invoice for 1,500 by Friday and copy the finance team.";
+const SKIPPED_ERROR = { code: "invalidEnhancement", message: "ChatGPT changed a number, link, email or code, so Onda kept your original words.", retryable: true } as const;
 let dictionary: DictionaryEntry[] = rich
   ? [
       { id: "d1", kind: "vocabulary", phrase: "Kubernetes", replacement: null, enabled: true, starred: true, source: "manual" },
@@ -84,7 +88,10 @@ let snippets: Snippet[] = rich
 
 const profiles: AccountInfo[] = scenario === "default" ? [{ id: "p1", label: "Personal", email: "you@example.com", signedIn: true, planUsageEnabled: true, active: true, preferredModel: null }] : [];
 
-const result: OperationResult | null = rich
+const result: OperationResult | null =
+  scenario === "skipped"
+    ? { commandText: null, operationId: "op-sample", original: SKIPPED_TEXT, output: SKIPPED_TEXT, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: SKIPPED_TEXT }], suggestion: SKIPPED_SUGGESTION }
+    : rich
   ? {
       commandText: null,
       operationId: "op-sample",
@@ -96,18 +103,19 @@ const result: OperationResult | null = rich
         { kind: "removed", text: "lets move the design review to thursday at three and um send the notes after" },
         { kind: "added", text: "Let's move the design review to Thursday at three and send the notes after." },
       ],
+      suggestion: null,
     }
   : null;
 
 const minutesAgo = (minutes: number) => Date.now() - minutes * 60_000;
 function sample(id: string, minutes: number, app: string, output: string, extra: Partial<HistoryEntry> = {}): HistoryEntry {
-  return { id, createdAt: minutesAgo(minutes), mode: "dictation", route: "local", original: output, output, commandText: null, inserted: true, fallbackUsed: false, errorCode: null, app, ...extra };
+  return { id, createdAt: minutesAgo(minutes), mode: "dictation", route: "local", original: output, output, commandText: null, inserted: true, fallbackUsed: false, errorCode: null, app, suggestion: null, ...extra };
 }
 let history: HistoryEntry[] = rich
   ? [
       sample("op-sample", 2, "slack.exe", "Let's move the design review to Thursday at three and send the notes after.", { route: "chatgptPlan", original: "lets move the design review to thursday at three and um send the notes after" }),
       sample("h2", 18, "outlook.exe", "Hi Priya, thanks for the quick turnaround. The numbers look right to me, so let's send the deck to the client tomorrow morning.", { inserted: false, errorCode: "focusChanged" }),
-      sample("h3", 47, "code.exe", "Rename the retry helper and add a test for the timeout path.", { route: "chatgptPlan", fallbackUsed: true }),
+      sample("h3", 47, "code.exe", "Move standup to 9 tomorrow and invite the two new hires.", { route: "chatgptPlan", fallbackUsed: true, original: "move standup to 9 tomorrow and invite the two new hires", suggestion: "Move standup to 9:00 tomorrow and invite the two new hires." }),
       sample("h4", 95, "winword.exe", "The pilot ran for six weeks across three teams. Adoption was strongest where managers used it first.", { mode: "spokenCommand", commandText: "make it more formal", original: "pilot went for six weeks, three teams, people used it more when their managers did", route: "chatgptPlan" }),
       sample("h5", 60 * 26, "notion.exe", "Ideas for the offsite: a short retro, a demo hour, and dinner somewhere walkable."),
       sample("h6", 60 * 27, "chrome.exe", "Order confirmation for the standing desk, delivery window Tuesday."),
@@ -115,6 +123,7 @@ let history: HistoryEntry[] = rich
   : [];
 
 function idle(): OperationState {
+  if (scenario === "skipped") return { operationId: "op-sample", phase: "error", mode: "transform", route: "chatgptPlan", error: SKIPPED_ERROR, fallbackUsed: false, handsFree: false };
   return { operationId: rich ? "op-sample" : null, phase: scenario === "error" ? "error" : rich ? "completed" : "idle", mode: "dictation", route: rich ? "chatgptPlan" : "local", error: scenario === "error" ? { code: "noSpeech", message: "No speech was detected. Check microphone level and try again.", retryable: true } : null, fallbackUsed: false, handsFree: false };
 }
 
@@ -185,7 +194,7 @@ async function dictate(handsFree = false): Promise<void> {
     }
   }
   const output = "Sure, I can send the summary by Friday.";
-  snapshot.result = { commandText: null, operationId: id, original: "sure i can send the summary by friday", output, inserted: true, fallbackUsed: false, diff: [{ kind: "removed", text: "sure i can send the summary by friday" }, { kind: "added", text: output }] };
+  snapshot.result = { commandText: null, operationId: id, original: "sure i can send the summary by friday", output, inserted: true, fallbackUsed: false, diff: [{ kind: "removed", text: "sure i can send the summary by friday" }, { kind: "added", text: output }], suggestion: null };
   domain({ type: "resultReady", payload: snapshot.result });
   const entry = sample(id, 0, "slack.exe", output, { original: "sure i can send the summary by friday", route: snapshot.state.route });
   history = [entry, ...history];
@@ -205,12 +214,16 @@ function freezePill(state: string): void {
     done: { ...base, phase: "completed" },
     error: { ...base, phase: "error", error: { code: "noSpeech", message: "No speech was detected. Check microphone level and try again.", retryable: true } },
     nottyped: { ...base, phase: "error", error: { code: "focusChanged", message: "The focused app, control, or selection changed. Your text is available to copy.", retryable: true } },
+    skipped: { ...base, phase: "error", mode: "transform", route: "chatgptPlan", error: SKIPPED_ERROR },
   };
   const target = states[state] ?? base;
   domain({ type: "stateChanged", payload: target });
   if (state === "nottyped") {
     const output = "Hi Priya, thanks for the quick turnaround.";
-    domain({ type: "resultReady", payload: { commandText: null, operationId: "pill", original: output, output, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: output }] } });
+    domain({ type: "resultReady", payload: { commandText: null, operationId: "pill", original: output, output, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: output }], suggestion: null } });
+  }
+  if (state === "skipped") {
+    domain({ type: "resultReady", payload: { commandText: null, operationId: "pill", original: SKIPPED_TEXT, output: SKIPPED_TEXT, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: SKIPPED_TEXT }], suggestion: SKIPPED_SUGGESTION } });
   }
   if (target.phase === "recording") {
     const tick = () => {
@@ -272,7 +285,7 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       return { type: "transforms", payload: transforms };
     }
     case "listAudioDevices":
-      return { type: "audioDevices", payload: [{ id: "mic-1", name: "Microphone Array (Sample Audio)", isDefault: true }, { id: "mic-2", name: "Headset Microphone (Sample)", isDefault: false }] };
+      return { type: "audioDevices", payload: [{ id: "mic-1", name: "Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)", isDefault: true }, { id: "mic-2", name: "Headset Microphone (Sample)", isDefault: false }] };
     case "testMicrophone":
       return speak(request.args.durationMs).then(() => ({ type: "microphone", payload: { durationMs: request.args.durationMs, peak: 0.42, rms: 0.05, clippedSamples: 0, discontinuities: 0, mostlySilent: false, sourceSampleRate: 48000, sourceChannels: 1 } }));
     case "startDictation":
@@ -302,7 +315,7 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     case "listAvailableModels":
       return { type: "cloudModels", payload: [{ slug: "fast-sample", name: "Fast (sample)" }, { slug: "smart-sample", name: "Thorough (sample)" }] };
     case "previewTransform":
-      return { type: "result", payload: { commandText: null, operationId: "preview", original: request.args.source, output: request.args.source.trim().replace(/^./, (c) => c.toUpperCase()), inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: request.args.source }] } };
+      return { type: "result", payload: { commandText: null, operationId: "preview", original: request.args.source, output: request.args.source.trim().replace(/^./, (c) => c.toUpperCase()), inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: request.args.source }], suggestion: null } };
     case "retryTransformation":
       return { type: "result", payload: snapshot.result as OperationResult };
     case "exportDiagnostics":
@@ -315,6 +328,9 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       return { type: "signOut", payload: { remoteRevocationConfirmed: true } };
     case "clearResult":
       snapshot.result = null;
+      return { type: "unit" };
+    case "dismissError":
+      if (snapshot.state.phase === "error" && snapshot.state.operationId === request.args.operationId) setState({ phase: "idle", error: null });
       return { type: "unit" };
     case "teachWord": {
       // Fictional takes of the brand name "Miille": two mishearings, then a correct one.

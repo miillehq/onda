@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
     "build": "tsc --noEmit && vite build",
-    "contracts": "cargo run -p onda-core --bin onda-contracts && cargo run -p onda-app --bin onda-api-contracts",
-    "contracts:check": "cargo run -p onda-core --bin onda-contracts -- --check && cargo run -p onda-app --bin onda-api-contracts -- --check",
+    "contracts": "cargo run -p onda-core --bin onda-contracts && cargo run -p onda-app --example onda-api-contracts",
+    "contracts:check": "cargo run -p onda-core --bin onda-contracts -- --check && cargo run -p onda-app --example onda-api-contracts -- --check",
     "tauri": "tauri",
     "desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1",
     "release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1",

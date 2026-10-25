@@ -348,11 +348,7 @@ impl Runtime {
                     .as_ref()
                     .map(|result| result.result.clone())
                     .ok_or_else(|| AppError::invalid("No result is available to copy."))?;
-                let text = saved.output.clone();
-                tokio::task::spawn_blocking(move || onda_platform::copy_text_to_clipboard(&text))
-                    .await
-                    .map_err(|_| AppError::new(ErrorCode::Internal, "Copy worker stopped.", true))?
-                    .map_err(errors::platform)?;
+                copy_text(saved.output.clone()).await?;
                 if let Some(current) = lock(&self.result)?.as_mut() {
                     if current.result.operation_id == saved.operation_id
                         && current.result.output == saved.output
@@ -411,22 +407,44 @@ impl Runtime {
                 }
                 Ok(O::Unit)
             }
+            R::CopySuggestion => {
+                let text = lock(&self.result)?
+                    .as_ref()
+                    .and_then(|saved| saved.result.suggestion.clone())
+                    .ok_or_else(|| {
+                        AppError::invalid("ChatGPT's version is no longer available.")
+                    })?;
+                copy_text(text).await?;
+                Ok(O::Unit)
+            }
             R::DismissPill => {
                 self.pill.hide_now(&self.app);
                 Ok(O::Unit)
             }
+            R::DismissError { operation_id } => {
+                if lock(&self.state)?.dismiss_error(&operation_id) {
+                    self.pill.hide_now(&self.app);
+                    self.emit_state();
+                }
+                Ok(O::Unit)
+            }
             R::GetHistory => Ok(O::History(lock(&self.history)?.iter().cloned().collect())),
+            R::CopyHistorySuggestion { id } => {
+                let text = lock(&self.history)?
+                    .iter()
+                    .find(|entry| entry.id == id)
+                    .and_then(|entry| entry.suggestion.clone())
+                    .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
+                copy_text(text).await?;
+                Ok(O::Unit)
+            }
             R::CopyHistoryEntry { id } => {
                 let text = lock(&self.history)?
                     .iter()
                     .find(|entry| entry.id == id)
                     .map(|entry| entry.output.clone())
                     .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
-                let copied = text.clone();
-                tokio::task::spawn_blocking(move || onda_platform::copy_text_to_clipboard(&copied))
-                    .await
-                    .map_err(|_| AppError::new(ErrorCode::Internal, "Copy worker stopped.", true))?
-                    .map_err(errors::platform)?;
+                copy_text(text.clone()).await?;
                 if let Some(current) = lock(&self.result)?.as_mut() {
                     if current.result.operation_id == id && current.result.output == text {
                         current.copied = true;
@@ -843,6 +861,7 @@ impl Runtime {
             inserted: false,
             fallback_used: false,
             diff: onda_core::transforms::diff(&source, &source),
+            suggestion: None,
         };
         {
             let state = lock(&self.state)?;
@@ -855,6 +874,7 @@ impl Runtime {
             }
             *lock(&self.result)? = Some(SavedResult {
                 copied: false,
+                failed: false,
                 retry: None,
                 result: original,
                 target: None,
@@ -883,7 +903,7 @@ impl Runtime {
                 )
                 .await?;
             if transform.preserve_protected_tokens {
-                onda_core::text::validate_enhancement(&source, &output, &[], false)?;
+                self.check_enhancement(&active, &source, &output, &[], false)?;
             }
             let result = OperationResult {
                 command_text: None,
@@ -893,6 +913,7 @@ impl Runtime {
                 inserted: false,
                 fallback_used: false,
                 diff: onda_core::transforms::diff(&source, &output),
+                suggestion: None,
             };
             {
                 let mut state = lock(&self.state)?;
@@ -908,6 +929,7 @@ impl Runtime {
                     .and_then(|saved| saved.retry.clone());
                 *lock(&self.result)? = Some(SavedResult {
                     copied: false,
+                    failed: false,
                     retry,
                     result: result.clone(),
                     target: None,
@@ -992,7 +1014,7 @@ impl Runtime {
                 )
                 .await?;
             if retry.preserve_tokens {
-                onda_core::text::validate_enhancement(&saved.result.original, &output, &[], false)?;
+                self.check_enhancement(&active, &saved.result.original, &output, &[], false)?;
             }
             self.save_result(&active, &saved.result.original, &output, false, false, None)?;
             if saved.target.is_some() {
@@ -1172,7 +1194,7 @@ impl Runtime {
     async fn install_update(self: &Arc<Self>) -> AppResult<()> {
         let _reservation = {
             let state = lock(&self.state)?;
-            self.ensure_recovery_resolved(&state)?;
+            self.ensure_recovery_resolved()?;
             if state.is_active()
                 || self.microphone_testing.load(Ordering::Acquire)
                 || self.updating.swap(true, Ordering::AcqRel)
@@ -1219,6 +1241,14 @@ impl Drop for UpdateReservation<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Release);
     }
+}
+
+/// Put text on the clipboard off the async runtime, with the platform's privacy markers.
+async fn copy_text(text: String) -> AppResult<()> {
+    tokio::task::spawn_blocking(move || onda_platform::copy_text_to_clipboard(&text))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::Internal, "Copy worker stopped.", true))?
+        .map_err(errors::platform)
 }
 
 fn validate_model_directory(path: &std::path::Path) -> AppResult<()> {

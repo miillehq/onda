@@ -36,6 +36,8 @@ const PRECEDING_CHARACTERS: usize = 2;
 const FAST_MODEL_NAME_HINTS: &[&str] = &["fast", "mini", "nano"];
 const MAX_HISTORY_ENTRIES: usize = 2000;
 const DAY_MS: i64 = 86_400_000;
+/// How long an account's model list is reused before polish asks ChatGPT again.
+const MODEL_LIST_TTL: Duration = Duration::from_secs(30 * 60);
 
 fn lock<T>(mutex: &Mutex<T>) -> AppResult<MutexGuard<'_, T>> {
     mutex.lock().map_err(|_| {
@@ -71,12 +73,21 @@ struct WarmWorker {
 #[derive(Clone)]
 struct SavedResult {
     copied: bool,
+    /// The operation failed after producing this result, so it may hold untyped text.
+    failed: bool,
     retry: Option<TransformRetry>,
     result: OperationResult,
     target: Option<TargetSnapshot>,
     selection: Option<String>,
     after_document: Option<String>,
     shortcut: onda_platform::PasteShortcut,
+}
+
+/// One account's models, so each polish does not wait on fetching the list again.
+struct CachedModels {
+    profile_id: String,
+    fetched: Instant,
+    models: Vec<onda_cloud::ModelChoice>,
 }
 
 #[derive(Clone)]
@@ -121,6 +132,7 @@ pub struct Runtime {
     history_days: AtomicU32,
     cloud: Option<ChatGptService>,
     cloud_error: Option<AppError>,
+    cloud_models: Mutex<Option<CachedModels>>,
     asr: AsrEngine,
     models: Mutex<ModelManager>,
     worker_directory: PathBuf,
@@ -187,6 +199,7 @@ impl Runtime {
             history_days: AtomicU32::new(settings.history_days),
             cloud,
             cloud_error,
+            cloud_models: Mutex::new(None),
             asr: AsrEngine::new(&worker_directory),
             models: Mutex::new(models),
             worker_directory,
@@ -275,6 +288,14 @@ impl Runtime {
             }
             state.fail(id, error.clone());
         }
+        if let Ok(mut saved) = lock(&self.result) {
+            if let Some(saved) = saved
+                .as_mut()
+                .filter(|saved| saved.result.operation_id == id)
+            {
+                saved.failed = true;
+            }
+        }
         tracing::warn!(subsystem="operation",operation_id=id,code=?error.code,"operation failed");
         self.discard_warm_worker();
         if error.code != ErrorCode::Cancelled {
@@ -307,12 +328,13 @@ impl Runtime {
         state.begin(mode)
     }
     /// History keeps failed text findable, so new operations never wait on it. Session-only
-    /// history is lost on restart, so an update must not discard text never typed or copied.
-    fn ensure_recovery_resolved(&self, state: &StateMachine) -> AppResult<()> {
+    /// history is lost on restart, so an update must not discard text never typed or copied,
+    /// even after the error was dismissed.
+    fn ensure_recovery_resolved(&self) -> AppResult<()> {
         if self.history_days.load(Ordering::Acquire) == 0
-            && state.snapshot().phase == Phase::Error
             && lock(&self.result)?.as_ref().is_some_and(|saved| {
-                saved.target.is_some()
+                saved.failed
+                    && saved.target.is_some()
                     && saved.selection.is_none()
                     && !saved.result.inserted
                     && !saved.copied
@@ -719,6 +741,9 @@ impl Runtime {
                 .unwrap_or(false)
         });
         self.start_warm_worker(&id, &settings, &warm_context, warm_cancellation);
+        if settings.enhancement_enabled || command_mode {
+            self.prefetch_polish();
+        }
         self.monitor_capture(id);
         Ok(())
     }
@@ -938,7 +963,7 @@ impl Runtime {
             output = self
                 .cloud_text(&active, &source, &instructions, None)
                 .await?;
-            onda_core::text::validate_enhancement(&source, &output, &[], false)?;
+            self.check_enhancement(&active, &source, &output, &[], false)?;
             self.save_result(&active, &source, &output, false, false, None)?;
         } else {
             self.save_result(&active, &local, &local, false, false, None)?;
@@ -955,12 +980,7 @@ impl Runtime {
                     .cloud_text(&active, &local, &instructions, None)
                     .await
                     .and_then(|candidate| {
-                        onda_core::text::validate_enhancement(
-                            &local,
-                            &candidate,
-                            &candidates,
-                            true,
-                        )?;
+                        self.check_enhancement(&active, &local, &candidate, &candidates, true)?;
                         Ok(candidate)
                     }) {
                     Ok(candidate) => output = candidate,
@@ -1109,10 +1129,11 @@ impl Runtime {
         let copied = lock(&self.result)?.as_ref().is_some_and(|saved| {
             saved.result.operation_id == active.id && saved.result.output == output && saved.copied
         });
-        let previous_retry = lock(&self.result)?
+        let (previous_retry, suggestion) = lock(&self.result)?
             .as_ref()
             .filter(|saved| saved.result.operation_id == active.id)
-            .and_then(|saved| saved.retry.clone());
+            .map(|saved| (saved.retry.clone(), saved.result.suggestion.clone()))
+            .unwrap_or_default();
         let result = OperationResult {
             command_text: previous_retry
                 .as_ref()
@@ -1123,10 +1144,12 @@ impl Runtime {
             inserted,
             fallback_used: fallback,
             diff: onda_core::transforms::diff(original, output),
+            suggestion,
         };
         let shortcut = paste_shortcut(&active.settings, &active.target.executable_name);
         *lock(&self.result)? = Some(SavedResult {
             copied,
+            failed: false,
             retry: previous_retry,
             result: result.clone(),
             target: Some(active.target.clone()),
@@ -1164,10 +1187,53 @@ impl Runtime {
         Ok(())
     }
 
+    /// Check ChatGPT's text before it is used. A rejected version stays on the result and in
+    /// History, so the user can still copy it.
+    fn check_enhancement(
+        &self,
+        active: &ActiveOperation,
+        original: &str,
+        candidate: &str,
+        dictionary: &[String],
+        strict_cleanup: bool,
+    ) -> AppResult<()> {
+        let checked =
+            onda_core::text::validate_enhancement(original, candidate, dictionary, strict_cleanup);
+        if checked.is_err() {
+            self.keep_suggestion(active, candidate);
+        }
+        checked
+    }
+
+    fn keep_suggestion(&self, active: &ActiveOperation, suggestion: &str) {
+        let (result, route) = {
+            let Ok(state) = lock(&self.state) else {
+                return;
+            };
+            if !state.matches(&active.id) {
+                return;
+            }
+            let Ok(mut saved) = lock(&self.result) else {
+                return;
+            };
+            let Some(saved) = saved
+                .as_mut()
+                .filter(|saved| saved.result.operation_id == active.id)
+            else {
+                return;
+            };
+            saved.result.suggestion = Some(suggestion.to_owned());
+            (saved.result.clone(), state.snapshot().route)
+        };
+        self.domain(AppEvent::ResultReady(result.clone()));
+        self.record_history(active, &result, route);
+    }
+
     /// Keep what was said findable after the next operation replaces the visible result.
     fn record_history(&self, active: &ActiveOperation, result: &OperationResult, route: DataRoute) {
-        let unchanged_edit =
-            active.mode == OperationMode::Transform && result.output == result.original;
+        let unchanged_edit = active.mode == OperationMode::Transform
+            && result.output == result.original
+            && result.suggestion.is_none();
         if !active.history || unchanged_edit || result.output.trim().is_empty() {
             return;
         }
@@ -1193,6 +1259,7 @@ impl Runtime {
                 fallback_used: result.fallback_used,
                 error_code: None,
                 app: Some(active.target.executable_name.clone()).filter(|name| !name.is_empty()),
+                suggestion: result.suggestion.clone(),
             };
             history.retain(|existing| existing.id != entry.id);
             history.push_front(entry.clone());
@@ -1278,6 +1345,46 @@ impl Runtime {
         Ok(())
     }
 
+    /// The account's models, fetched at most every half hour so polish can start at once.
+    async fn account_models(&self, profile_id: &str) -> AppResult<Vec<onda_cloud::ModelChoice>> {
+        if let Some(cached) = lock(&self.cloud_models)?.as_ref().filter(|cached| {
+            cached.profile_id == profile_id && cached.fetched.elapsed() < MODEL_LIST_TTL
+        }) {
+            return Ok(cached.models.clone());
+        }
+        let models = self
+            .cloud()?
+            .list_models(Some(profile_id.to_owned()))
+            .await
+            .map_err(errors::cloud)?;
+        *lock(&self.cloud_models)? = Some(CachedModels {
+            profile_id: profile_id.to_owned(),
+            fetched: Instant::now(),
+            models: models.clone(),
+        });
+        Ok(models)
+    }
+
+    /// Look up the account and its models while the user speaks; on a cold start this took
+    /// one to four seconds before ChatGPT was even asked.
+    fn prefetch_polish(self: &Arc<Self>) {
+        let service = self.clone();
+        tauri::async_runtime::spawn(async move {
+            let Ok(cloud) = service.cloud() else {
+                return;
+            };
+            let Ok(profiles) = cloud.list_profiles().await else {
+                return;
+            };
+            if let Some(profile) = profiles
+                .iter()
+                .find(|profile| profile.active && profile.signed_in)
+            {
+                let _ = service.account_models(&profile.id).await;
+            }
+        });
+    }
+
     async fn cloud_text(
         self: &Arc<Self>,
         active: &ActiveOperation,
@@ -1305,15 +1412,11 @@ impl Runtime {
             .ok_or_else(|| {
                 AppError::new(
                     ErrorCode::Unauthorized,
-                    "Connect ChatGPT to enable this operation.",
+                    "No ChatGPT account is connected. Connect one in AI polish to use this.",
                     true,
                 )
             })?;
-        let models = self
-            .cloud()?
-            .list_models(Some(profile.id.clone()))
-            .await
-            .map_err(errors::cloud)?;
+        let models = self.account_models(&profile.id).await?;
         let model = [preferred, profile.preferred_model.as_deref()]
             .into_iter()
             .flatten()
@@ -1556,7 +1659,7 @@ impl Runtime {
                     )
                     .await?;
                 if transform.preserve_protected_tokens {
-                    onda_core::text::validate_enhancement(&selection, &output, &[], false)?;
+                    service.check_enhancement(&active, &selection, &output, &[], false)?;
                 }
                 service.save_result(&active, &selection, &output, false, false, None)?;
                 service.transition(&id, Phase::Inserting)?;
