@@ -3,7 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { ask } from "../../api";
 import { Button, Chip, Select, Switch } from "../../components/controls";
 import { Callout, Page, Row, Rows, Section } from "../../components/layout";
-import type { AccountInfo } from "../../generated/api";
+import type { AccountInfo, CloudModel } from "../../generated/api";
 import { activeProfile, aiReady, cloudModels, oauthStatus, refresh, saveSettings, settings, snapshot, toast, toastError } from "../../lib/store";
 
 async function act(label: string, request: Parameters<typeof ask>[0]): Promise<void> {
@@ -81,8 +81,8 @@ function AccountRow({ account }: { account: AccountInfo }) {
   );
 }
 
-function ModelPicker() {
-  const profile = activeProfile.value;
+/** The account's models, fetched once per window; the light one Onda uses by default is marked. */
+function useCloudModels(): { models: CloudModel[]; loading: boolean } {
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!aiReady.value || cloudModels.value) return;
@@ -92,27 +92,44 @@ function ModelPicker() {
       .catch(() => (cloudModels.value = []))
       .finally(() => setLoading(false));
   }, [aiReady.value]);
+  return { models: cloudModels.value ?? [], loading };
+}
+
+/** Why a light model is the right default, naming the one this account offers. */
+export function modelAdvice(models: CloudModel[]): string {
+  const light = models.find((model) => model.recommended);
+  return light
+    ? `${light.name} is light and quick, which is all polish needs. Bigger models take longer and can use up your plan's limits faster.`
+    : "Lighter models are quick, which is all polish needs. Bigger models take longer and can use up your plan's limits faster.";
+}
+
+/** Choose the ChatGPT model; "Recommended" names the model Onda would use. */
+export function ChatgptModelSelect() {
+  const profile = activeProfile.value;
+  const { models, loading } = useCloudModels();
   if (!profile || !aiReady.value) return null;
-  const models = cloudModels.value ?? [];
-  const options = [...(profile.preferredModel ? [] : [{ value: "", label: loading ? "Loading models…" : "Recommended" }]), ...models.map((model) => ({ value: model.slug, label: model.name }))];
+  const recommended = models.find((model) => model.recommended);
+  const options = [
+    ...(profile.preferredModel ? [] : [{ value: "", label: loading ? "Loading models…" : recommended ? `Recommended (${recommended.name})` : "Recommended" }]),
+    ...models.map((model) => ({ value: model.slug, label: model.recommended && profile.preferredModel ? `${model.name} (recommended)` : model.name })),
+  ];
   return (
-    <Row
-      icon={<Sparkles size={18} />}
-      title="ChatGPT model"
-      description="Models come from your plan. Faster models keep dictation snappy."
-      control={
-        <Select
-          label="ChatGPT model"
-          value={profile.preferredModel ?? ""}
-          options={options}
-          onChange={(slug) => {
-            if (!slug) return;
-            void act("Model not changed", { command: "setChatgptModel", args: { profileId: profile.id, slug } });
-          }}
-        />
-      }
+    <Select
+      label="ChatGPT model"
+      value={profile.preferredModel ?? ""}
+      options={options}
+      onChange={(slug) => {
+        if (!slug) return;
+        void act("Model not changed", { command: "setChatgptModel", args: { profileId: profile.id, slug } });
+      }}
     />
   );
+}
+
+function ModelPicker() {
+  const { models } = useCloudModels();
+  if (!activeProfile.value || !aiReady.value) return null;
+  return <Row icon={<Sparkles size={18} />} title="ChatGPT model" description={modelAdvice(models)} control={<ChatgptModelSelect />} />;
 }
 
 export function AiPolish() {

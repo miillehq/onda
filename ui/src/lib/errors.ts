@@ -15,6 +15,7 @@ const PRESENTATION: Record<ErrorCode, ErrorPresentation> = {
   storage: { title: "Couldn't save your data", action: { label: "Get help", route: "settings/about" } },
   noMicrophone: { title: "No microphone found", action: { label: "Check microphone", route: "settings/microphone" } },
   noSpeech: { title: "Didn't hear anything", action: { label: "Test microphone", route: "settings/microphone" } },
+  shortPress: { title: "Hold to talk" },
   selectionRequired: { title: "Select some text first", hint: "Highlight the text you want to change, then use the shortcut again." },
   audioDisconnected: { title: "Microphone disconnected", action: { label: "Check microphone", route: "settings/microphone" } },
   audioRouteChanged: { title: "Microphone changed", action: { label: "Check microphone", route: "settings/microphone" } },

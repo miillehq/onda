@@ -12,6 +12,7 @@ import { navigate } from "../lib/router";
 import {
   aiReady,
   catalog,
+  cloudModels,
   devices,
   downloadModel,
   downloads,
@@ -20,12 +21,14 @@ import {
   loadDevices,
   micLevel,
   oauthStatus,
+  operation,
   refresh,
   saveSettings,
   settings,
   snapshot,
   toastError,
 } from "../lib/store";
+import { ChatgptModelSelect, modelAdvice } from "./settings/AiPolish";
 import { MicTest } from "./settings/Microphone";
 
 type Step = "welcome" | "microphone" | "model" | "try" | "polish" | "done";
@@ -51,8 +54,16 @@ function Art({ step }: { step: Step }) {
     case "try": {
       const keys = settings.value?.pushToTalk.keys ?? [0xa2, 0x5b, 0x20];
       return (
+        // A looping demonstration of holding, since a tap of the shortcut records nothing.
         <div class="art-try">
           <Keys keys={keys} size="hero" />
+          <span class="hold-meter">
+            <i />
+          </span>
+          <span class="hold-caption">
+            <span class="hold-caption-hold">Hold while you speak</span>
+            <span class="hold-caption-release">Let go to type</span>
+          </span>
           <span class="pill-capsule">
             <Wave mode="live" level={micLevel} glyph width={84} height={30} />
           </span>
@@ -214,6 +225,7 @@ function TryStep({ onSuccess }: { onSuccess: () => void }) {
   const field = useRef<HTMLTextAreaElement>(null);
   const start = useRef(lastResult.value?.operationId ?? null);
   const succeeded = !!lastResult.value && lastResult.value.operationId !== start.current && lastResult.value.inserted;
+  const tapped = operation.value?.phase === "error" && operation.value.error?.code === "shortPress";
   useEffect(() => field.current?.focus(), []);
   useEffect(() => {
     if (succeeded) onSuccess();
@@ -224,7 +236,7 @@ function TryStep({ onSuccess }: { onSuccess: () => void }) {
       title="Try it"
       lede={
         <>
-          Click in the box, hold <Keys keys={value.pushToTalk.keys} /> and say something like “Hello from Onda”. Let go to type.
+          Click in the box, then press and hold <Keys keys={value.pushToTalk.keys} /> while you say something like “Hello from Onda”. Let go to type.
         </>
       }
     >
@@ -232,6 +244,10 @@ function TryStep({ onSuccess }: { onSuccess: () => void }) {
       {succeeded ? (
         <p class="success-line" role="status">
           <CircleCheck size={18} aria-hidden="true" /> That's it. It works the same in every app.
+        </p>
+      ) : tapped ? (
+        <p class="hint-line" role="status">
+          That was a quick tap. Keep all three keys held while you speak, and let go when you're done.
         </p>
       ) : (
         <p class="muted">A small pill appears at the bottom of your screen while Onda listens.</p>
@@ -246,9 +262,16 @@ function PolishStep() {
   return (
     <StepBody title="Polish with ChatGPT (optional)" lede="Connect your ChatGPT plan to clean up punctuation and filler words, and to rewrite selected text. Only written text is sent, never audio.">
       {connected ? (
-        <p class="success-line" role="status">
-          <CircleCheck size={18} aria-hidden="true" /> Connected. AI polish is on.
-        </p>
+        <>
+          <p class="success-line" role="status">
+            <CircleCheck size={18} aria-hidden="true" /> Connected. AI polish is on.
+          </p>
+          <div class="setup-field">
+            <span class="field-label">Model for polish</span>
+            <ChatgptModelSelect />
+            <p class="muted setup-hint">{modelAdvice(cloudModels.value ?? [])} You can change it later in Settings.</p>
+          </div>
+        </>
       ) : (
         <div class="button-row">
           <Button

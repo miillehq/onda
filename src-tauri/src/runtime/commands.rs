@@ -305,18 +305,24 @@ impl Runtime {
                     remote_revocation_confirmed: signed_out.remote_revocation_confirmed,
                 })
             }
-            R::ListAvailableModels => Ok(O::CloudModels(
-                self.cloud()?
+            R::ListAvailableModels => {
+                let models = self
+                    .cloud()?
                     .list_models(None)
                     .await
-                    .map_err(errors::cloud)?
-                    .into_iter()
-                    .map(|model| CloudModel {
-                        slug: model.slug,
-                        name: model.display_name,
-                    })
-                    .collect(),
-            )),
+                    .map_err(errors::cloud)?;
+                let recommended = super::recommended_model(&models).map(|model| model.slug.clone());
+                Ok(O::CloudModels(
+                    models
+                        .into_iter()
+                        .map(|model| CloudModel {
+                            recommended: recommended.as_deref() == Some(model.slug.as_str()),
+                            slug: model.slug,
+                            name: model.display_name,
+                        })
+                        .collect(),
+                ))
+            }
             R::SetChatgptModel { profile_id, slug } => {
                 self.cloud()?
                     .set_preferred_model(&profile_id, &slug)

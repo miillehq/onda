@@ -11,6 +11,8 @@ pub enum ErrorCode {
     Storage,
     NoMicrophone,
     NoSpeech,
+    /// The hold-to-talk keys were tapped rather than held, so almost nothing was recorded.
+    ShortPress,
     SelectionRequired,
     AudioDisconnected,
     AudioRouteChanged,

@@ -129,7 +129,7 @@ function idle(): OperationState {
 
 const snapshot: Snapshot = {
   appName: "Onda",
-  version: "0.1.3",
+  version: "0.1.4",
   contractVersion: 1,
   state: idle(),
   settings,
@@ -313,13 +313,13 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     case "listChatgptProfiles":
       return { type: "profiles", payload: profiles };
     case "listAvailableModels":
-      return { type: "cloudModels", payload: [{ slug: "fast-sample", name: "Fast (sample)" }, { slug: "smart-sample", name: "Thorough (sample)" }] };
+      return { type: "cloudModels", payload: [{ slug: "thorough-sample", name: "Thorough (sample)", recommended: false }, { slug: "light-sample", name: "Light (sample)", recommended: true }] };
     case "previewTransform":
       return { type: "result", payload: { commandText: null, operationId: "preview", original: request.args.source, output: request.args.source.trim().replace(/^./, (c) => c.toUpperCase()), inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: request.args.source }], suggestion: null } };
     case "retryTransformation":
       return { type: "result", payload: snapshot.result as OperationResult };
     case "exportDiagnostics":
-      return { type: "text", payload: JSON.stringify({ app: "Onda", version: "0.1.3", note: "Sample diagnostics from the development mock." }, null, 2) };
+      return { type: "text", payload: JSON.stringify({ app: "Onda", version: "0.1.4", note: "Sample diagnostics from the development mock." }, null, 2) };
     case "checkUpdate":
       return { type: "update", payload: { available: false, version: null } };
     case "getUsage":

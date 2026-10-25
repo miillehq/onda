@@ -188,6 +188,8 @@ pub struct AccountInfo {
 pub struct CloudModel {
     pub slug: String,
     pub name: String,
+    /// The model Onda uses when the account has no chosen model.
+    pub recommended: bool,
 }
 #[derive(Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

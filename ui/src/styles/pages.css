@@ -1481,7 +1481,109 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 34px;
+  gap: 16px;
+}
+/* One 5.6 s loop: the keys go down one after another, stay down while the bar fills and the
+   pill listens, then come up together and the caption says to let go. */
+.art-try .key {
+  animation: key-hold-1 5.6s var(--ease-out) infinite;
+}
+.art-try .key:nth-of-type(2) {
+  animation-name: key-hold-2;
+}
+.art-try .key:nth-of-type(n + 3) {
+  animation-name: key-hold-3;
+}
+.hold-meter {
+  width: 220px;
+  height: 4px;
+  margin-top: 10px;
+  border-radius: 2px;
+  background: var(--tile-line);
+  overflow: hidden;
+}
+.hold-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #ffffff;
+  transform-origin: left;
+  animation: hold-fill 5.6s linear infinite;
+}
+.hold-caption {
+  display: grid;
+  justify-items: center;
+  color: #ffffff;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.hold-caption > span {
+  grid-area: 1 / 1;
+}
+.hold-caption-hold {
+  animation: caption-hold 5.6s linear infinite;
+}
+.hold-caption-release {
+  color: var(--tile-fg-2);
+  animation: caption-release 5.6s linear infinite;
+}
+.art-try .pill-capsule {
+  margin-top: 14px;
+  animation: pill-listen 5.6s var(--ease-out) infinite;
+}
+@keyframes key-hold-1 {
+  0%, 9% { transform: none; }
+  12%, 70% { transform: translateY(6px); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.14), inset 0 1px 0 #ffffff, 0 1px 3px rgba(0, 0, 0, 0.5); filter: brightness(0.86); }
+  74%, 100% { transform: none; }
+}
+@keyframes key-hold-2 {
+  0%, 13% { transform: none; }
+  16%, 70% { transform: translateY(6px); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.14), inset 0 1px 0 #ffffff, 0 1px 3px rgba(0, 0, 0, 0.5); filter: brightness(0.86); }
+  74%, 100% { transform: none; }
+}
+@keyframes key-hold-3 {
+  0%, 17% { transform: none; }
+  20%, 70% { transform: translateY(6px); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.14), inset 0 1px 0 #ffffff, 0 1px 3px rgba(0, 0, 0, 0.5); filter: brightness(0.86); }
+  74%, 100% { transform: none; }
+}
+@keyframes hold-fill {
+  0%, 20% { transform: scaleX(0); opacity: 1; }
+  70% { transform: scaleX(1); opacity: 1; }
+  74%, 100% { transform: scaleX(1); opacity: 0; }
+}
+@keyframes caption-hold {
+  0%, 16% { opacity: 0; }
+  21%, 70% { opacity: 1; }
+  73%, 100% { opacity: 0; }
+}
+@keyframes caption-release {
+  0%, 72% { opacity: 0; }
+  76%, 94% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes pill-listen {
+  0%, 18% { opacity: 0.35; transform: scale(0.94); }
+  22%, 70% { opacity: 1; transform: none; }
+  76%, 100% { opacity: 0.35; transform: scale(0.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .art-try .key,
+  .hold-meter i,
+  .hold-caption > span,
+  .art-try .pill-capsule {
+    animation: none;
+  }
+  .hold-caption-release {
+    opacity: 0;
+  }
+}
+.hint-line {
+  color: var(--warn);
+  font-weight: 600;
+}
+.setup-hint {
+  font-size: var(--text-sm);
+  line-height: 1.5;
 }
 .setup-main {
   display: flex;

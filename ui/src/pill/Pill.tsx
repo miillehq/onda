@@ -1,5 +1,5 @@
 import { signal, useComputed } from "@preact/signals";
-import { Ban, Check, Copy, MicOff, Sparkles, TriangleAlert } from "lucide-preact";
+import { Ban, Check, Copy, Keyboard, MicOff, Sparkles, TriangleAlert } from "lucide-preact";
 import { useEffect, useState } from "preact/hooks";
 import { ask, onEvent } from "../api";
 import { Keys } from "../components/controls";
@@ -76,7 +76,7 @@ function ErrorCard({ error, operation }: { error: AppError; operation: Operation
   };
   return (
     <div class="pill-card" role="alert">
-      <span class="pill-card-icon">{mic ? <MicOff size={18} /> : <TriangleAlert size={18} />}</span>
+      <span class="pill-card-icon">{mic ? <MicOff size={18} /> : error.code === "shortPress" ? <Keyboard size={18} /> : <TriangleAlert size={18} />}</span>
       <div class="pill-card-text">
         <p class="pill-card-title">{presentation.title}</p>
         <p class="pill-card-body">{presentation.hint ?? error.message}</p>

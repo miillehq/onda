@@ -4,7 +4,11 @@ export type ApiRequest = { "command": "completeDebugSmoke", "args": { passed: bo
 export type ModelInfo = { id: string, name: string, version: string, downloadSizeBytes: number, memoryBytes: number, license: string, englishOnly: boolean, sha256: string, };
 export type ModelInstallation = { modelId: string, version: string, sizeBytes: number, };
 export type AccountInfo = { id: string, label: string, email: string | null, signedIn: boolean, planUsageEnabled: boolean, active: boolean, preferredModel: string | null, };
-export type CloudModel = { slug: string, name: string, };
+export type CloudModel = { slug: string, name: string, 
+/**
+ * The model Onda uses when the account has no chosen model.
+ */
+recommended: boolean, };
 export type AudioDevice = { id: string, name: string, isDefault: boolean, };
 export type MicrophoneReport = { durationMs: number, peak: number, rms: number, clippedSamples: number, discontinuities: number, mostlySilent: boolean, sourceSampleRate: number, sourceChannels: number, };
 export type GpuInfo = { name: string, vendorId: number, dedicatedMemoryBytes: number, sharedMemoryBytes: number, };

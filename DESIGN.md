@@ -134,6 +134,14 @@ Graphics explain things wherever a paragraph would otherwise go.
 - 2026-10-24: Settings saves are coalesced and sent one at a time, and the shortcut helper
   restarts only when shortcuts change, because rapid quality switching flickered the cards
   and the sidebar status.
+- 2026-10-25: Onboarding's Try it art loops a held shortcut (keys go down one by one, stay
+  down while a bar fills and the pill listens, then release on "Let go to type"), and a tap
+  shorter than 0.6 s gets its own "Hold to talk" message, because a tester tapped the keys and
+  got "Didn't hear anything".
+- 2026-10-25: The ChatGPT model picker names what "Recommended" means ("Recommended (GPT-6
+  Luna)"), onboarding asks for the model once connected, and Luna counts as a light model,
+  because the old hints (fast, mini, nano) matched none of the GPT-6 names and fell back to
+  the first, possibly heaviest, model.
 - 2026-10-25: When ChatGPT's text fails the preservation check, its version is kept beside the
   original: Copy ChatGPT's version on the pill and Home, and Show ChatGPT's version in History,
   marked word by word against the kept text. History still leads with the kept text because
