@@ -183,7 +183,8 @@ function OperationError() {
   const dismissed = useSignal<string | null>(null);
   if (!state || state.phase !== "error" || !state.error || state.error.code === "noModel" || dismissed.value === state.operationId) return null;
   const presentation = presentError(state.error);
-  const suggestion = lastResult.value?.operationId === state.operationId ? lastResult.value.suggestion : null;
+  // Offer ChatGPT's version only when its polish is what failed.
+  const suggestion = state.error.code === "invalidEnhancement" && lastResult.value?.operationId === state.operationId ? lastResult.value.suggestion : null;
   const dismiss = () => {
     dismissed.value = state.operationId;
     if (state.operationId) void dismissError(state.operationId);

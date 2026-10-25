@@ -8,7 +8,7 @@ import { Callout, Dialog, Page } from "../components/layout";
 import { ShortcutRecorder } from "../components/ShortcutRecorder";
 import type { OperationResult, Transform } from "../generated/core";
 import { navigate } from "../lib/router";
-import { aiReady, isBusy, saveSettings, settings, toast, toastError, transforms } from "../lib/store";
+import { aiReady, copyResult, isBusy, lastResult, saveSettings, settings, toast, toastError, transforms } from "../lib/store";
 
 function RewriteDialog({ transform, onClose }: { transform: Transform | null; onClose: () => void }) {
   const [name, setName] = useState(transform?.name ?? "");
@@ -146,10 +146,14 @@ function TryPanel({ initial }: { initial: string }) {
                 size="sm"
                 icon={<Copy size={15} />}
                 onClick={() =>
-                  void navigator.clipboard
-                    .writeText(result.output)
-                    .then(() => toast({ tone: "ok", title: "Copied" }, 2000))
-                    .catch(() => toast({ tone: "error", title: "Couldn't copy" }))
+                  // Onda's own copy keeps the text out of Windows clipboard history, like every
+                  // other Copy; the browser's is the fallback once a newer result has replaced it.
+                  lastResult.value?.operationId === result.operationId
+                    ? void copyResult()
+                    : void navigator.clipboard
+                        .writeText(result.output)
+                        .then(() => toast({ tone: "ok", title: "Copied" }, 2000))
+                        .catch(() => toast({ tone: "error", title: "Couldn't copy" }))
                 }
               >
                 Copy result

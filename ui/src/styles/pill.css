@@ -82,6 +82,7 @@ body {
 }
 
 .pill-card {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
@@ -103,11 +104,12 @@ body {
 }
 .pill-card-title {
   margin: 1px 0 4px;
+  padding-right: 26px;
   font-size: 15px;
   font-weight: 650;
 }
 .pill-card-body {
-  margin: 0 0 12px;
+  margin: 0;
   color: #d4d4d9;
   font-size: 13.5px;
   line-height: 1.45;
@@ -115,6 +117,29 @@ body {
 .pill-card-actions {
   display: flex;
   gap: 8px;
+  margin-top: 12px;
+}
+.pill-card-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #a3a3aa;
+}
+.pill-card-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+.pill-card-close:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 0;
 }
 .pill-button {
   display: inline-flex;

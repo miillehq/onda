@@ -37,14 +37,15 @@ const PRESENTATION: Record<ErrorCode, ErrorPresentation> = {
   cloud: { title: "ChatGPT didn't respond", action: { label: "Open AI polish", route: "settings/ai" } },
   // The native message names what ChatGPT changed, e.g. a number or a dictionary word.
   invalidEnhancement: { title: "Polish was skipped" },
-  focusChanged: { title: "You switched fields", hint: "Onda didn't type because focus moved. Your words are saved in History.", action: { label: "Open History", route: "history" } },
-  targetExited: { title: "The app closed", hint: "Your words are saved in History.", action: { label: "Open History", route: "history" } },
+  // Typing failures carry a native message saying whether the words went to the clipboard.
+  focusChanged: { title: "Focus moved", action: { label: "Open History", route: "history" } },
+  targetExited: { title: "The app closed", action: { label: "Open History", route: "history" } },
   passwordField: { title: "Password fields are skipped", hint: "For your safety, Onda never types into password fields." },
-  elevatedTarget: { title: "Can't type into admin apps", hint: "Apps running as administrator block Onda. Copy your words from History instead.", action: { label: "Open History", route: "history" } },
-  unsupportedControl: { title: "This field isn't supported", hint: "Your words are saved in History.", action: { label: "Open History", route: "history" } },
-  clipboardBusy: { title: "Clipboard is busy", hint: "Another app was using the clipboard. Your words are saved in History.", action: { label: "Open History", route: "history" } },
+  elevatedTarget: { title: "Can't type into admin apps", action: { label: "Open History", route: "history" } },
+  unsupportedControl: { title: "This field isn't supported", action: { label: "Open History", route: "history" } },
+  clipboardBusy: { title: "Clipboard is busy", action: { label: "Open History", route: "history" } },
   clipboardUnsupported: { title: "Clipboard can't be restored", hint: "Your clipboard holds something Onda can't safely put back, so it didn't type. Your words are saved in History.", action: { label: "Open History", route: "history" } },
-  insertion: { title: "Couldn't type it", hint: "Your words are saved in History.", action: { label: "Open History", route: "history" } },
+  insertion: { title: "Couldn't type it", action: { label: "Open History", route: "history" } },
   shortcut: { title: "Shortcut unavailable", action: { label: "Open shortcuts", route: "settings/shortcuts" } },
   internal: { title: "Something went wrong", action: { label: "Get help", route: "settings/about" } },
 };

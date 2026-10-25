@@ -134,6 +134,11 @@ Graphics explain things wherever a paragraph would otherwise go.
 - 2026-10-24: Settings saves are coalesced and sent one at a time, and the shortcut helper
   restarts only when shortcuts change, because rapid quality switching flickered the cards
   and the sidebar status.
+- 2026-10-25: The pill's error card moves Dismiss to a corner × and keeps at most two
+  actions, because "Copy ChatGPT's version", "Open History" and Dismiss overflowed its 340 px
+  and hid Dismiss. When Onda cannot type, the words go on the clipboard and the card says
+  so, because Ctrl+V otherwise pasted whatever was copied before. ChatGPT's version is
+  offered only when its polish is what failed.
 - 2026-10-25: Onboarding's Try it art loops a held shortcut (keys go down one by one, stay
   down while a bar fills and the pill listens, then release on "Let go to type"), and a tap
   shorter than 0.6 s gets its own "Hold to talk" message, because a tester tapped the keys and

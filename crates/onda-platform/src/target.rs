@@ -341,6 +341,8 @@ pub(crate) fn validate_identity(
             same_control = expected.focused_runtime_id == actual.focused_runtime_id,
             same_integrity = expected.integrity_level == actual.integrity_level,
             same_type = expected.focused_control.control_type == actual.focused_control.control_type,
+            expected_type = expected.focused_control.control_type,
+            actual_type = actual.focused_control.control_type,
             same_automation_id =
                 expected.focused_control.automation_id == actual.focused_control.automation_id,
             framework = %expected.focused_control.framework_id,

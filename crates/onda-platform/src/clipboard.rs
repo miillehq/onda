@@ -18,7 +18,10 @@ const PALETTE_FORMAT: u32 = 9;
 const ENHANCED_METAFILE_FORMAT: u32 = 14;
 const MAX_CLIPBOARD_BYTES: usize = 64 * 1024 * 1024;
 const MAX_CLIPBOARD_FORMATS: usize = 128;
-const PASTE_RECEIPT_TIMEOUT: Duration = Duration::from_millis(1000);
+/// How long a target may take to read the pasted text before the user's clipboard comes back.
+/// A busy Electron app can read after a second, and restoring first pastes the old clipboard.
+/// A prompt read still ends the wait after `READ_SETTLE_DELAY`.
+const PASTE_RECEIPT_TIMEOUT: Duration = Duration::from_millis(2500);
 /// Clipboard managers and history briefly hold the clipboard after every change.
 const OPEN_ATTEMPTS: u32 = 40;
 const OPEN_RETRY_DELAY: Duration = Duration::from_millis(15);

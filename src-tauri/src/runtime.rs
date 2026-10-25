@@ -1500,34 +1500,38 @@ impl Runtime {
         let started = Instant::now();
         let native = tokio::task::spawn_blocking(move || {
             if cancellation.is_cancelled() {
-                return Err(AppError::new(
-                    ErrorCode::Cancelled,
-                    "Operation cancelled.",
+                return Err((
+                    AppError::new(ErrorCode::Cancelled, "Operation cancelled.", false),
                     false,
                 ));
             }
             let targets = WindowsTargetService::new();
-            let outcome = if let Some(original) = selection {
-                targets.replace_selection_guarded(&target, &original, &text, shortcut, || {
-                    cancellation.is_cancelled()
-                })
-            } else {
-                // Two characters tell a closing quote from an opening one; a field that
-                // exposes no caret simply gets the text as dictated.
-                let before = targets
-                    .preceding_text(&target, PRECEDING_CHARACTERS)
-                    .unwrap_or_default();
-                let spaced = onda_core::text::space_after_previous_text(&before, &text);
-                targets.paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
-            }
-            .map_err(errors::platform)?;
-            if !outcome.input_injected || !outcome.clipboard_read_observed {
-                return Err(AppError::new(
-                    ErrorCode::Insertion,
-                    "The target did not acknowledge the paste. Copy your result or retry.",
-                    true,
-                ));
-            }
+            let typed = (|| {
+                let outcome = if let Some(original) = &selection {
+                    targets.replace_selection_guarded(&target, original, &text, shortcut, || {
+                        cancellation.is_cancelled()
+                    })
+                } else {
+                    // Two characters tell a closing quote from an opening one; a field that
+                    // exposes no caret simply gets the text as dictated.
+                    let before = targets
+                        .preceding_text(&target, PRECEDING_CHARACTERS)
+                        .unwrap_or_default();
+                    let spaced = onda_core::text::space_after_previous_text(&before, &text);
+                    targets
+                        .paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
+                }
+                .map_err(errors::platform)?;
+                if !outcome.input_injected || !outcome.clipboard_read_observed {
+                    return Err(AppError::new(
+                        ErrorCode::Insertion,
+                        "The target did not acknowledge the paste. Copy your result or retry.",
+                        true,
+                    ));
+                }
+                Ok(())
+            })();
+            typed.map_err(|error| copy_untyped(error, &text))?;
             let document = if observe_document {
                 targets.field_text(&target, LEARNING_CHARACTERS).ok()
             } else {
@@ -1538,7 +1542,22 @@ impl Runtime {
         .await
         .map_err(|_| AppError::new(ErrorCode::Internal, "Insertion worker stopped.", true))?;
         self.metric(&active.id, "paste", started, native.is_ok());
-        let document = native?;
+        let document = match native {
+            Ok(document) => document,
+            Err((error, copied)) => {
+                if copied {
+                    if let Ok(mut saved) = lock(&self.result) {
+                        if let Some(saved) = saved
+                            .as_mut()
+                            .filter(|saved| saved.result.operation_id == active.id)
+                        {
+                            saved.copied = true;
+                        }
+                    }
+                }
+                return Err(error);
+            }
+        };
         let original = lock(&self.result)?
             .as_ref()
             .map(|result| result.result.original.clone())
@@ -1911,6 +1930,30 @@ fn load_history(store: &mut Store, days: u32) -> VecDeque<HistoryEntry> {
     history
 }
 
+/// When Onda could not type, put the words on the clipboard so they paste wherever the user is
+/// now, instead of leaving whatever was copied before; the message says which happened. Password
+/// fields and clipboards Onda must not overwrite are left alone.
+fn copy_untyped(mut error: AppError, text: &str) -> (AppError, bool) {
+    let reason = match error.code {
+        ErrorCode::FocusChanged => "Onda only types where you started dictating.",
+        ErrorCode::TargetExited => "Nothing was typed.",
+        ErrorCode::ElevatedTarget => {
+            "Windows doesn't let Onda type into apps run as administrator."
+        }
+        ErrorCode::UnsupportedControl => "Onda can't type into this kind of field.",
+        ErrorCode::ClipboardBusy => "Another app was holding the clipboard.",
+        ErrorCode::Insertion => "The app didn't accept the paste.",
+        _ => return (error, false),
+    };
+    let copied = !text.trim().is_empty() && onda_platform::copy_text_to_clipboard(text).is_ok();
+    error.message = if copied {
+        format!("{reason} Your words are on the clipboard, so press Ctrl+V to paste them.")
+    } else {
+        format!("{reason} Your words are saved in History.")
+    };
+    (error, copied)
+}
+
 fn tray_status(phase: &Phase) -> &'static str {
     match phase {
         Phase::Recording => "Listening",
@@ -2158,6 +2201,24 @@ mod tests {
         }];
         require_installed_model(selected, &installed).unwrap();
     }
+    #[test]
+    fn untyped_words_are_copied_only_after_failures_that_left_them_untyped() {
+        // Neither case reaches the clipboard: one is excluded, the other has no words.
+        let (password, copied) = copy_untyped(
+            AppError::new(ErrorCode::PasswordField, "secure field", false),
+            "words",
+        );
+        assert!(!copied);
+        assert_eq!(password.message, "secure field");
+        let (moved, copied) =
+            copy_untyped(AppError::new(ErrorCode::FocusChanged, "moved", true), "  ");
+        assert!(!copied);
+        assert_eq!(
+            moved.message,
+            "Onda only types where you started dictating. Your words are saved in History."
+        );
+    }
+
     #[test]
     fn fast_model_hint_uses_server_display_label_words() {
         assert!(is_fast_model_name("GPT Fast"));

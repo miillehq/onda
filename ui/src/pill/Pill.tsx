@@ -1,5 +1,5 @@
 import { signal, useComputed } from "@preact/signals";
-import { Ban, Check, Copy, Keyboard, MicOff, Sparkles, TriangleAlert } from "lucide-preact";
+import { Ban, Check, Copy, Keyboard, MicOff, Sparkles, TriangleAlert, X } from "lucide-preact";
 import { useEffect, useState } from "preact/hooks";
 import { ask, onEvent } from "../api";
 import { Keys } from "../components/controls";
@@ -57,7 +57,9 @@ function ErrorCard({ error, operation }: { error: AppError; operation: Operation
   const section = presentation.action?.route;
   const [copied, setCopied] = useState(false);
   const saved = result.value;
-  const suggestion = saved?.suggestion ?? null;
+  // ChatGPT's version is the thing to copy only when its polish was what failed; after any
+  // other failure the words to copy are the ones Onda meant to type.
+  const suggestion = error.code === "invalidEnhancement" ? saved?.suggestion ?? null : null;
   // A failed rewrite leaves the selection in place, so copying it again would do nothing.
   const keptSelection = operation.mode !== "dictation" && saved?.output === saved?.original;
   const copyable = !!saved && !saved.inserted && saved.output.trim().length > 0 && !keptSelection;
@@ -74,29 +76,34 @@ function ErrorCard({ error, operation }: { error: AppError; operation: Operation
       setCopied(false);
     }
   };
+  const canCopy = copyable || !!suggestion;
+  // Dismiss lives in the corner, so the row holds at most a copy and one fix-it action and
+  // never runs past the card's 340 px.
   return (
     <div class="pill-card" role="alert">
       <span class="pill-card-icon">{mic ? <MicOff size={18} /> : error.code === "shortPress" ? <Keyboard size={18} /> : <TriangleAlert size={18} />}</span>
       <div class="pill-card-text">
         <p class="pill-card-title">{presentation.title}</p>
         <p class="pill-card-body">{presentation.hint ?? error.message}</p>
-        <div class="pill-card-actions">
-          {(copyable || suggestion) && (
-            <button type="button" class="pill-button is-primary" onClick={() => void copy()} disabled={copied}>
-              {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
-              {copied ? "Copied" : suggestion ? "Copy ChatGPT's version" : "Copy"}
-            </button>
-          )}
-          {section && (
-            <button type="button" class={`pill-button${copyable || suggestion ? "" : " is-primary"}`} onClick={() => void ask({ command: "openMainWindow", args: { section } }, "unit").catch(() => undefined)}>
-              {presentation.action?.label}
-            </button>
-          )}
-          <button type="button" class="pill-button" onClick={dismiss}>
-            Dismiss
-          </button>
-        </div>
+        {(canCopy || section) && (
+          <div class="pill-card-actions">
+            {canCopy && (
+              <button type="button" class="pill-button is-primary" onClick={() => void copy()} disabled={copied}>
+                {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+                {copied ? "Copied" : suggestion ? "Copy ChatGPT's version" : "Copy"}
+              </button>
+            )}
+            {section && (
+              <button type="button" class={`pill-button${canCopy ? "" : " is-primary"}`} onClick={() => void ask({ command: "openMainWindow", args: { section } }, "unit").catch(() => undefined)}>
+                {presentation.action?.label}
+              </button>
+            )}
+          </div>
+        )}
       </div>
+      <button type="button" class="pill-card-close" aria-label="Dismiss" title="Dismiss" onClick={dismiss}>
+        <X size={16} aria-hidden="true" />
+      </button>
     </div>
   );
 }

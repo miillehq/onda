@@ -6,10 +6,11 @@
  *   ?mock=default|empty|onboarding|error|skipped   initial scenario
  *   ?theme=light|dark                      force a theme
  *   ?pill=listening|handsfree|writing|polishing|done|error|nottyped|skipped|cycle   pill window state
+ *   ?pill=code&code=focusChanged[&mode=transform][&text=1][&suggestion=1]   any error card
  */
 import type { Backend } from "../api";
 import type { AccountInfo, ApiRequest, ApiResponse, ModelInfo, RuntimeEvent, Snapshot } from "../generated/api";
-import type { DictionaryEntry, HistoryEntry, OperationResult, OperationState, Settings, Snippet, Transform } from "../generated/core";
+import type { AppError, DictionaryEntry, HistoryEntry, OperationResult, OperationState, Settings, Snippet, Transform } from "../generated/core";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = params.get("mock") ?? "default";
@@ -204,6 +205,24 @@ async function dictate(handsFree = false): Promise<void> {
   setState({ phase: "completed" });
 }
 
+/** Messages as the native runtime words them, longest variant where there are several. */
+const SAMPLE_ERROR_MESSAGES: Partial<Record<AppError["code"], string>> = {
+  focusChanged: "Onda only types where you started dictating. Your words are on the clipboard, so press Ctrl+V to paste them.",
+  targetExited: "Nothing was typed. Your words are on the clipboard, so press Ctrl+V to paste them.",
+  elevatedTarget: "Windows doesn't let Onda type into apps run as administrator. Your words are on the clipboard, so press Ctrl+V to paste them.",
+  unsupportedControl: "Onda can't type into this kind of field. Your words are on the clipboard, so press Ctrl+V to paste them.",
+  clipboardBusy: "Another app was holding the clipboard. Your words are saved in History.",
+  insertion: "The app didn't accept the paste. Your words are on the clipboard, so press Ctrl+V to paste them.",
+  invalidEnhancement: "ChatGPT rewrote far more than a cleanup should, so Onda kept your original words.",
+  shortPress: "Keep holding the keys while you speak, then let go to type.",
+  noSpeech: "No speech was recognized. Check the selected microphone with Test level while speaking, then hold the dictation shortcut, speak and release.",
+  unauthorized: "No ChatGPT account is connected. Connect one in AI polish to use this.",
+  noModel: "Fast · English (whisper-tiny-en) is selected but not downloaded yet. Download it in Settings › Speech and language, or pick a model you already have.",
+  audioPermissionDenied: "Windows denied microphone access. Enable microphone access for desktop apps in Windows privacy settings and retry.",
+  audioBackend: "The microphone driver rejected its recording format. Select another input in Settings and retry.",
+  selectionRequired: "Select text in your target app before using a transform or spoken editing shortcut.",
+};
+
 function freezePill(state: string): void {
   const base: OperationState = { operationId: "pill", phase: "recording", mode: "dictation", route: "local", error: null, fallbackUsed: false, handsFree: false };
   const states: Record<string, OperationState> = {
@@ -216,11 +235,19 @@ function freezePill(state: string): void {
     nottyped: { ...base, phase: "error", error: { code: "focusChanged", message: "The focused app, control, or selection changed. Your text is available to copy.", retryable: true } },
     skipped: { ...base, phase: "error", mode: "transform", route: "chatgptPlan", error: SKIPPED_ERROR },
   };
-  const target = states[state] ?? base;
+  // One card per error code, for checking that every combination of message and buttons fits.
+  const code = state === "code" ? (params.get("code") as AppError["code"] | null) : null;
+  const mode = (params.get("mode") ?? "dictation") as OperationState["mode"];
+  const target = code ? { ...base, phase: "error" as const, mode, error: { code, message: SAMPLE_ERROR_MESSAGES[code] ?? "Sample failure message.", retryable: true } } : states[state] ?? base;
   domain({ type: "stateChanged", payload: target });
   if (state === "nottyped") {
     const output = "Hi Priya, thanks for the quick turnaround.";
     domain({ type: "resultReady", payload: { commandText: null, operationId: "pill", original: output, output, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: output }], suggestion: null } });
+  }
+  if (code && params.get("text")) {
+    const output = "Hi Priya, thanks for the quick turnaround on the deck.";
+    const original = mode === "dictation" ? output : "hi priya thanks for the quick turnaround on the deck";
+    domain({ type: "resultReady", payload: { commandText: null, operationId: "pill", original, output, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: output }], suggestion: params.get("suggestion") ? `${output} Talk soon!` : null } });
   }
   if (state === "skipped") {
     domain({ type: "resultReady", payload: { commandText: null, operationId: "pill", original: SKIPPED_TEXT, output: SKIPPED_TEXT, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: SKIPPED_TEXT }], suggestion: SKIPPED_SUGGESTION } });
