@@ -4,7 +4,9 @@ pub mod dictionary;
 pub mod error;
 pub mod learning;
 pub mod persistence;
+pub mod profile;
 pub mod state;
+pub mod stats;
 pub mod text;
 pub mod transforms;
 

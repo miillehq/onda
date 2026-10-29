@@ -301,7 +301,7 @@ fn read_bounded(path: &Path) -> Result<Vec<u8>> {
 }
 
 /// Writes a complete durable record before an atomic, write-through replacement.
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().ok_or(CloudError::Storage)?;
     let temporary = parent.join(format!(".{}.tmp", Uuid::new_v4()));
     let result = (|| {
@@ -354,11 +354,11 @@ fn replace_file(_source: &Path, _destination: &Path) -> Result<()> {
 
 #[cfg(windows)]
 fn protect(bytes: &[u8]) -> Result<Vec<u8>> {
-    crypt_bytes(bytes, false)
+    crypt_bytes(bytes, false, PROTECTION_ENTROPY)
 }
 #[cfg(windows)]
 fn unprotect(bytes: &[u8]) -> Result<Vec<u8>> {
-    crypt_bytes(bytes, true)
+    crypt_bytes(bytes, true, PROTECTION_ENTROPY)
 }
 #[cfg(not(windows))]
 fn protect(_bytes: &[u8]) -> Result<Vec<u8>> {
@@ -369,8 +369,10 @@ fn unprotect(_bytes: &[u8]) -> Result<Vec<u8>> {
     Err(CloudError::UnsupportedPlatform)
 }
 
+/// DPAPI for the current Windows user. `entropy` separates each kind of record, so one cannot be
+/// swapped for another.
 #[cfg(windows)]
-fn crypt_bytes(bytes: &[u8], decrypt: bool) -> Result<Vec<u8>> {
+pub(crate) fn crypt_bytes(bytes: &[u8], decrypt: bool, entropy: &[u8]) -> Result<Vec<u8>> {
     use windows_sys::Win32::{
         Foundation::LocalFree,
         Security::Cryptography::{
@@ -385,8 +387,8 @@ fn crypt_bytes(bytes: &[u8], decrypt: bool) -> Result<Vec<u8>> {
         pbData: bytes.as_ptr() as *mut u8,
     };
     let entropy = CRYPT_INTEGER_BLOB {
-        cbData: PROTECTION_ENTROPY.len() as u32,
-        pbData: PROTECTION_ENTROPY.as_ptr() as *mut u8,
+        cbData: entropy.len() as u32,
+        pbData: entropy.as_ptr() as *mut u8,
     };
     let mut output = CRYPT_INTEGER_BLOB {
         cbData: 0,

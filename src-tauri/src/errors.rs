@@ -33,7 +33,8 @@ pub fn platform(error: onda_platform::PlatformError) -> AppError {
         E::TextLimit|E::InvalidParameter(_)=>(ErrorCode::InvalidInput,"Native operation parameters are invalid.",false),
         E::Audio(_)=>(ErrorCode::NoMicrophone,"The selected microphone is unavailable or could not start.",true),
         E::Timeout=>(ErrorCode::InferenceTimeout,"A Windows operation timed out.",true),
-        E::UnsupportedPlatform=>(ErrorCode::Internal,"Windows 10 or Windows 11 is required.",false),
+        E::UnsupportedPlatform if cfg!(windows)=>(ErrorCode::Internal,"Windows 10 or Windows 11 is required.",false),
+        E::UnsupportedPlatform=>(ErrorCode::UnsupportedControl,"This needs Windows; on this system Onda can only copy dictation to the clipboard.",false),
         E::Protection=>return AppError::storage(),
     };
     AppError::new(code, message, retryable)
@@ -141,6 +142,119 @@ pub fn cloud(error: onda_cloud::CloudError) -> AppError {
         _ => "ChatGPT request failed or returned an invalid stream. Your original text was kept.",
     };
     AppError::new(code, message, true)
+}
+
+/// Provider-specific, actionable messages. Logs keep the status and error code, never a body.
+pub fn provider(
+    provider: onda_core::contracts::AiProvider,
+    endpoint: Option<&onda_cloud::Endpoint>,
+    error: onda_cloud::CloudError,
+) -> AppError {
+    use onda_cloud::CloudError as E;
+    use onda_core::contracts::AiProvider as P;
+    if !matches!(error, E::Cancelled) {
+        let (status, code) = match &error {
+            E::Remote { status, code, .. } => (Some(*status), code.as_deref()),
+            _ => (None, None),
+        };
+        tracing::warn!(subsystem = "ai", provider = ?provider, error = %error, status = ?status, code = ?code, "AI provider request failed");
+    }
+    let name = match provider {
+        P::Chatgpt => "ChatGPT",
+        P::OpenaiCompatible => "The AI server",
+        P::Anthropic => "Anthropic",
+        P::Local => "The local model server",
+    };
+    let host = endpoint.map(onda_cloud::Endpoint::host).unwrap_or_default();
+    let kept = "Your original text was kept.";
+    let (code, message) = match error {
+        E::Cancelled => (ErrorCode::Cancelled, "Polish was cancelled.".to_owned()),
+        E::EndpointNotAllowed if provider == P::Local => (
+            ErrorCode::InvalidInput,
+            "Local models must use an address on this computer, such as http://127.0.0.1:11434/v1.".to_owned(),
+        ),
+        E::EndpointNotAllowed => (
+            ErrorCode::InvalidInput,
+            "Use an https:// address (plain http:// is allowed only for this computer).".to_owned(),
+        ),
+        E::InvalidApiKey => (
+            ErrorCode::InvalidInput,
+            "That API key doesn't look right. Paste the whole key, without spaces.".to_owned(),
+        ),
+        E::MissingApiKey => (
+            ErrorCode::Unauthorized,
+            format!("Add your {} API key in AI polish.", if provider == P::Anthropic { "Anthropic" } else { "server's" }),
+        ),
+        E::Storage | E::UnsupportedPlatform if cfg!(windows) => (
+            ErrorCode::Cloud,
+            "Protected key storage is unavailable, so Onda can't save or read API keys.".to_owned(),
+        ),
+        E::Storage | E::UnsupportedPlatform => (
+            ErrorCode::Cloud,
+            "Onda keeps API keys in the desktop keyring (Secret Service), and none is available or it is locked.".to_owned(),
+        ),
+        E::Unreachable if provider == P::Local => (
+            ErrorCode::Offline,
+            format!("Nothing answered at {host}. Start your local model server (Ollama, LM Studio or llama.cpp) and try again."),
+        ),
+        E::Unreachable | E::Transport => (ErrorCode::Offline, format!("Couldn't reach {host}.")),
+        E::Timeout => (ErrorCode::InferenceTimeout, format!("{name} took too long. {kept}")),
+        E::Remote { status: 401 | 403, .. } => (
+            ErrorCode::Unauthorized,
+            format!("{name} refused the API key. Check it in AI polish."),
+        ),
+        E::Remote { status: 404, .. } => (
+            ErrorCode::Cloud,
+            format!("{name} doesn't offer the chosen model, or the address is wrong. Check AI polish."),
+        ),
+        E::Remote { status: 429, .. } => (
+            ErrorCode::Quota,
+            format!("{name} rate limit or quota reached. {kept}"),
+        ),
+        E::Refusal => (ErrorCode::Cloud, format!("The model declined to rewrite this. {kept}")),
+        E::IncompleteResponse => (ErrorCode::Cloud, format!("The answer was cut off. {kept}")),
+        _ => (
+            ErrorCode::Cloud,
+            format!("{name} returned an error or an unreadable answer. {kept}"),
+        ),
+    };
+    let retryable = code != ErrorCode::InvalidInput;
+    AppError::new(code, message, retryable)
+}
+
+#[cfg(test)]
+mod provider_error_tests {
+    use super::*;
+    use onda_core::contracts::AiProvider;
+
+    #[test]
+    fn local_server_errors_name_the_address_and_what_to_start() {
+        let endpoint = onda_cloud::Endpoint::local("http://127.0.0.1:11434/v1").unwrap();
+        let error = provider(
+            AiProvider::Local,
+            Some(&endpoint),
+            onda_cloud::CloudError::Unreachable,
+        );
+        assert_eq!(error.code, ErrorCode::Offline);
+        assert!(error.message.contains("127.0.0.1:11434") && error.message.contains("Ollama"));
+    }
+
+    #[test]
+    fn remote_failures_never_include_response_text() {
+        let error = provider(
+            AiProvider::OpenaiCompatible,
+            None,
+            onda_cloud::CloudError::Remote {
+                status: 401,
+                code: Some("invalid_api_key".into()),
+                parameter: None,
+                request_id: Some("req_1".into()),
+                body_shape: "error".into(),
+            },
+        );
+        assert_eq!(error.code, ErrorCode::Unauthorized);
+        assert!(!error.message.contains("invalid_api_key") && !error.message.contains("req_1"));
+    }
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use onda_asr::{
     ExecutionBackend,
 };
 use std::{
-    ffi::{c_char, c_int, c_void, CStr},
+    ffi::{c_char, c_void, CStr},
     io::{BufRead, BufReader, Read, Write},
     sync::atomic::{AtomicBool, Ordering},
     time::Instant,
@@ -284,7 +284,8 @@ fn request_full_speed() {
 /// Capture only fixed initialization failure evidence; discard every sensitive native message.
 /// whisper.cpp 1.8.3 can otherwise silently initialize CPU after GPU initialization fails.
 unsafe extern "C" fn native_diagnostic_gate(
-    _level: c_int,
+    // The C enum is signed under MSVC and unsigned under GCC/Clang; take bindgen's type.
+    _level: whisper_rs::whisper_rs_sys::ggml_log_level,
     message: *const c_char,
     _user_data: *mut c_void,
 ) {

@@ -3,7 +3,7 @@ name = "onda-platform"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Windows microphone capture, target validation and clipboard-safe insertion"
+description = "Microphone capture, target validation, clipboard-safe insertion and process measurements"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -12,8 +12,14 @@ tracing = "0.1"
 rubato = "0.16"
 rtrb = "0.3"
 
-[target.'cfg(windows)'.dependencies]
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
 cpal = "0.18.2"
 zeroize = "1.8"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+arboard = { version = "3.6", default-features = false }
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_Accessibility", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant"] }
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_Security", "Win32_System_LibraryLoader", "Win32_System_SystemServices", "Win32_System_SystemInformation", "Win32_System_Registry", "Win32_Graphics_Dwm", "Win32_Media_Audio", "Win32_Security_Cryptography"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_Security", "Win32_System_LibraryLoader", "Win32_System_SystemServices", "Win32_System_SystemInformation", "Win32_System_Registry", "Win32_Graphics_Dwm", "Win32_Media_Audio", "Win32_Security_Cryptography", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus"] }

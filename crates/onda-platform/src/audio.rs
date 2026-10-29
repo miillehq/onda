@@ -121,7 +121,7 @@ impl Drop for LevelWindow {
 /// Capture ownership is explicit: Stop finalizes, Cancel discards, Drop closes the stream.
 #[derive(Default)]
 pub struct AudioCapture {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     active: Option<native::CaptureSession>,
     meter: LevelMeter,
 }
@@ -135,7 +135,7 @@ impl AudioCapture {
         self.meter.clone()
     }
     pub fn enumerate_devices() -> Result<Vec<InputDevice>, PlatformError> {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             // The audio backend enters a single-threaded COM apartment on its calling thread.
             // Keep that off shared worker threads, which later run UI Automation.
@@ -146,7 +146,7 @@ impl AudioCapture {
                 .join()
                 .map_err(|_| PlatformError::Audio("device enumeration stopped".into()))?
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             Err(PlatformError::UnsupportedPlatform)
         }
@@ -158,7 +158,7 @@ impl AudioCapture {
                 "capture duration must be 1–600 seconds".into(),
             ));
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             if self.active.is_some() {
                 return Err(PlatformError::AlreadyRecording);
@@ -166,57 +166,57 @@ impl AudioCapture {
             self.active = Some(native::start(options, self.meter.clone())?);
             Ok(())
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             Err(PlatformError::UnsupportedPlatform)
         }
     }
     pub fn stop(&mut self) -> Result<CapturedAudio, PlatformError> {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             self.active
                 .take()
                 .ok_or(PlatformError::NotRecording)?
                 .finish(false)
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             Err(PlatformError::UnsupportedPlatform)
         }
     }
     /// Nonblocking completion observation; finished audio/errors remain owned until Stop/Cancel.
     pub fn poll_completion(&mut self) -> Result<CaptureCompletion, PlatformError> {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             self.active
                 .as_mut()
                 .ok_or(PlatformError::NotRecording)?
                 .poll_completion()
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             Err(PlatformError::UnsupportedPlatform)
         }
     }
     pub fn cancel(&mut self) -> Result<(), PlatformError> {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             let Some(session) = self.active.take() else {
                 return Ok(());
             };
             session.finish(true).map(|_| ())
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             Err(PlatformError::UnsupportedPlatform)
         }
     }
     pub fn is_recording(&self) -> bool {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             self.active.is_some()
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             false
         }
@@ -420,7 +420,7 @@ impl RecordingBuffer {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 mod native {
     use super::*;
     use crate::AudioBackendFailure;

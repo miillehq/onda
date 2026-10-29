@@ -1,4 +1,6 @@
 //! Hermetic loopback tests: no real accounts, credentials, or OpenAI requests.
+// The account fixtures drive DPAPI-backed tests that only run on Windows.
+#![cfg_attr(not(windows), allow(dead_code, unused_imports))]
 
 use super::*;
 use crate::{ModelChoice, ResponseRequest};

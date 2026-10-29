@@ -64,6 +64,23 @@ impl ControlFingerprint {
     }
 }
 
+impl TargetSnapshot {
+    /// No window or control identity; app profiles never match it.
+    #[cfg_attr(windows, allow(dead_code))]
+    pub(crate) fn unidentified() -> Self {
+        Self {
+            window_handle: 0,
+            process_id: 0,
+            process_created_at: 0,
+            executable_name: String::new(),
+            focused_runtime_id: Vec::new(),
+            is_password: false,
+            integrity_level: 0,
+            focused_control: ControlFingerprint::default(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PasteShortcut {
@@ -100,11 +117,17 @@ impl WindowsTargetService {
         {
             crate::clipboard::copy_text(text)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_clipboard::copy_text(text)
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             Err(PlatformError::UnsupportedPlatform)
         }
     }
+    /// Elsewhere the target cannot be identified, so dictation hands its words to the clipboard
+    /// (see `TYPES_INTO_APPS`) and nothing that needs the field (selection, context) is read.
     pub fn snapshot(&self) -> Result<TargetSnapshot, PlatformError> {
         #[cfg(windows)]
         {
@@ -112,7 +135,7 @@ impl WindowsTargetService {
         }
         #[cfg(not(windows))]
         {
-            Err(PlatformError::UnsupportedPlatform)
+            Ok(TargetSnapshot::unidentified())
         }
     }
     pub fn revalidate(&self, target: &TargetSnapshot) -> Result<(), PlatformError> {

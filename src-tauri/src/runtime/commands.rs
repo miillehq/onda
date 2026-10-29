@@ -46,10 +46,11 @@ impl Runtime {
             }
             R::GetSnapshot => Ok(O::Snapshot(Box::new(self.snapshot().await?))),
             R::ReplayDebugFixture => Ok(O::Result(self.replay_debug_fixture().await?)),
-            R::GetSettings => Ok(O::Settings(lock(&self.store)?.settings()?)),
+            R::GetSettings => Ok(O::Settings(Box::new(lock(&self.store)?.settings()?))),
             R::UpdateSettings { settings } => {
                 let _configuration = self.configuration_gate.lock().await;
                 settings.validate()?;
+                super::providers::validate_provider_settings(&settings)?;
                 self.selected_model(&settings)?;
                 let config = shortcut_config(&settings, &lock(&self.store)?.transforms()?)?;
                 self.cancel().await?;
@@ -106,6 +107,14 @@ impl Runtime {
                     .configure(&self.app, settings.show_pill, settings.play_sounds);
                 if current.theme != settings.theme {
                     crate::apply_theme(&self.app, settings.theme);
+                }
+                if current.tray_icon != settings.tray_icon {
+                    crate::apply_tray_icon(&self.app, settings.tray_icon);
+                }
+                if (&current.openai_base_url, &current.local_base_url)
+                    != (&settings.openai_base_url, &settings.local_base_url)
+                {
+                    *lock(&self.provider_models)? = None;
                 }
                 self.emit_state();
                 Ok(O::Settings(settings))
@@ -391,10 +400,7 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::ExportDiagnostics => Ok(O::Text(self.diagnostics()?)),
-            R::GetUsage => Ok(O::Usage(UsageReport {
-                today: onda_platform::local_date(),
-                days: lock(&self.store)?.daily_usage(MAX_REPORTED_USAGE_DAYS)?,
-            })),
+            R::GetUsage => Ok(O::Usage(self.usage_report(MAX_REPORTED_USAGE_DAYS)?)),
             R::OpenMainWindow { section } => {
                 if let Some(section) = section.as_deref() {
                     if section.is_empty()
@@ -466,6 +472,33 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::TeachWord { duration_ms } => Ok(O::TeachTake(self.teach_word(duration_ms).await?)),
+            R::GetProfile => Ok(O::Profile(self.profile()?)),
+            R::SetProfileName { name } => Ok(O::Profile(self.set_profile_name(name.as_deref())?)),
+            R::ChooseProfilePicture => Ok(O::Profile(self.choose_profile_picture().await?)),
+            R::RemoveProfilePicture => Ok(O::Profile(self.remove_profile_picture()?)),
+            R::SaveStatsImage { png_base64 } => Ok(O::SavedFile {
+                path: self.save_stats_image(&png_base64).await?,
+            }),
+            R::ListProviderModels { provider } => Ok(O::CloudModels(
+                self.provider_models(provider)
+                    .await?
+                    .into_iter()
+                    .map(|model| CloudModel {
+                        slug: model.id,
+                        name: model.display_name,
+                        recommended: false,
+                    })
+                    .collect(),
+            )),
+            R::SaveProviderKey { provider, key } => {
+                self.save_provider_key(provider, key).await?;
+                Ok(O::Unit)
+            }
+            R::RemoveProviderKey { provider } => {
+                self.remove_provider_key(provider).await?;
+                Ok(O::Unit)
+            }
+            R::GetResourceUsage => Ok(O::Resources(self.resource_usage().await?)),
             R::ClearHistory => {
                 lock(&self.history)?.clear();
                 lock(&self.store)?.prune_history(i64::MAX)?;
@@ -550,6 +583,8 @@ impl Runtime {
             cloud_error,
             shortcut_status: lock(&self.shortcut_status)?.clone(),
             updater_configured: updater_configured(),
+            platform: std::env::consts::OS.into(),
+            provider_keys: self.provider_keys(),
         })
     }
 
@@ -1262,6 +1297,7 @@ async fn copy_text(text: String) -> AppResult<()> {
         .map_err(errors::platform)
 }
 
+#[cfg(windows)]
 fn validate_model_directory(path: &std::path::Path) -> AppResult<()> {
     let mut components = path.components();
     let valid_prefix = matches!(components.next(),Some(std::path::Component::Prefix(prefix)) if matches!(prefix.kind(),std::path::Prefix::Disk(_)|std::path::Prefix::VerbatimDisk(_)));
@@ -1273,9 +1309,38 @@ fn validate_model_directory(path: &std::path::Path) -> AppResult<()> {
     Ok(())
 }
 
+#[cfg(not(windows))]
+fn validate_model_directory(path: &std::path::Path) -> AppResult<()> {
+    use std::path::Component;
+    let below_root = path
+        .components()
+        .any(|component| matches!(component, Component::Normal(_)));
+    let climbs = path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir));
+    if !path.is_absolute() || !below_root || climbs {
+        return Err(AppError::invalid(
+            "Choose an absolute folder below the root directory.",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(windows))]
+    #[test]
+    fn managed_model_location_refuses_relative_climbing_and_root_paths() {
+        for path in ["models", "/", "/home/example/../../etc", "./models"] {
+            assert!(
+                validate_model_directory(std::path::Path::new(path)).is_err(),
+                "{path}"
+            );
+        }
+        assert!(validate_model_directory(std::path::Path::new("/home/example/models")).is_ok());
+    }
+    #[cfg(windows)]
     #[test]
     fn managed_model_location_refuses_unc_relative_and_drive_roots() {
         for path in ["..\\models", "C:\\", "\\\\server\\share\\models"] {

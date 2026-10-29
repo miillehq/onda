@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 default-run = "onda"
-description = "Windows local-first dictation and optional ChatGPT text tools"
+description = "Local-first dictation for Windows and Linux with optional AI text tools"
 
 [lib]
 name = "onda_app"
@@ -32,6 +32,9 @@ onda-cloud = { path = "../crates/onda-cloud" }
 tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2.4"
 tauri-plugin-updater = "2.10"
+tauri-plugin-dialog = "2.4"
+base64 = "0.22.1"
+zeroize = "1.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }

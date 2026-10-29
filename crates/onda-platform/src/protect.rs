@@ -2,6 +2,7 @@
 use crate::PlatformError;
 
 /// Separates history blobs from other DPAPI consumers running as the same Windows user.
+#[cfg_attr(not(windows), allow(dead_code))]
 const ENTROPY: &[u8] = b"onda-history-v1";
 
 pub fn protect_user_data(bytes: &[u8]) -> Result<Vec<u8>, PlatformError> {

@@ -4,6 +4,7 @@
 /.research/
 /.local/
 /src-tauri/binaries/*.exe
+/src-tauri/binaries/*-linux-gnu
 /src-tauri/gen/
 *.part
 *.wav.tmp

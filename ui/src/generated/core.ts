@@ -4,6 +4,8 @@ export type AppError = { code: ErrorCode, message: string, retryable: boolean, }
 export type ExecutionPreference = "auto" | "cpuOnly" | "gpuPreferred";
 export type QualityProfile = "fast" | "balanced" | "bestQuality" | "custom";
 export type ThemePreference = "system" | "light" | "dark";
+export type TrayIconStyle = "auto" | "black" | "white";
+export type AiProvider = "chatgpt" | "openaiCompatible" | "anthropic" | "local";
 export type PasteShortcut = "controlV" | "controlShiftV" | "shiftInsert";
 export type Shortcut = { keys: Array<number>, };
 export type AppProfile = { executable: string, contextEnabled: boolean, enhancementEnabled: boolean, cleanupInstruction: string | null, pasteShortcut: PasteShortcut, };
@@ -20,7 +22,16 @@ showPill: boolean, playSounds: boolean, onboardingCompleted: boolean,
  * Days to keep dictation history, encrypted to the Windows user. 0 keeps it for this
  * session only, in memory.
  */
-historyDays: number, };
+historyDays: number, trayIcon: TrayIconStyle, aiProvider: AiProvider, 
+/**
+ * Base URL of the OpenAI-compatible server, e.g. `https://api.example.com/v1`. API keys are
+ * kept in protected storage, never here.
+ */
+openaiBaseUrl: string | null, openaiModel: string | null, anthropicModel: string | null, 
+/**
+ * Base URL of the local server; must be a loopback address.
+ */
+localBaseUrl: string | null, localModel: string | null, };
 export type EntrySource = "manual" | "autoLearned" | "imported";
 export type DictionaryKind = "vocabulary" | "replacement";
 export type DictionaryEntry = { id: string, kind: DictionaryKind, phrase: string, replacement: string | null, enabled: boolean, starred: boolean, source: EntrySource, };
@@ -28,13 +39,35 @@ export type Snippet = { id: string, trigger: string, expansion: string, enabled:
 export type Transform = { id: string, name: string, instruction: string, shortcut: Shortcut | null, modelPreference: string | null, preserveProtectedTokens: boolean, builtIn: boolean, };
 export type Phase = "idle" | "recording" | "finalizingAudio" | "transcribing" | "enhancing" | "inserting" | "completed" | "error" | "cancelled";
 export type OperationMode = "dictation" | "spokenCommand" | "transform";
-export type DataRoute = "local" | "chatgptPlan";
+export type DataRoute = "local" | "chatgptPlan" | "openaiCompatible" | "anthropic" | "localModel";
 export type OperationState = { operationId: string | null, phase: Phase, mode: OperationMode, route: DataRoute, error: AppError | null, fallbackUsed: boolean, 
 /**
  * Started by the toggle shortcut, so recording continues until it is pressed again.
  */
 handsFree: boolean, };
 export type DailyUsage = { day: string, dictations: number, words: number, audioMs: number, };
+export type UsageSummary = { 
+/**
+ * Dictations typed since `since`.
+ */
+dictations: number, words: number, audioMs: number, 
+/**
+ * First day Onda counted, or null before the first dictation.
+ */
+since: string | null, 
+/**
+ * Words per minute of recorded audio; null until there is a minute of audio.
+ */
+wordsPerMinute: number | null, 
+/**
+ * Consecutive days with a dictation, ending today, or yesterday if today has none yet.
+ */
+currentStreak: number, longestStreak: number, activeDays: number, };
+export type Profile = { name: string | null, 
+/**
+ * Base64 PNG, 256×256, re-encoded by Onda so no original file metadata survives.
+ */
+picture: string | null, };
 export type HistoryEntry = { id: string, 
 /**
  * Unix milliseconds.

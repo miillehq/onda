@@ -1,10 +1,10 @@
-//! Thin Windows desktop host. Application policy lives in Rust services.
+//! Thin desktop host for Windows and Linux. Application policy lives in Rust services.
 pub mod api;
 mod errors;
 mod pill;
 mod runtime;
 use onda_core::{
-    contracts::ThemePreference,
+    contracts::{ThemePreference, TrayIconStyle},
     error::{AppError, AppResult, ErrorCode},
 };
 use runtime::Runtime;
@@ -161,8 +161,10 @@ pub(crate) fn apply_theme(app: &tauri::AppHandle, theme: ThemePreference) {
     let dark = is_dark(theme);
     let _ = window.set_theme(window_theme(theme));
     let _ = window.set_background_color(Some(chrome_color(dark)));
-    let (caption, text) = if dark { DARK_CHROME } else { LIGHT_CHROME };
+    // Elsewhere the title bar follows the desktop's theme.
+    #[cfg(windows)]
     if let Ok(hwnd) = window.hwnd() {
+        let (caption, text) = if dark { DARK_CHROME } else { LIGHT_CHROME };
         onda_platform::set_caption_colors(hwnd.0 as isize, caption, text);
     }
 }
@@ -210,14 +212,35 @@ fn resolve_data_directory(app: &tauri::App) -> tauri::Result<PathBuf> {
     Ok(directory)
 }
 
-fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
-    // The flat mark below 32 px, following the brand guide; white on dark taskbars.
-    let bytes: &'static [u8] = if onda_platform::system_uses_light_theme() {
+/// The flat mark below 32 px, following the brand guide. `Auto` is white on a dark taskbar and
+/// black on a light one; Linux panels cannot be read, so there `Auto` is white, which suits the
+/// dark top bars of GNOME and most themes.
+fn tray_icon(style: TrayIconStyle) -> tauri::Result<tauri::image::Image<'static>> {
+    let black = match style {
+        TrayIconStyle::Auto => onda_platform::system_uses_light_theme(),
+        TrayIconStyle::Black => true,
+        TrayIconStyle::White => false,
+    };
+    let bytes: &'static [u8] = if black {
         include_bytes!("../icons/tray-light.png")
     } else {
         include_bytes!("../icons/tray-dark.png")
     };
     tauri::image::Image::from_bytes(bytes)
+}
+
+/// Swap the tray mark after the setting or the taskbar theme changes.
+pub(crate) fn apply_tray_icon(app: &tauri::AppHandle, style: TrayIconStyle) {
+    if let Some(tray) = app.tray_by_id("main") {
+        match tray_icon(style) {
+            Ok(icon) => {
+                if tray.set_icon(Some(icon)).is_err() {
+                    tracing::warn!(subsystem = "tray", "tray icon not updated");
+                }
+            }
+            Err(_) => tracing::warn!(subsystem = "tray", "tray icon could not be decoded"),
+        }
+    }
 }
 
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -259,7 +282,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // needs it running but hidden.
     if smoke_directory.is_some() {
         build_main_window(app.handle(), None, false)?;
-    } else if !std::env::args().any(|argument| argument == "--background") {
+    } else if !std::env::args()
+        .any(|argument| argument == "--background" || argument == DICTATE_ARGUMENT)
+    {
         build_main_window(app.handle(), None, true)?;
     }
     let webview_data = smoke_directory
@@ -306,6 +331,14 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         true,
         None::<&str>,
     )?;
+    // Without the Windows keyboard helper, the tray (and desktop shortcuts) start dictation.
+    let dictate = MenuItem::with_id(
+        app,
+        "dictate",
+        "Start or finish dictation",
+        true,
+        None::<&str>,
+    )?;
     let cancel = MenuItem::with_id(app, "cancel", "Cancel dictation", true, None::<&str>)?;
     let quit = MenuItem::with_id(
         app,
@@ -314,14 +347,19 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         true,
         None::<&str>,
     )?;
-    let menu = Menu::with_items(app, &[&open, &cancel, &quit])?;
+    let menu = if cfg!(windows) {
+        Menu::with_items(app, &[&open, &cancel, &quit])?
+    } else {
+        Menu::with_items(app, &[&open, &dictate, &cancel, &quit])?
+    };
     TrayIconBuilder::with_id("main")
-        .icon(tray_icon()?)
+        .icon(tray_icon(settings.tray_icon)?)
         .tooltip(format!("{} · Ready", onda_core::APP_NAME))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main(app),
+            "dictate" => app.state::<Arc<Runtime>>().toggle_dictation(),
             "cancel" => {
                 let service = app.state::<Arc<Runtime>>().inner().clone();
                 tauri::async_runtime::spawn(async move {
@@ -349,20 +387,44 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         version = onda_core::APP_VERSION,
         "application started"
     );
+    if std::env::args().any(|argument| argument == DICTATE_ARGUMENT) {
+        app.state::<Arc<Runtime>>().toggle_dictation();
+    }
     Ok(())
 }
 
-/// Windows-only runtime. Native startup failures remain visible instead of silent exits.
+/// `onda --dictate` starts hands-free dictation, or finishes it if one is recording. On Linux,
+/// where Onda has no keyboard hook, bind it to a desktop shortcut.
+const DICTATE_ARGUMENT: &str = "--dictate";
+
+/// A second launch either toggles dictation or opens the window.
+fn second_instance(app: &tauri::AppHandle, arguments: Vec<String>) {
+    if arguments
+        .iter()
+        .any(|argument| argument == DICTATE_ARGUMENT)
+    {
+        if let Some(service) = app.try_state::<Arc<Runtime>>() {
+            service.toggle_dictation();
+        }
+    } else {
+        show_main(app);
+    }
+}
+
+/// Native startup failures remain visible instead of silent exits.
 pub fn run() {
     let mut builder = tauri::Builder::default();
     // An isolated profile must neither activate the user's app nor share its global shortcuts.
     if !isolated() {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            show_main(app)
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
+            second_instance(app, arguments)
         }));
     }
     let application = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Used only from native commands (profile picture, saving the stats image); the
+        // webview's capabilities grant it nothing.
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![application_call])
         .setup(setup)
         .on_window_event(|window, event| match event {
@@ -371,12 +433,18 @@ pub fn run() {
                 api.prevent_close();
                 let _ = window.hide();
             }
-            tauri::WindowEvent::ThemeChanged(_) if window.label() == MAIN_LABEL => {
+            // The pill window always exists, so its theme events keep the tray mark current
+            // even while the main window is closed.
+            tauri::WindowEvent::ThemeChanged(_) => {
                 let app = window.app_handle();
                 if let Some(service) = app.try_state::<Arc<Runtime>>() {
                     if let Ok(settings) = service.settings() {
-                        if settings.theme == ThemePreference::System {
+                        if window.label() == MAIN_LABEL && settings.theme == ThemePreference::System
+                        {
                             apply_theme(app, settings.theme);
+                        }
+                        if settings.tray_icon == TrayIconStyle::Auto {
+                            apply_tray_icon(app, settings.tray_icon);
                         }
                     }
                 }

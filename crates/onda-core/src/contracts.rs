@@ -7,6 +7,7 @@ pub const DEFAULT_MAX_RECORDING_SECONDS: u32 = 180;
 pub const MAX_RECORDING_SECONDS: u32 = 600;
 pub const DEFAULT_HISTORY_DAYS: u32 = 3;
 pub const MAX_HISTORY_DAYS: u32 = 30;
+const MAX_PROVIDER_SETTING_BYTES: usize = 2048;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +33,31 @@ pub enum ThemePreference {
     System,
     Light,
     Dark,
+}
+
+/// Colour of the notification-area (tray) mark. `Auto` picks white on a dark taskbar and black on
+/// a light one; the fixed choices are for taskbars Onda cannot read, such as Linux panels.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TrayIconStyle {
+    Auto,
+    Black,
+    White,
+}
+
+/// Where AI polish, rewrites and spoken edits send text. Only the chosen provider is ever used:
+/// a failure keeps the local text and never retries with another provider.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AiProvider {
+    /// Sign in with ChatGPT, using the account's plan.
+    Chatgpt,
+    /// A user-configured server that speaks the OpenAI Chat Completions API.
+    OpenaiCompatible,
+    /// Anthropic's Messages API with the user's own API key.
+    Anthropic,
+    /// An OpenAI-compatible server on this computer (Ollama, LM Studio, llama.cpp); loopback only.
+    Local,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
@@ -90,6 +116,16 @@ pub struct Settings {
     /// Days to keep dictation history, encrypted to the Windows user. 0 keeps it for this
     /// session only, in memory.
     pub history_days: u32,
+    pub tray_icon: TrayIconStyle,
+    pub ai_provider: AiProvider,
+    /// Base URL of the OpenAI-compatible server, e.g. `https://api.example.com/v1`. API keys are
+    /// kept in protected storage, never here.
+    pub openai_base_url: Option<String>,
+    pub openai_model: Option<String>,
+    pub anthropic_model: Option<String>,
+    /// Base URL of the local server; must be a loopback address.
+    pub local_base_url: Option<String>,
+    pub local_model: Option<String>,
 }
 
 impl Default for Settings {
@@ -126,6 +162,13 @@ impl Default for Settings {
             play_sounds: true,
             onboarding_completed: false,
             history_days: DEFAULT_HISTORY_DAYS,
+            tray_icon: TrayIconStyle::Auto,
+            ai_provider: AiProvider::Chatgpt,
+            openai_base_url: None,
+            openai_model: None,
+            anthropic_model: None,
+            local_base_url: None,
+            local_model: None,
         }
     }
 }
@@ -186,6 +229,27 @@ impl Settings {
             return Err(crate::error::AppError::invalid(
                 "Model directory is invalid.",
             ));
+        }
+        // The network policy for these URLs (HTTPS, loopback for local) lives in onda-cloud; this
+        // only keeps malformed values out of the database.
+        for value in [
+            &self.openai_base_url,
+            &self.openai_model,
+            &self.anthropic_model,
+            &self.local_base_url,
+            &self.local_model,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if value.is_empty()
+                || value.len() > MAX_PROVIDER_SETTING_BYTES
+                || value.chars().any(|c| c.is_control() || c.is_whitespace())
+            {
+                return Err(crate::error::AppError::invalid(
+                    "AI provider addresses and model names cannot be empty or contain spaces.",
+                ));
+            }
         }
         if self.app_profiles.len() > 100
             || self.app_profiles.iter().any(|profile| {
@@ -286,6 +350,11 @@ pub enum OperationMode {
 pub enum DataRoute {
     Local,
     ChatgptPlan,
+    /// Sent to the user's OpenAI-compatible endpoint.
+    OpenaiCompatible,
+    Anthropic,
+    /// Processed by a model server on this computer; nothing leaves the PC.
+    LocalModel,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -334,6 +403,34 @@ pub struct DailyUsage {
     pub dictations: u32,
     pub words: u32,
     pub audio_ms: u32,
+}
+
+/// Lifetime totals, statistics and streaks derived only from content-free daily counts.
+/// Days are the local calendar day when each dictation was typed.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageSummary {
+    /// Dictations typed since `since`.
+    pub dictations: u32,
+    pub words: u32,
+    pub audio_ms: f64,
+    /// First day Onda counted, or null before the first dictation.
+    pub since: Option<String>,
+    /// Words per minute of recorded audio; null until there is a minute of audio.
+    pub words_per_minute: Option<f64>,
+    /// Consecutive days with a dictation, ending today, or yesterday if today has none yet.
+    pub current_streak: u32,
+    pub longest_streak: u32,
+    pub active_days: u32,
+}
+
+/// The local profile shown in greetings and, only if the user chooses, on shared images.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    pub name: Option<String>,
+    /// Base64 PNG, 256×256, re-encoded by Onda so no original file metadata survives.
+    pub picture: Option<String>,
 }
 
 /// Result retained only in memory for recovery/copy/retry; no history database.

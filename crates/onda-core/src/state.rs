@@ -123,9 +123,10 @@ impl StateMachine {
         Ok(())
     }
 
-    pub fn mark_cloud(&mut self, operation_id: &str) {
+    /// Record where the text is going; the interface names it while the model works.
+    pub fn mark_cloud(&mut self, operation_id: &str, route: DataRoute) {
         if self.matches(operation_id) {
-            self.current.route = DataRoute::ChatgptPlan;
+            self.current.route = route;
         }
     }
     pub fn mark_hands_free(&mut self, operation_id: &str) {

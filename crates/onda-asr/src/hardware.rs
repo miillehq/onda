@@ -44,6 +44,30 @@ pub struct HardwareInfo {
     pub directml_library_present: bool,
 }
 
+/// Memory from /proc/meminfo and whether a Vulkan loader is installed. GPU adapters are not
+/// enumerated on Linux; the optional Vulkan worker probes them itself.
+#[cfg(target_os = "linux")]
+fn inspect_linux(hardware: &mut HardwareInfo) {
+    if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
+        let field = |name: &str| {
+            meminfo
+                .lines()
+                .find_map(|line| line.strip_prefix(name))
+                .and_then(|rest| rest.split_whitespace().next()?.parse::<u64>().ok())
+                .map(|kilobytes| kilobytes * 1024)
+        };
+        hardware.total_memory_bytes = field("MemTotal:").unwrap_or(0);
+        hardware.available_memory_bytes = field("MemAvailable:").unwrap_or(0);
+    }
+    hardware.vulkan_loader_present = [
+        "/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
+        "/usr/lib64/libvulkan.so.1",
+        "/usr/lib/libvulkan.so.1",
+    ]
+    .iter()
+    .any(|path| std::path::Path::new(path).exists());
+}
+
 impl HardwareInfo {
     /// Inspect CPU/RAM and DXGI adapters without loading optional GPU runtimes.
     pub fn detect() -> Self {
@@ -60,6 +84,8 @@ impl HardwareInfo {
         };
         #[cfg(windows)]
         inspect_windows(&mut hardware);
+        #[cfg(target_os = "linux")]
+        inspect_linux(&mut hardware);
         hardware
     }
 
@@ -183,6 +209,14 @@ mod tests {
         hardware.physical_cpus = 64;
         assert_eq!(hardware.inference_threads(), 6);
     }
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_reports_installed_and_available_memory() {
+        let hardware = HardwareInfo::detect();
+        assert!(hardware.total_memory_bytes > 0);
+        assert!(hardware.available_memory_bytes <= hardware.total_memory_bytes);
+    }
+
     #[test]
     fn avx2_worker_needs_avx2_fma_and_f16c() {
         let mut hardware = HardwareInfo::detect();

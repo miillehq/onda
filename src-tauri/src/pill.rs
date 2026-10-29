@@ -163,9 +163,13 @@ impl Pill {
             let _ = window.set_size(PhysicalSize::new(width as u32, height as u32));
         }
         let _ = window.set_ignore_cursor_events(true);
+        #[cfg(windows)]
         if let Ok(hwnd) = window.hwnd() {
             onda_platform::show_without_activation(hwnd.0 as isize);
         }
+        // GTK honours the window's focusable(false); Wayland compositors may ignore the position.
+        #[cfg(not(windows))]
+        let _ = window.show();
     }
 
     fn hide_after(&self, app: &AppHandle, delay: Duration) {
@@ -189,7 +193,13 @@ impl Pill {
 /// Hide natively; tao keeps believing the window is visible, which is what keeps its own
 /// style updates from re-hiding or activating it.
 pub fn hide(app: &AppHandle) {
-    if let Some(Ok(hwnd)) = app.get_webview_window(LABEL).map(|window| window.hwnd()) {
+    let Some(window) = app.get_webview_window(LABEL) else {
+        return;
+    };
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
         onda_platform::hide_window(hwnd.0 as isize);
     }
+    #[cfg(not(windows))]
+    let _ = window.hide();
 }

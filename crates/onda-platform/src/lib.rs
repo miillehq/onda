@@ -1,10 +1,14 @@
-//! Sensitive Windows operations remain in the native backend, outside the renderer.
+//! Sensitive desktop operations remain in the native backend, outside the renderer. Windows has
+//! the full set; Linux has microphone capture, the clipboard and process measurements.
 mod audio;
 #[cfg(windows)]
 mod clipboard;
 #[cfg(all(windows, debug_assertions))]
 pub mod debug_fixture;
 mod desktop;
+#[cfg(target_os = "linux")]
+mod linux_clipboard;
+mod processes;
 mod protect;
 mod target;
 #[cfg(windows)]
@@ -18,7 +22,12 @@ pub use desktop::{
     apps_use_light_theme, hide_window, launch_at_login_registered, local_date, play_cue,
     set_caption_colors, set_launch_at_login, show_without_activation, system_uses_light_theme, Cue,
 };
+pub use processes::{process_tree, MemoryMeasure, ProcessSample};
 pub use protect::{protect_user_data, unprotect_user_data};
+
+/// Whether Onda can type into the focused field of another app. Without it (Linux), dictation
+/// completes by putting its words on the clipboard for the user to paste.
+pub const TYPES_INTO_APPS: bool = cfg!(windows);
 pub use target::{
     ControlFingerprint, InsertionOutcome, PasteShortcut, TargetSnapshot, WindowsTargetService,
     MAX_TEXT_CHARACTERS,

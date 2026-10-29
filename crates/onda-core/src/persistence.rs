@@ -5,17 +5,22 @@ use crate::{
     },
     dictionary::lookup_key,
     error::{AppError, AppResult},
+    stats::LifetimeUsage,
     MAX_DICTIONARY_ENTRIES, MAX_TEXT_BYTES,
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use std::{path::Path, time::Duration};
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 /// Applied in order; each script ends by setting its own user_version.
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/001_initial.sql")),
     (2, include_str!("../migrations/002_daily_usage.sql")),
     (3, include_str!("../migrations/003_history.sql")),
+    (
+        4,
+        include_str!("../migrations/004_profile_and_lifetime.sql"),
+    ),
 ];
 /// Bounds the encrypted history table regardless of retention.
 const MAX_HISTORY_ROWS: i64 = 2000;
@@ -300,6 +305,8 @@ impl Store {
             .map_err(|_| AppError::storage())?;
         transaction.execute("UPDATE usage SET operations=operations+1,audio_ms=audio_ms+?1,inference_ms=inference_ms+?2,fallbacks=fallbacks+?3 WHERE id=1", params![audio_ms,inference_ms,u32::from(fallback)]).map_err(|_|AppError::storage())?;
         transaction.execute("INSERT INTO daily_usage(day,dictations,words,audio_ms) VALUES(?1,1,?2,?3) ON CONFLICT(day) DO UPDATE SET dictations=dictations+1,words=words+excluded.words,audio_ms=audio_ms+excluded.audio_ms", params![day,words,audio_ms]).map_err(|_|AppError::storage())?;
+        // Lifetime totals outlive the pruned daily rows.
+        transaction.execute("UPDATE usage_lifetime SET since=COALESCE(since,?1),dictations=dictations+1,words=words+?2,audio_ms=audio_ms+?3 WHERE id=1", params![day,words,audio_ms]).map_err(|_|AppError::storage())?;
         transaction.execute("DELETE FROM daily_usage WHERE day NOT IN (SELECT day FROM daily_usage ORDER BY day DESC LIMIT ?1)", params![MAX_USAGE_DAYS]).map_err(|_|AppError::storage())?;
         transaction.commit().map_err(|_| AppError::storage())?;
         Ok(())
@@ -385,6 +392,59 @@ impl Store {
             .map_err(|_| AppError::storage())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|_| AppError::storage())
+    }
+
+    pub fn lifetime_usage(&self) -> AppResult<LifetimeUsage> {
+        self.connection
+            .query_row(
+                "SELECT since,dictations,words,audio_ms FROM usage_lifetime WHERE id=1",
+                [],
+                |row| {
+                    Ok(LifetimeUsage {
+                        since: row.get(0)?,
+                        dictations: saturating_u32(row.get(1)?),
+                        words: saturating_u32(row.get(2)?),
+                        audio_ms: row.get::<_, i64>(3)?.max(0) as f64,
+                    })
+                },
+            )
+            .map_err(|_| AppError::storage())
+    }
+
+    /// The name and the stored, already normalized PNG.
+    pub fn profile(&self) -> AppResult<(Option<String>, Option<Vec<u8>>)> {
+        self.connection
+            .query_row("SELECT name,picture FROM profile WHERE id=1", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()
+            .map(Option::unwrap_or_default)
+            .map_err(|_| AppError::storage())
+    }
+
+    /// `name` must already be validated by `profile::normalize_name`.
+    pub fn set_profile_name(&mut self, name: Option<&str>) -> AppResult<()> {
+        self.connection
+            .execute(
+                "INSERT INTO profile(id,name) VALUES(1,?1) ON CONFLICT(id) DO UPDATE SET name=excluded.name",
+                params![name],
+            )
+            .map_err(|_| AppError::storage())?;
+        Ok(())
+    }
+
+    /// `picture` must already be re-encoded by `profile::normalize_picture`.
+    pub fn set_profile_picture(&mut self, picture: Option<&[u8]>) -> AppResult<()> {
+        if picture.is_some_and(|bytes| bytes.len() > crate::profile::MAX_STORED_PICTURE_BYTES) {
+            return Err(AppError::invalid("The picture is too large."));
+        }
+        self.connection
+            .execute(
+                "INSERT INTO profile(id,picture) VALUES(1,?1) ON CONFLICT(id) DO UPDATE SET picture=excluded.picture",
+                params![picture],
+            )
+            .map_err(|_| AppError::storage())?;
+        Ok(())
     }
 
     fn load_json_rows<T: serde::de::DeserializeOwned>(&self, query: &str) -> AppResult<Vec<T>> {
@@ -556,6 +616,64 @@ mod tests {
             .record_usage("2026-01-02", 3, 1000, 10, false)
             .unwrap();
         assert_eq!(store.daily_usage(1).unwrap()[0].words, 3);
+    }
+
+    #[test]
+    fn version_three_database_backfills_lifetime_totals_from_daily_rows() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("v3.db");
+        let connection = Connection::open(&path).unwrap();
+        for (_, migration) in &MIGRATIONS[..3] {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection
+            .execute_batch(
+                "INSERT INTO daily_usage VALUES('2026-10-23',2,30,9000),('2026-10-24',1,12,4000);",
+            )
+            .unwrap();
+        drop(connection);
+        let mut store = Store::open(&path).unwrap();
+        let lifetime = store.lifetime_usage().unwrap();
+        assert_eq!(lifetime.since.as_deref(), Some("2026-10-23"));
+        assert_eq!((lifetime.dictations, lifetime.words), (3, 42));
+        assert_eq!(lifetime.audio_ms, 13_000.0);
+        store
+            .record_usage("2026-10-25", 8, 1000, 10, false)
+            .unwrap();
+        let lifetime = store.lifetime_usage().unwrap();
+        assert_eq!((lifetime.dictations, lifetime.words), (4, 50));
+        assert_eq!(lifetime.since.as_deref(), Some("2026-10-23"));
+    }
+
+    #[test]
+    fn lifetime_totals_start_on_the_first_dictation_and_outlive_pruned_days() {
+        let mut store = Store::in_memory().unwrap();
+        assert_eq!(store.lifetime_usage().unwrap(), LifetimeUsage::default());
+        for offset in 0..(MAX_USAGE_DAYS + 5) {
+            let day = format!("2025-{:02}-{:02}", offset / 28 + 1, offset % 28 + 1);
+            store.record_usage(&day, 2, 1000, 1, false).unwrap();
+        }
+        assert_eq!(
+            store.daily_usage(1000).unwrap().len(),
+            MAX_USAGE_DAYS as usize
+        );
+        let lifetime = store.lifetime_usage().unwrap();
+        assert_eq!(lifetime.since.as_deref(), Some("2025-01-01"));
+        assert_eq!(lifetime.words, 2 * (MAX_USAGE_DAYS as u32 + 5));
+    }
+
+    #[test]
+    fn profile_name_and_picture_are_stored_independently() {
+        let mut store = Store::in_memory().unwrap();
+        assert_eq!(store.profile().unwrap(), (None, None));
+        store.set_profile_name(Some("Daniel")).unwrap();
+        store.set_profile_picture(Some(&[1, 2, 3])).unwrap();
+        store.set_profile_name(None).unwrap();
+        assert_eq!(store.profile().unwrap(), (None, Some(vec![1, 2, 3])));
+        store.set_profile_picture(None).unwrap();
+        assert_eq!(store.profile().unwrap(), (None, None));
+        let oversized = vec![0; crate::profile::MAX_STORED_PICTURE_BYTES + 1];
+        assert!(store.set_profile_picture(Some(&oversized)).is_err());
     }
 
     #[test]

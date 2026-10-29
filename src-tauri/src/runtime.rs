@@ -1,7 +1,7 @@
 //! Serialized user actions and cancellable pipelines over independently testable services.
 use crate::{api::*, errors};
 use onda_asr::{AsrEngine, ModelManager, TranscriptionOptions};
-use onda_cloud::{ChatGptService, CloudConfig, ResponseRequest};
+use onda_cloud::{ChatGptService, CloudConfig, KeyStore, ProviderClient, ResponseRequest};
 use onda_core::{
     contracts::*,
     dictionary::DictionaryIndex,
@@ -23,6 +23,8 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 mod commands;
+mod profile;
+mod providers;
 
 const ACTION_QUEUE_CAPACITY: usize = 64;
 const MAX_METRICS: usize = 512;
@@ -138,6 +140,9 @@ pub struct Runtime {
     cloud: Option<ChatGptService>,
     cloud_error: Option<AppError>,
     cloud_models: Mutex<Option<CachedModels>>,
+    providers: Option<ProviderClient>,
+    keys: KeyStore,
+    provider_models: Mutex<Option<providers::CachedProviderModels>>,
     asr: AsrEngine,
     models: Mutex<ModelManager>,
     worker_directory: PathBuf,
@@ -188,6 +193,7 @@ impl Runtime {
         let capture = AudioCapture::new();
         let level_meter = capture.level_meter();
         let pill = crate::pill::Pill::new(settings.show_pill, settings.play_sounds);
+        let keys = KeyStore::new(data_directory.clone(), onda_core::APP_IDENTIFIER);
         let service = Arc::new(Self {
             app,
             store: Mutex::new(store),
@@ -205,6 +211,9 @@ impl Runtime {
             cloud,
             cloud_error,
             cloud_models: Mutex::new(None),
+            providers: ProviderClient::new().ok(),
+            keys,
+            provider_models: Mutex::new(None),
             asr: AsrEngine::new(&worker_directory),
             models: Mutex::new(models),
             worker_directory,
@@ -227,7 +236,10 @@ impl Runtime {
         tauri::async_runtime::spawn(async move {
             actor.action_loop(receiver).await;
         });
-        if register_global_shortcuts {
+        if !cfg!(windows) {
+            // The keyboard hook helper is Windows-only; desktop shortcuts run `onda --dictate`.
+            *lock(&service.shortcut_status)? = "desktop".into();
+        } else if register_global_shortcuts {
             service.start_helper()?;
         } else {
             *lock(&service.shortcut_status)? = "disabled for isolated test".into();
@@ -1420,7 +1432,27 @@ impl Runtime {
         preferred: Option<&str>,
     ) -> AppResult<String> {
         onda_core::text::validate_source(source, Some(&active.context))?;
-        lock(&self.state)?.mark_cloud(&active.id);
+        match active.settings.ai_provider {
+            AiProvider::Chatgpt => {
+                self.chatgpt_text(active, source, instructions, preferred)
+                    .await
+            }
+            // A rewrite's preferred model names a ChatGPT model; other providers use theirs.
+            provider => {
+                self.provider_text(active, provider, source, instructions)
+                    .await
+            }
+        }
+    }
+
+    async fn chatgpt_text(
+        self: &Arc<Self>,
+        active: &ActiveOperation,
+        source: &str,
+        instructions: &str,
+        preferred: Option<&str>,
+    ) -> AppResult<String> {
+        lock(&self.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
         self.emit_state();
         let profiles = self.cloud()?.list_profiles().await.map_err(errors::cloud)?;
         let profile = profiles
@@ -1491,6 +1523,9 @@ impl Runtime {
         output: &str,
         fallback: bool,
     ) -> AppResult<()> {
+        if !onda_platform::TYPES_INTO_APPS {
+            return self.hand_off_to_clipboard(active, output, fallback).await;
+        }
         let target = active.target.clone();
         let text = output.to_owned();
         let selection = active.selection.clone();
@@ -1569,6 +1604,49 @@ impl Runtime {
             }
         }
         Ok(())
+    }
+
+    /// Where Onda cannot type into other apps (Linux), a dictation completes by putting the words
+    /// on the clipboard with the privacy markers; the pill and Home say to press Ctrl+V.
+    async fn hand_off_to_clipboard(
+        self: &Arc<Self>,
+        active: &ActiveOperation,
+        output: &str,
+        fallback: bool,
+    ) -> AppResult<()> {
+        if active.selection.is_some() {
+            return Err(errors::platform(
+                onda_platform::PlatformError::UnsupportedPlatform,
+            ));
+        }
+        let text = output.to_owned();
+        let started = Instant::now();
+        let copied =
+            tokio::task::spawn_blocking(move || onda_platform::copy_text_to_clipboard(&text))
+                .await
+                .map_err(|_| {
+                    AppError::new(ErrorCode::Internal, "Clipboard worker stopped.", true)
+                })?;
+        self.metric(&active.id, "clipboard", started, copied.is_ok());
+        copied.map_err(errors::platform)?;
+        let original = lock(&self.result)?
+            .as_ref()
+            .map(|result| result.result.original.clone())
+            .unwrap_or_else(|| output.into());
+        self.save_result(active, &original, output, false, fallback, None)?;
+        if let Some(saved) = lock(&self.result)?
+            .as_mut()
+            .filter(|saved| saved.result.operation_id == active.id)
+        {
+            saved.copied = true;
+        }
+        Ok(())
+    }
+
+    /// Desktop shortcuts on Linux run `onda --dictate`; it starts or finishes hands-free
+    /// dictation like the toggle shortcut does on Windows.
+    pub fn toggle_dictation(&self) {
+        self.queue_helper_action(Action::Toggle);
     }
 
     fn start_learning(

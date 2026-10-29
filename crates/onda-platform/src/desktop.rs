@@ -18,14 +18,35 @@ pub fn local_date() -> String {
         unsafe { GetLocalTime(&mut time) };
         format!("{:04}-{:02}-{:02}", time.wYear, time.wMonth, time.wDay)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        let days = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_secs() / 86_400)
-            .unwrap_or(0) as i64;
-        civil_from_days(days)
+        // SAFETY: localtime_r only writes the provided struct; a null time is not passed.
+        let mut local: libc::tm = unsafe { std::mem::zeroed() };
+        let now: libc::time_t = unsafe { libc::time(std::ptr::null_mut()) };
+        if unsafe { libc::localtime_r(&now, &mut local) }.is_null() {
+            return utc_date();
+        }
+        format!(
+            "{:04}-{:02}-{:02}",
+            local.tm_year + 1900,
+            local.tm_mon + 1,
+            local.tm_mday
+        )
     }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        utc_date()
+    }
+}
+
+/// The UTC day, where the local time zone cannot be read.
+#[cfg(not(windows))]
+fn utc_date() -> String {
+    let days = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() / 86_400)
+        .unwrap_or(0) as i64;
+    civil_from_days(days)
 }
 
 #[cfg(not(windows))]
@@ -319,6 +340,7 @@ pub fn play_cue(cue: Cue) {
 }
 
 /// 16-bit mono PCM; each note has a short raised-cosine envelope so cues never click.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn tone_wav(notes: &[(f32, f32)]) -> Vec<u8> {
     const RATE: u32 = 44_100;
     const VOLUME: f32 = 0.16;

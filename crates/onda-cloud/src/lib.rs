@@ -1,14 +1,19 @@
-//! Native-only Sign in with ChatGPT and plan-backed text inference.
+//! Native-only Sign in with ChatGPT and plan-backed text inference, plus user-configured
+//! providers (OpenAI-compatible servers, Anthropic, and local model servers).
 //!
-//! OAuth credentials never leave this crate. Public types deliberately expose
+//! OAuth credentials and API keys never leave this crate. Public types deliberately expose
 //! only account metadata, model choices, text, and actionable, redacted errors.
 
+mod keys;
 mod oauth;
+mod providers;
 mod responses;
 mod sse;
 mod storage;
 
+pub use keys::{ApiKey, KeySlot, KeyStore};
 pub use oauth::{ChatGptService, PendingSignIn};
+pub use providers::{Endpoint, ProviderClient, ProviderKind, ProviderModel, ProviderRequest};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 pub use tokio_util::sync::CancellationToken;
@@ -106,6 +111,16 @@ pub enum CloudError {
     InterruptedStream,
     #[error("The response was incomplete")]
     IncompleteResponse,
+    #[error("The provider address is not allowed")]
+    EndpointNotAllowed,
+    #[error("The provider needs an API key")]
+    MissingApiKey,
+    #[error("The API key is not valid")]
+    InvalidApiKey,
+    #[error("The model declined to answer")]
+    Refusal,
+    #[error("The provider could not be reached")]
+    Unreachable,
     #[error("The cloud service rejected the request ({status})")]
     Remote {
         status: u16,
