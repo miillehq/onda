@@ -168,7 +168,7 @@ function TryPanel({ initial }: { initial: string }) {
         <Button variant="primary" icon={<WandSparkles size={16} />} busy={running} disabled={!source.trim() || !aiReady.value || isBusy.value} onClick={() => void run()}>
           Rewrite
         </Button>
-        {!aiReady.value && <span class="muted">Connect ChatGPT first.</span>}
+        {!aiReady.value && <span class="muted">Set up AI polish first.</span>}
       </div>
     </section>
   );
@@ -196,7 +196,7 @@ export function Rewrites() {
   return (
     <Page
       title="Rewrites"
-      lede="Select text in any app, press a shortcut, and ChatGPT rewrites it in place."
+      lede="Select text in any app, press a shortcut, and your AI provider rewrites it in place."
       actions={
         <Button variant="primary" icon={<Plus size={16} />} onClick={() => setEditing("new")}>
           New rewrite
@@ -207,14 +207,14 @@ export function Rewrites() {
         <Callout
           tone="info"
           icon={<Sparkles size={20} />}
-          title="Connect ChatGPT to use rewrites"
+          title="Set up AI polish to use rewrites"
           action={
             <Button variant="primary" onClick={() => navigate("settings/ai")}>
               Set up AI polish
             </Button>
           }
         >
-          Rewrites use your ChatGPT plan. Dictation keeps working on this PC without it.
+          Rewrites use the provider you choose in AI polish: ChatGPT, your own server, Anthropic or a model on this computer. Dictation keeps working without it.
         </Callout>
       )}
 

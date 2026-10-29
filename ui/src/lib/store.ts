@@ -43,7 +43,7 @@ export const downloads = signal<Record<string, DownloadReport>>({});
 export const devices = signal<AudioDevice[] | null>(null);
 export const oauthStatus = signal<string | null>(null);
 export const learning = signal<LearningProposal | null>(null);
-/** Streaming ChatGPT text; provisional until `resultReady` validates it. */
+/** Streaming AI text; provisional until `resultReady` validates it. */
 export const provisional = signal<{ operationId: string; text: string } | null>(null);
 /** 0–1 display level of the open microphone. */
 export const micLevel = signal(0);
@@ -334,9 +334,9 @@ export async function getResourceUsage(): Promise<ResourceUsage> {
 export async function copyResult(): Promise<void> {
   if (await run("Couldn't copy", { command: "copyResult" })) toast({ tone: "ok", title: "Copied" }, 2400);
 }
-/** Copy ChatGPT's version that Onda's checks kept out of the document. */
+/** Copy the AI version that Onda's checks kept out of the document. */
 export async function copySuggestion(): Promise<void> {
-  if (await run("Couldn't copy", { command: "copySuggestion" })) toast({ tone: "ok", title: "Copied ChatGPT's version" }, 2400);
+  if (await run("Couldn't copy", { command: "copySuggestion" })) toast({ tone: "ok", title: "Copied the AI version" }, 2400);
 }
 /** Acknowledge a failure so Onda reads as ready again; its text stays in History. */
 export const dismissError = (operationId: string) => run("Couldn't dismiss", { command: "dismissError", args: { operationId } });
@@ -369,7 +369,7 @@ export async function copyHistoryEntry(id: string): Promise<void> {
   if (await run("Couldn't copy", { command: "copyHistoryEntry", args: { id } })) toast({ tone: "ok", title: "Copied" }, 2400);
 }
 export async function copyHistorySuggestion(id: string): Promise<void> {
-  if (await run("Couldn't copy", { command: "copyHistorySuggestion", args: { id } })) toast({ tone: "ok", title: "Copied ChatGPT's version" }, 2400);
+  if (await run("Couldn't copy", { command: "copyHistorySuggestion", args: { id } })) toast({ tone: "ok", title: "Copied the AI version" }, 2400);
 }
 
 export async function deleteHistoryEntry(id: string): Promise<void> {

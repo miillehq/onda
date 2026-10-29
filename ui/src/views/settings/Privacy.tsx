@@ -5,7 +5,7 @@ import { Button, Select, Switch } from "../../components/controls";
 import { Dialog, Page, Row, Rows, Section } from "../../components/layout";
 import { plural } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { aiReady, clearHistory, history, saveSettings, settings, toast, toastError } from "../../lib/store";
+import { aiReady, clearHistory, history, isWindows, saveSettings, settings, toast, toastError } from "../../lib/store";
 import { retentionPhrase } from "../History";
 
 const NEVER = ["Recordings of your voice", "Your words in logs or diagnostics", "Analytics or usage tracking"];
@@ -108,7 +108,11 @@ export function Privacy() {
           <Row
             icon={<HistoryIcon size={18} />}
             title="Keep history"
-            description="So you can copy a dictation again if it didn't make it into your app. Encrypted with your Windows account and deleted automatically."
+            description={
+              isWindows.value
+                ? "So you can copy a dictation again if it didn't make it into your app. Encrypted with your Windows account and deleted automatically."
+                : "So you can copy a dictation again. On Linux, Onda keeps it only until it quits, because it never saves history unencrypted."
+            }
             control={
               <Select
                 label="Keep history"

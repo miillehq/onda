@@ -101,6 +101,9 @@ export async function runSmoke(): Promise<void> {
       check((await call({ command: "updateSettings", args: { settings: { ...current.payload, aiProvider: "local", localBaseUrl: "http://127.0.0.1:9/v1", localModel: "smoke" } } })).type === "settings", "local provider settings saved");
       check(await rejected({ command: "listProviderModels", args: { provider: "local" } }, "offline"), "unreachable local server reported as offline");
       check(await rejected({ command: "saveProviderKey", args: { provider: "anthropic", key: "not a key" } }, "invalidInput"), "malformed API key refused before storage");
+      check((await call({ command: "updateSettings", args: { settings: { ...current.payload, trayIcon: "black" } } })).type === "settings", "tray icon style saved");
+      const stored = await call({ command: "getSettings" });
+      check(stored.type === "settings" && stored.payload.trayIcon === "black", "tray icon style persisted natively");
       await call({ command: "updateSettings", args: { settings: current.payload } });
     }
     // The whole process tree, web view included, as Task Manager does not show it.

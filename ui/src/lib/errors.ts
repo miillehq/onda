@@ -31,11 +31,11 @@ const PRESENTATION: Record<ErrorCode, ErrorPresentation> = {
   insufficientDisk: { title: "Not enough disk space", action: { label: "Open speech settings", route: "settings/speech" } },
   inference: { title: "Couldn't write that out", action: { label: "Open speech settings", route: "settings/speech" } },
   inferenceTimeout: { title: "That took too long", hint: "Try the Fast model for quicker results.", action: { label: "Open speech settings", route: "settings/speech" } },
-  offline: { title: "You're offline", hint: "Dictation still works on this PC. AI polish needs a connection." },
-  unauthorized: { title: "Reconnect ChatGPT", action: { label: "Open AI polish", route: "settings/ai" } },
-  quota: { title: "ChatGPT limit reached", action: { label: "Open AI polish", route: "settings/ai" } },
-  cloud: { title: "ChatGPT didn't respond", action: { label: "Open AI polish", route: "settings/ai" } },
-  // The native message names what ChatGPT changed, e.g. a number or a dictionary word.
+  offline: { title: "Couldn't connect", hint: "Dictation still works. AI polish needs a connection, or its local server running." },
+  unauthorized: { title: "Check your AI provider", action: { label: "Open AI polish", route: "settings/ai" } },
+  quota: { title: "AI usage limit reached", action: { label: "Open AI polish", route: "settings/ai" } },
+  cloud: { title: "AI polish didn't work", action: { label: "Open AI polish", route: "settings/ai" } },
+  // The native message names what the AI model changed, e.g. a number or a dictionary word.
   invalidEnhancement: { title: "Polish was skipped" },
   // Typing failures carry a native message saying whether the words went to the clipboard.
   focusChanged: { title: "Focus moved", action: { label: "Open History", route: "history" } },

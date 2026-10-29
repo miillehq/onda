@@ -30,7 +30,7 @@ function ProfileCard({ profile, onChange, onRemove }: { profile: AppProfile; onC
       </header>
       <div class="app-card-grid">
         <label class="check-row">
-          <Switch checked={profile.enhancementEnabled} label={`Polish with ChatGPT in ${name}`} onChange={(enhancementEnabled) => onChange({ ...profile, enhancementEnabled })} />
+          <Switch checked={profile.enhancementEnabled} label={`Polish with AI in ${name}`} onChange={(enhancementEnabled) => onChange({ ...profile, enhancementEnabled })} />
           <span>Polish with ChatGPT</span>
         </label>
         <label class="check-row">

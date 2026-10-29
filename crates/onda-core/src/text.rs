@@ -214,7 +214,7 @@ pub fn validate_enhancement(
     let reject = |reason: &str| {
         AppError::new(
             ErrorCode::InvalidEnhancement,
-            format!("ChatGPT {reason}, so Onda kept your original words."),
+            format!("The AI model {reason}, so Onda kept your original words."),
             true,
         )
     };

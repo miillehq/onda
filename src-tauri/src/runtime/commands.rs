@@ -432,9 +432,7 @@ impl Runtime {
                 let text = lock(&self.result)?
                     .as_ref()
                     .and_then(|saved| saved.result.suggestion.clone())
-                    .ok_or_else(|| {
-                        AppError::invalid("ChatGPT's version is no longer available.")
-                    })?;
+                    .ok_or_else(|| AppError::invalid("The AI version is no longer available."))?;
                 copy_text(text).await?;
                 Ok(O::Unit)
             }

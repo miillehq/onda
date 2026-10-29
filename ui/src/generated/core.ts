@@ -86,12 +86,12 @@ errorCode: ErrorCode | null,
  */
 app: string | null, 
 /**
- * ChatGPT's version when it failed Onda's checks and `output` kept the original.
+ * The AI provider's version when it failed Onda's checks and `output` kept the original.
  */
 suggestion: string | null, };
 export type OperationResult = { commandText: string | null, operationId: string, original: string, output: string, inserted: boolean, fallbackUsed: boolean, diff: Array<DiffSegment>, 
 /**
- * ChatGPT's version when it failed Onda's checks, so it can still be copied.
+ * The AI provider's version when it failed Onda's checks, so it can still be copied.
  */
 suggestion: string | null, };
 export type DiffKind = "equal" | "removed" | "added";

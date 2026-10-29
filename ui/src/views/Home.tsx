@@ -203,7 +203,7 @@ function OperationError() {
   const dismissed = useSignal<string | null>(null);
   if (!state || state.phase !== "error" || !state.error || state.error.code === "noModel" || dismissed.value === state.operationId) return null;
   const presentation = presentError(state.error);
-  // Offer ChatGPT's version only when its polish is what failed.
+  // Offer the AI version only when its polish is what failed.
   const suggestion = state.error.code === "invalidEnhancement" && lastResult.value?.operationId === state.operationId ? lastResult.value.suggestion : null;
   const dismiss = () => {
     dismissed.value = state.operationId;
@@ -217,7 +217,7 @@ function OperationError() {
         <div class="button-row">
           {suggestion ? (
             <Button variant="primary" size="sm" icon={<Copy size={15} />} onClick={() => void copySuggestion()}>
-              Copy ChatGPT's version
+              Copy AI version
             </Button>
           ) : (
             presentation.action && (

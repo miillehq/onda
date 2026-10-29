@@ -1,4 +1,4 @@
-import type { DataRoute } from "../generated/core";
+import type { DataRoute, Settings } from "../generated/core";
 
 const integer = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
@@ -37,6 +37,25 @@ export function greeting(now = new Date()): string {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
+}
+
+/** Who receives text for AI polish under these settings, for sentences such as "goes to …". */
+export function providerName(value: Settings): string {
+  switch (value.aiProvider) {
+    case "openaiCompatible": {
+      try {
+        return value.openaiBaseUrl ? new URL(value.openaiBaseUrl).host : "your AI server";
+      } catch {
+        return "your AI server";
+      }
+    }
+    case "anthropic":
+      return "Anthropic";
+    case "local":
+      return "the model on this computer";
+    default:
+      return "ChatGPT";
+  }
 }
 
 /** Where an AI step sent the text, or null when nothing left Onda's own pipeline. */

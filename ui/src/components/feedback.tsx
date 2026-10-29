@@ -66,12 +66,12 @@ export function Diff({ segments }: { segments: DiffSegment[] }) {
   );
 }
 
-/** ChatGPT's version that failed Onda's checks, marked against the text that was kept. */
+/** The AI provider's version that failed Onda's checks, marked against the text that was kept. */
 export function Suggestion({ kept, suggestion, onCopy }: { kept: string; suggestion: string; onCopy: () => void }) {
   return (
     <div class="suggestion">
       <div class="suggestion-head">
-        <span class="suggestion-label">ChatGPT's version, not used</span>
+        <span class="suggestion-label">AI version, not used</span>
         <Button variant="ghost" size="sm" icon={<Copy size={15} />} onClick={onCopy}>
           Copy
         </Button>

@@ -4,7 +4,7 @@
     "targets": ["deb", "appimage"],
     "externalBin": ["binaries/onda-asr-worker", "binaries/onda-asr-avx2-worker"],
     "linux": {
-      "deb": { "section": "utils" }
+      "deb": { "section": "utils", "depends": ["libasound2t64 | libasound2", "libdbus-1-3"] }
     }
   }
 }

@@ -78,7 +78,7 @@ const rich = scenario === "default" || scenario === "error" || scenario === "ski
 /** A rewrite whose ChatGPT version changed a number, so Onda kept the selection. */
 const SKIPPED_TEXT = "Send the invoice for 1,200 by Friday and copy finance.";
 const SKIPPED_SUGGESTION = "Please send the invoice for 1,500 by Friday and copy the finance team.";
-const SKIPPED_ERROR = { code: "invalidEnhancement", message: "ChatGPT changed a number, link, email or code, so Onda kept your original words.", retryable: true } as const;
+const SKIPPED_ERROR = { code: "invalidEnhancement", message: "The AI model changed a number, link, email or code, so Onda kept your original words.", retryable: true } as const;
 let dictionary: DictionaryEntry[] = rich
   ? [
       { id: "d1", kind: "vocabulary", phrase: "Kubernetes", replacement: null, enabled: true, starred: true, source: "manual" },

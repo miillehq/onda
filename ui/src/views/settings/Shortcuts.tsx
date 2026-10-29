@@ -66,7 +66,7 @@ export function Shortcuts() {
         </Rows>
       </Section>
 
-      <Section title="Editing with ChatGPT" description="These need AI polish to be connected.">
+      <Section title="Editing with AI" description="These use the provider set up in AI polish.">
         <Rows>
           <Row icon={<WandSparkles size={18} />} title="Rewrite selected text" description="Applies your default rewrite to the selection.">
             <ShortcutRecorder value={value.transformShortcut.keys} label="Rewrite selected text" onSave={(keys) => save({ transformShortcut: { keys } })} />

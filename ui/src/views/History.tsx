@@ -91,7 +91,7 @@ export function HistoryItem({ entry, compact = false }: { entry: HistoryEntry; c
           )}
           {!compact && entry.suggestion && (
             <button type="button" class="link-button history-toggle" aria-expanded={comparing} onClick={() => setComparing(!comparing)}>
-              {comparing ? "Hide ChatGPT's version" : "Show ChatGPT's version"}
+              {comparing ? "Hide AI version" : "Show AI version"}
               <ChevronDown size={14} aria-hidden="true" />
             </button>
           )}

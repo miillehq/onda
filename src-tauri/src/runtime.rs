@@ -758,7 +758,11 @@ impl Runtime {
                 .unwrap_or(false)
         });
         self.start_warm_worker(&id, &settings, &warm_context, warm_cancellation);
-        if settings.enhancement_enabled || command_mode {
+        // Only ChatGPT's account and model list are worth warming; other providers are asked
+        // nothing until there is text, and an unchosen provider is never contacted.
+        if (settings.enhancement_enabled || command_mode)
+            && settings.ai_provider == AiProvider::Chatgpt
+        {
             self.prefetch_polish();
         }
         self.monitor_capture(id);

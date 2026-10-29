@@ -5,7 +5,7 @@ import { Button, Chip, Field, ProgressBar, Segmented, Select } from "../../compo
 import { Callout, Dialog, Page, Row, Rows, Section } from "../../components/layout";
 import type { ModelInfo } from "../../generated/api";
 import type { QualityProfile, Settings } from "../../generated/core";
-import { formatBytes } from "../../lib/format";
+import { formatBytes, providerName } from "../../lib/format";
 import { LANGUAGES, languageName } from "../../lib/languages";
 import {
   aiReady,
@@ -291,7 +291,7 @@ export function Speech() {
         <p class="flow-foot">
           <ShieldCheck size={16} aria-hidden="true" />
           <b>Your audio never leaves your PC.</b>
-          <span>{value.enhancementEnabled && aiReady.value ? "With AI polish on, only the written text goes to ChatGPT." : "AI polish is off, so your text stays here too."}</span>
+          <span>{value.enhancementEnabled && aiReady.value ? (value.aiProvider === "local" ? "AI polish uses a model on this computer, so your text stays here too." : `With AI polish on, only the written text goes to ${providerName(value)}.`) : "AI polish is off, so your text stays here too."}</span>
         </p>
       </div>
 
