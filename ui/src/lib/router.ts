@@ -11,10 +11,10 @@ export const SETTINGS_SECTIONS = [
   "about",
 ] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
-export type MainPage = "home" | "history" | "dictionary" | "snippets" | "rewrites";
+export type MainPage = "home" | "stats" | "history" | "dictionary" | "snippets" | "rewrites";
 export type Route = MainPage | `settings/${SettingsSection}` | "onboarding";
 
-const MAIN_PAGES: MainPage[] = ["home", "history", "dictionary", "snippets", "rewrites"];
+const MAIN_PAGES: MainPage[] = ["home", "stats", "history", "dictionary", "snippets", "rewrites"];
 
 export function parseRoute(value: string): Route | null {
   if ((MAIN_PAGES as string[]).includes(value) || value === "onboarding") return value as Route;

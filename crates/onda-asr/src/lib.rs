@@ -6,6 +6,7 @@
 
 mod engine;
 mod hardware;
+mod languages;
 mod manifest;
 mod models;
 pub mod protocol;
@@ -14,6 +15,7 @@ mod worker_job;
 
 pub use engine::{AsrEngine, PreparedTranscription, TranscriptionOptions, TranscriptionResult};
 pub use hardware::{ExecutionBackend, ExecutionPreference, GpuInfo, HardwareInfo};
+pub use languages::{is_supported_language, WHISPER_LANGUAGES};
 pub use manifest::{builtin_models, recommended_model, ModelSpec, QualityProfile};
 pub use models::{DownloadProgress, DownloadStage, InstalledModel, ModelManager};
 pub use tokio_util::sync::CancellationToken;

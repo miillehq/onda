@@ -4,10 +4,10 @@ import { Button, Chip, IconButton } from "../components/controls";
 import { Dialog, EmptyState, Page } from "../components/layout";
 import type { HistoryEntry } from "../generated/core";
 import { presentError } from "../lib/errors";
-import { appName, plural } from "../lib/format";
+import { appName, plural, routeLabel } from "../lib/format";
 import { navigate } from "../lib/router";
 import { Suggestion } from "../components/feedback";
-import { clearHistory, copyHistoryEntry, copyHistorySuggestion, deleteHistoryEntry, history, settings, toast } from "../lib/store";
+import { clearHistory, copyHistoryEntry, copyHistorySuggestion, deleteHistoryEntry, history, isWindows, settings, toast } from "../lib/store";
 
 const PAGE_SIZE = 60;
 
@@ -71,15 +71,15 @@ export function HistoryItem({ entry, compact = false }: { entry: HistoryEntry; c
           )}
           {entry.app && <span>{appName(entry.app)}</span>}
           {mode && <span>{mode}</span>}
-          {entry.route === "chatgptPlan" && !skipped ? (
-            <span class="history-route">
+          {routeLabel(entry.route) && !skipped ? (
+            <span class="history-route" title={routeLabel(entry.route) ?? undefined}>
               <Sparkles size={13} aria-hidden="true" />
               Polished
             </span>
           ) : (
             <span class="history-route">
               <Cpu size={13} aria-hidden="true" />
-              On this PC
+              On this {isWindows.value ? "PC" : "computer"}
             </span>
           )}
           {skipped && <Chip tone="warn">Polish skipped</Chip>}

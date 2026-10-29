@@ -13,6 +13,8 @@ const state = signal<OperationState | null>(null);
 const result = signal<OperationResult | null>(null);
 const level = signal(0);
 const settings = signal<Settings | null>(null);
+/** The pill loads no snapshot; WebView2 reports Windows in its user agent, WebKitGTK Linux. */
+const isWindows = { value: navigator.userAgent.includes("Windows") };
 const startedAt = signal(0);
 
 /** Exit fades start shortly before the native window hides (see src-tauri/src/pill.rs). */
@@ -149,16 +151,22 @@ export function Pill() {
           {handsFree && <Timer />}
           {command && <span class="pill-label">Say your edit</span>}
           <Wave mode="live" level={level} glyph />
-          {handsFree && settings.value && (
+          {handsFree && settings.value && isWindows.value && (
             <>
               <span class="pill-divider" />
               <Keys keys={settings.value.toggleShortcut.keys} />
               <span class="pill-hint">to finish</span>
             </>
           )}
+          {handsFree && !isWindows.value && (
+            <>
+              <span class="pill-divider" />
+              <span class="pill-hint">Shortcut again to finish</span>
+            </>
+          )}
         </div>
       );
-    } else if (phase === "enhancing" && current.route === "chatgptPlan") {
+    } else if (phase === "enhancing" && current.route !== "local") {
       content = (
         <div class="pill-capsule">
           <Wave mode="settle" width={62} height={23} glyph />
@@ -169,12 +177,14 @@ export function Pill() {
       );
     } else if (phase === "completed") {
       const fallback = result.value?.fallbackUsed ?? current.fallbackUsed;
+      // Where Onda can't type into apps (Linux), a finished dictation waits on the clipboard.
+      const copied = result.value?.operationId === current.operationId && result.value.inserted === false;
       content = (
         <div class="pill-capsule">
           <span class="pill-check">
             <Check size={15} strokeWidth={3} />
           </span>
-          <span class="pill-label">{fallback ? "Inserted without polish" : "Inserted"}</span>
+          <span class="pill-label">{copied ? (fallback ? "Copied without polish · Ctrl+V" : "Copied · press Ctrl+V") : fallback ? "Inserted without polish" : "Inserted"}</span>
         </div>
       );
     } else if (phase === "cancelled") {

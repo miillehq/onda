@@ -12,6 +12,7 @@ import { Onboarding } from "../views/Onboarding";
 import { Rewrites } from "../views/Rewrites";
 import { SettingsView } from "../views/settings/SettingsView";
 import { Snippets } from "../views/Snippets";
+import { Stats } from "../views/Stats";
 import { CommandPalette } from "./CommandPalette";
 import { Sidebar } from "./Sidebar";
 
@@ -43,6 +44,8 @@ function View() {
   switch (current) {
     case "home":
       return <Home />;
+    case "stats":
+      return <Stats />;
     case "history":
       return <History />;
     case "dictionary":

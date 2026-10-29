@@ -1,12 +1,14 @@
-/** Spoken languages offered in settings. `null` means automatic detection (multilingual model);
- *  "en" selects the smaller English-only models natively. */
+/** Spoken languages offered in settings: the most widely used of the 99 that Onda's multilingual
+ *  Whisper models know (docs/asr.md). `null` means automatic detection; "en" selects the smaller
+ *  English-only models natively. Cantonese is not offered: none of Onda's models has it. */
 export const LANGUAGES: ReadonlyArray<{ code: string; name: string }> = [
   { code: "en", name: "English" },
   { code: "ar", name: "Arabic" },
   { code: "bn", name: "Bengali" },
   { code: "bg", name: "Bulgarian" },
   { code: "ca", name: "Catalan" },
-  { code: "zh", name: "Chinese" },
+  // Whisper has one code for all Chinese; it was trained and evaluated mostly on Mandarin.
+  { code: "zh", name: "Chinese (Mandarin)" },
   { code: "hr", name: "Croatian" },
   { code: "cs", name: "Czech" },
   { code: "da", name: "Danish" },

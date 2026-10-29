@@ -1,9 +1,95 @@
-import { Bell, LogIn, Monitor, Moon, PanelBottom, RotateCcw, Sun, X } from "lucide-preact";
+import { Bell, ImagePlus, LogIn, Monitor, Moon, PanelBottom, RotateCcw, Sun, Trash2, X } from "lucide-preact";
+import { useEffect, useState } from "preact/hooks";
+import { Avatar } from "../../components/Avatar";
+import { Mark } from "../../components/Brand";
 import { Button, Switch } from "../../components/controls";
 import { Page, Row, Rows, Section } from "../../components/layout";
 import { Wave } from "../../components/Wave";
+import type { TrayIconStyle } from "../../generated/core";
+import { greetingFor } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { saveSettings, settings } from "../../lib/store";
+import { chooseProfilePicture, isWindows, profile, removeProfilePicture, saveSettings, setProfileName, settings } from "../../lib/store";
+
+function ProfileEditor() {
+  const person = profile.value;
+  const [name, setName] = useState(person?.name ?? "");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setName(person?.name ?? ""), [person?.name]);
+  const commit = () => {
+    if ((person?.name ?? "") !== name.trim()) void setProfileName(name);
+  };
+  const pick = async () => {
+    setBusy(true);
+    await chooseProfilePicture();
+    setBusy(false);
+  };
+  return (
+    <div class="profile-editor">
+      <Avatar profile={person} size={72} />
+      <div class="profile-fields">
+        <label class="field-label" for="profile-name">
+          Your name
+        </label>
+        <input
+          id="profile-name"
+          class="input"
+          type="text"
+          maxLength={80}
+          autoComplete="given-name"
+          placeholder="Optional"
+          value={name}
+          onInput={(event) => setName(event.currentTarget.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+        />
+        <p class="field-hint">Onda greets you with it: “{greetingFor(name)}”.</p>
+        <div class="profile-actions">
+          <Button size="sm" icon={<ImagePlus size={15} />} busy={busy} onClick={() => void pick()}>
+            {person?.picture ? "Replace picture…" : "Choose picture…"}
+          </Button>
+          {person?.picture && (
+            <Button size="sm" variant="ghost" icon={<Trash2 size={15} />} onClick={() => void removeProfilePicture()}>
+              Remove picture
+            </Button>
+          )}
+        </div>
+        <p class="field-hint">PNG, JPEG or WebP up to 10 MB. Onda keeps a 256-pixel copy without the file's details (such as location).</p>
+      </div>
+    </div>
+  );
+}
+
+const TRAY_OPTIONS: { id: TrayIconStyle; label: string }[] = [
+  { id: "auto", label: "Automatic" },
+  { id: "white", label: "White" },
+  { id: "black", label: "Black" },
+];
+
+function TrayIconPicker({ value }: { value: TrayIconStyle }) {
+  return (
+    <div class="tray-picker" role="radiogroup" aria-label="Tray icon">
+      {TRAY_OPTIONS.map((option) => (
+        <button type="button" role="radio" key={option.id} class={`tray-option${value === option.id ? " is-selected" : ""}`} aria-checked={value === option.id} onClick={() => void saveSettings({ trayIcon: option.id })}>
+          <span class="tray-swatches" aria-hidden="true">
+            {(option.id === "auto" || option.id === "white") && (
+              <span class="tray-swatch is-dark">
+                <Mark height={14} />
+              </span>
+            )}
+            {(option.id === "auto" || option.id === "black") && (
+              <span class="tray-swatch is-light">
+                <Mark height={14} />
+              </span>
+            )}
+          </span>
+          <span class="theme-label">{option.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function ThemePreview() {
   return (
@@ -22,12 +108,16 @@ export function General() {
   const value = settings.value;
   if (!value) return null;
   return (
-    <Page title="General" lede="How Onda looks and behaves on your PC.">
+    <Page title="General" lede={`How Onda looks and behaves on your ${isWindows.value ? "PC" : "computer"}.`}>
+      <Section title="Profile" description="Shown in greetings and on Stats. Kept only on this computer, and added to a shared image only if you switch it on there.">
+        <ProfileEditor />
+      </Section>
+
       <Section title="Appearance">
         <div class="theme-picker" role="presentation">
           {(
             [
-              { id: "system", label: "Match Windows", icon: <Monitor size={16} /> },
+              { id: "system", label: isWindows.value ? "Match Windows" : "Match system", icon: <Monitor size={16} /> },
               { id: "light", label: "Light", icon: <Sun size={16} /> },
               { id: "dark", label: "Dark", icon: <Moon size={16} /> },
             ] as const
@@ -58,12 +148,23 @@ export function General() {
         </div>
       </Section>
 
+      <Section
+        title="Tray icon"
+        description={
+          isWindows.value
+            ? "The Onda mark in the notification area. Automatic follows the taskbar: white on a dark taskbar, black on a light one."
+            : "The Onda mark in the top bar or panel. Linux doesn't report the panel's colour, so Automatic uses white, which suits most dark panels; choose Black for a light one."
+        }
+      >
+        <TrayIconPicker value={value.trayIcon} />
+      </Section>
+
       <Section title="While you dictate">
         <Rows>
           <Row
             icon={<PanelBottom size={18} />}
             title="Show the dictation pill"
-            description="A small indicator above the taskbar shows when Onda is listening. It never takes focus from your app."
+            description={isWindows.value ? "A small indicator above the taskbar shows when Onda is listening. It never takes focus from your app." : "A small indicator at the bottom of the screen shows when Onda is listening. Some Wayland desktops place it themselves."}
             control={<Switch checked={value.showPill} label="Show the dictation pill" onChange={(showPill) => void saveSettings({ showPill })} />}
           >
             <span class={`pill-capsule pill-preview${value.showPill ? "" : " is-off"}`} aria-hidden="true">

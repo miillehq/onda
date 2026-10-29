@@ -51,6 +51,15 @@ impl Runtime {
                 let _configuration = self.configuration_gate.lock().await;
                 settings.validate()?;
                 super::providers::validate_provider_settings(&settings)?;
+                if settings
+                    .language
+                    .as_deref()
+                    .is_some_and(|language| !onda_asr::is_supported_language(language))
+                {
+                    return Err(AppError::invalid(
+                        "Onda's speech models don't support that language. Cantonese, for example, needs a large-v3 model, which Onda doesn't offer.",
+                    ));
+                }
                 self.selected_model(&settings)?;
                 let config = shortcut_config(&settings, &lock(&self.store)?.transforms()?)?;
                 self.cancel().await?;

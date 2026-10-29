@@ -10,7 +10,7 @@ import { Wave } from "../components/Wave";
 import { formatBytes } from "../lib/format";
 import { navigate } from "../lib/router";
 import {
-  aiReady,
+  chatgptReady,
   catalog,
   cloudModels,
   devices,
@@ -258,9 +258,9 @@ function TryStep({ onSuccess }: { onSuccess: () => void }) {
 
 function PolishStep() {
   const authorizing = oauthStatus.value === "authorizing";
-  const connected = aiReady.value;
+  const connected = chatgptReady.value;
   return (
-    <StepBody title="Polish with ChatGPT (optional)" lede="Connect your ChatGPT plan to clean up punctuation and filler words, and to rewrite selected text. Only written text is sent, never audio.">
+    <StepBody title="Polish with ChatGPT (optional)" lede="Connect your ChatGPT plan to clean up punctuation and filler words, and to rewrite selected text. Only written text is sent, never audio. To use your own AI service or a model on this computer instead, choose it later in Settings › AI polish.">
       {connected ? (
         <>
           <p class="success-line" role="status">

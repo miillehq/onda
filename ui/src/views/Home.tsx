@@ -22,7 +22,7 @@ import { Diff, Suggestion } from "../components/feedback";
 import { Callout, EmptyState } from "../components/layout";
 import { Wave } from "../components/Wave";
 import { presentError } from "../lib/errors";
-import { formatBytes, formatDuration, formatInteger, greeting } from "../lib/format";
+import { formatBytes, formatDuration, formatInteger, greetingFor, routeLabel } from "../lib/format";
 import { navigate } from "../lib/router";
 import { HistoryItem, retentionPhrase } from "./History";
 import {
@@ -47,6 +47,8 @@ import {
   settings,
   snapshot,
   undoRewrite,
+  isWindows,
+  profile,
   usage,
 } from "../lib/store";
 
@@ -99,24 +101,42 @@ function Hero({ onPractice }: { onPractice: () => void }) {
   if (!value) return null;
   return (
     <section class="hero" aria-labelledby="hero-title">
-      <div class="hero-copy">
-        <p class="hero-eyebrow">Your dictation shortcut</p>
-        <Keys keys={value.pushToTalk.keys} size="hero" />
-        <h2 id="hero-title" class="hero-title">
-          Hold to talk.
-          <br />
-          Let go to type.
-        </h2>
-        <p class="hero-text">Works in any app, wherever your cursor is.</p>
-        <div class="hero-actions">
-          <Button variant="inverse" icon={<Mic size={16} />} onClick={onPractice}>
-            Try it here
-          </Button>
-          <Button variant="inverse-ghost" icon={<Keyboard size={16} />} onClick={() => navigate("settings/shortcuts")}>
-            Change shortcut
-          </Button>
+      {isWindows.value ? (
+        <div class="hero-copy">
+          <p class="hero-eyebrow">Your dictation shortcut</p>
+          <Keys keys={value.pushToTalk.keys} size="hero" />
+          <h2 id="hero-title" class="hero-title">
+            Hold to talk.
+            <br />
+            Let go to type.
+          </h2>
+          <p class="hero-text">Works in any app, wherever your cursor is.</p>
+          <div class="hero-actions">
+            <Button variant="inverse" icon={<Mic size={16} />} onClick={onPractice}>
+              Try it here
+            </Button>
+            <Button variant="inverse-ghost" icon={<Keyboard size={16} />} onClick={() => navigate("settings/shortcuts")}>
+              Change shortcut
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div class="hero-copy">
+          <p class="hero-eyebrow">Your dictation shortcut</p>
+          <p class="hero-command mono">onda --dictate</p>
+          <h2 id="hero-title" class="hero-title">
+            Press to talk.
+            <br />
+            Press again, then paste.
+          </h2>
+          <p class="hero-text">Bind the command to a key in your desktop's settings. Your words wait on the clipboard for Ctrl+V.</p>
+          <div class="hero-actions">
+            <Button variant="inverse" icon={<Keyboard size={16} />} onClick={() => navigate("settings/shortcuts")}>
+              Set up the shortcut
+            </Button>
+          </div>
+        </div>
+      )}
       <HeroScene />
     </section>
   );
@@ -395,12 +415,13 @@ function ResultCard() {
         <div class="chip-row">
           {skipped ? (
             <Chip tone="warn">Polish skipped</Chip>
-          ) : state?.route === "chatgptPlan" ? (
-            <Chip icon={<Sparkles size={14} />}>Polished with ChatGPT</Chip>
+          ) : state && routeLabel(state.route) ? (
+            <Chip icon={<Sparkles size={14} />}>{routeLabel(state.route)}</Chip>
           ) : (
-            <Chip icon={<Cpu size={14} />}>On this PC</Chip>
+            <Chip icon={<Cpu size={14} />}>On this {isWindows.value ? "PC" : "computer"}</Chip>
           )}
           {result && !result.inserted && state?.phase === "error" && state.error?.code !== "invalidEnhancement" && <Chip tone="err">Not inserted</Chip>}
+          {result && !result.inserted && state?.phase === "completed" && <Chip tone="ok">On the clipboard · Ctrl+V</Chip>}
         </div>
       </header>
       {result?.commandText && <p class="result-command">You asked: “{result.commandText}”</p>}
@@ -522,7 +543,7 @@ export function Home() {
     <div class="page home">
       <header class="page-head">
         <div class="page-heading">
-          <h1 tabIndex={-1}>{greeting()}</h1>
+          <h1 tabIndex={-1}>{greetingFor(profile.value?.name)}</h1>
         </div>
       </header>
       <div class="stack">

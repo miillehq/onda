@@ -4,7 +4,7 @@
   "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
   "app": {
     "windows": [{ "label": "main", "title": "Onda", "create": false, "width": 1120, "height": 780, "minWidth": 760, "minHeight": 560, "center": true }],
-    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'" }
+    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'" }
   },
   "plugins": { "updater": { "pubkey": "", "endpoints": [], "requireSignedVersion": true } },
   "bundle": {

@@ -3183,6 +3183,7 @@ dependencies = [
  "rtrb",
  "rubato",
  "serde",
+ "tempfile",
  "thiserror 2.0.21",
  "tracing",
  "windows 0.58.0",

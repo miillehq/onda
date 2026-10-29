@@ -174,13 +174,19 @@ pub(crate) fn apply_launch_at_login(enabled: bool) -> AppResult<()> {
         return Ok(());
     }
     let command = if enabled {
-        let executable = std::env::current_exe().map_err(|_| {
-            AppError::new(
-                ErrorCode::Internal,
-                "The application location could not be read.",
-                true,
-            )
-        })?;
+        // An AppImage runs from a new mount point each time; $APPIMAGE is the file itself.
+        let executable = std::env::var_os("APPIMAGE")
+            .filter(|_| cfg!(target_os = "linux"))
+            .map(PathBuf::from)
+            .map(Ok)
+            .unwrap_or_else(std::env::current_exe)
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::Internal,
+                    "The application location could not be read.",
+                    true,
+                )
+            })?;
         Some(format!("\"{}\" --background", executable.display()))
     } else {
         None
@@ -188,7 +194,7 @@ pub(crate) fn apply_launch_at_login(enabled: bool) -> AppResult<()> {
     onda_platform::set_launch_at_login(onda_core::APP_NAME, command.as_deref()).map_err(|_| {
         AppError::new(
             ErrorCode::Internal,
-            "Windows didn't allow changing the startup setting.",
+            "The system didn't allow changing the startup setting.",
             true,
         )
     })

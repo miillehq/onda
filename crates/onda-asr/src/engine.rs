@@ -519,13 +519,8 @@ fn validate_options(options: &TranscriptionOptions) -> Result<(), AsrError> {
         ));
     }
     if let Some(language) = options.language.as_ref() {
-        if language.is_empty()
-            || language.len() > 8
-            || !language
-                .bytes()
-                .all(|byte| byte.is_ascii_alphabetic() || byte == b'-')
-        {
-            return Err(AsrError::InvalidOptions("invalid language code"));
+        if !crate::is_supported_language(language) {
+            return Err(AsrError::InvalidOptions("unsupported language"));
         }
     }
     if options
@@ -588,6 +583,21 @@ mod tests {
         assert!(matches!(
             validate_input(&[0.1], &options),
             Err(AsrError::InvalidOptions(_))
+        ));
+    }
+
+    #[test]
+    fn languages_the_models_lack_never_reach_the_worker() {
+        let mut options = TranscriptionOptions::new(PathBuf::new());
+        options.language = Some("yue".into());
+        assert!(matches!(
+            validate_input(&[0.1], &options),
+            Err(AsrError::InvalidOptions("unsupported language"))
+        ));
+        options.language = Some("zh".into());
+        assert!(!matches!(
+            validate_input(&[0.1], &options),
+            Err(AsrError::InvalidOptions("unsupported language"))
         ));
     }
 }

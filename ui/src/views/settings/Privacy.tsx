@@ -65,7 +65,8 @@ export function Privacy() {
           <ul class="ticks">
             <li>
               <Check size={16} aria-hidden="true" />
-              Written text, to ChatGPT, for AI polish {value.enhancementEnabled && aiReady.value ? "(on)" : "(off)"}
+              {value.aiProvider === "local" ? "Written text, to a model on this computer (it never leaves it), for AI polish" : `Written text, to ${{ chatgpt: "ChatGPT", openaiCompatible: "your AI server", anthropic: "Anthropic" }[value.aiProvider]}, for AI polish`}{" "}
+              {value.enhancementEnabled && aiReady.value ? "(on)" : "(off)"}
             </li>
             <li>
               <Check size={16} aria-hidden="true" />

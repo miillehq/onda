@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   AudioLines,
   BookOpen,
+  ChartNoAxesColumn,
   History as HistoryIcon,
   House,
   Keyboard,
@@ -21,7 +22,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import { languageName } from "../lib/languages";
 import { inSettings, leaveSettings, navigate, route, type Route } from "../lib/router";
-import { devices, dictionary, isBusy, loadDevices, micLevel, micName, modelReady, operation, selectedModel, settings, snapshot, snippets, transforms } from "../lib/store";
+import { devices, dictionary, isBusy, isWindows, loadDevices, micLevel, micName, modelReady, operation, selectedModel, settings, snapshot, snippets, transforms } from "../lib/store";
 import { openPalette } from "./CommandPalette";
 
 interface NavItem {
@@ -70,7 +71,7 @@ function StatusCard() {
       case "inserting":
         return { tone: "live", title: "Writing it out", to: "home" as Route };
       case "enhancing":
-        return { tone: "live", title: state.route === "chatgptPlan" ? "Polishing" : "Working", to: "home" as Route };
+        return { tone: "live", title: state.route === "local" ? "Working" : "Polishing", to: "home" as Route };
       case "error":
         return { tone: "err", title: "Needs attention", to: "home" as Route };
       default:
@@ -96,7 +97,7 @@ function StatusCard() {
         <span class="status-title">{title}</span>
       </span>
       <span class="status-sub">
-        {quality} · {languageName(value.language)} · on this PC
+        {quality} · {languageName(value.language)} · on this {isWindows.value ? "PC" : "computer"}
       </span>
       <span class="status-mic">
         <Mic size={15} aria-hidden="true" />
@@ -123,6 +124,7 @@ export function Sidebar() {
   const settingsMode = inSettings.value;
   const main: NavItem[] = [
     { to: "home", label: "Home", icon: <House size={19} /> },
+    { to: "stats", label: "Stats", icon: <ChartNoAxesColumn size={19} /> },
     { to: "history", label: "History", icon: <HistoryIcon size={19} /> },
     { to: "dictionary", label: "Dictionary", icon: <BookOpen size={19} />, count: dictionary.value.length },
     { to: "snippets", label: "Snippets", icon: <TextQuote size={19} />, count: snippets.value.length },

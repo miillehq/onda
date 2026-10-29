@@ -1,12 +1,134 @@
-import { Download, RefreshCw, RotateCcw } from "lucide-preact";
-import { useState } from "preact/hooks";
+import { Download, Gauge, RefreshCw, RotateCcw } from "lucide-preact";
+import { useEffect, useState } from "preact/hooks";
 import iconUrl from "../../assets/onda-icon-dark.svg";
 import { ask } from "../../api";
 import { Button, Keys } from "../../components/controls";
-import { Page, Row, Rows, Section } from "../../components/layout";
-import type { UpdateInfo } from "../../generated/api";
+import { Card, Page, Row, Rows, Section } from "../../components/layout";
+import type { ResourceUsage, UpdateInfo } from "../../generated/api";
+import { formatBytes } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { settings, snapshot, toastError } from "../../lib/store";
+import { getResourceUsage, isWindows, settings, snapshot, toastError } from "../../lib/store";
+
+const ROLE_NAMES: Record<string, string> = {
+  app: "Onda",
+  helper: "Shortcut helper",
+  speech: "Speech recognition",
+  webview: "Interface (web view)",
+  other: "Other helpers",
+};
+
+const MEASURES: Record<string, string> = {
+  privateWorkingSet: "Memory is the private working set, the same measure as Task Manager's Memory column.",
+  privateCommit: "This Windows version doesn't report the private working set, so memory is private commit, which reads higher than Task Manager's Memory column.",
+  privateResident: "Memory is private resident memory, close to what System Monitor shows.",
+};
+
+/** Onda's own process tree, measured by native code; Task Manager splits it into groups. */
+function ResourceReport() {
+  const [report, setReport] = useState<ResourceUsage | null>(null);
+  const [measuring, setMeasuring] = useState(false);
+  const [open, setOpen] = useState(false);
+  const measure = async () => {
+    setMeasuring(true);
+    try {
+      setReport(await getResourceUsage());
+    } catch (error) {
+      toastError(error, "Couldn't measure Onda's processes");
+    } finally {
+      setMeasuring(false);
+    }
+  };
+  useEffect(() => {
+    void measure();
+  }, []);
+  const groups = report
+    ? Object.entries(
+        report.processes.reduce<Record<string, { count: number; memory: number; cpu: number }>>((all, process) => {
+          const group = (all[process.role] ??= { count: 0, memory: 0, cpu: 0 });
+          group.count += 1;
+          group.memory += process.memoryBytes;
+          group.cpu += process.cpuPercent;
+          return all;
+        }, {}),
+      )
+    : [];
+  const webviews = report?.processes.filter((process) => process.role === "webview").length ?? 0;
+  return (
+    <Section
+      title="What Onda is using"
+      description={
+        isWindows.value
+          ? "Onda draws its windows with Microsoft Edge WebView2. Task Manager lists those processes separately, under “WebView2 Manager” in Background processes, so Onda itself looks smaller there than it is. Windows decides that grouping; apps can't change it. This total includes them."
+          : "Onda draws its windows with WebKitGTK, whose processes (WebKitWebProcess, WebKitNetworkProcess) appear separately in System Monitor. This total includes them."
+      }
+    >
+      <Card class="resources">
+        <div class="resources-head">
+          <div>
+            <p class="tile-label">
+              <Gauge size={16} aria-hidden="true" /> Onda in total
+            </p>
+            <p class="tile-value tabular">{report ? formatBytes(report.totalMemoryBytes) : "…"}</p>
+            <p class="field-hint">{report ? `${report.totalCpuPercent.toFixed(1)}% of the CPU over half a second · ${report.processes.length} processes` : "Measuring…"}</p>
+          </div>
+          <Button size="sm" icon={<RefreshCw size={15} />} busy={measuring} onClick={() => void measure()}>
+            Measure again
+          </Button>
+        </div>
+        {report && (
+          <table class="plain-table">
+            <thead>
+              <tr>
+                <th scope="col">Part</th>
+                <th scope="col" class="is-number">
+                  Processes
+                </th>
+                <th scope="col" class="is-number">
+                  Memory
+                </th>
+                <th scope="col" class="is-number">
+                  CPU
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(([role, group]) => (
+                <tr key={role}>
+                  <td>{ROLE_NAMES[role] ?? role}</td>
+                  <td class="is-number">{group.count}</td>
+                  <td class="is-number">{formatBytes(group.memory)}</td>
+                  <td class="is-number">{group.cpu.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {report && (
+          <button type="button" class="link-button" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? "Hide processes" : "Show each process"}
+          </button>
+        )}
+        {report && open && (
+          <table class="plain-table">
+            <tbody>
+              {report.processes.map((process) => (
+                <tr key={process.pid}>
+                  <td class="mono">{process.name || "(unnamed)"}</td>
+                  <td class="is-number mono">PID {process.pid}</td>
+                  <td class="is-number">{formatBytes(process.memoryBytes)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {report && <p class="footnote">{MEASURES[report.memoryMeasure] ?? ""}</p>}
+        {report && isWindows.value && webviews === 0 && (
+          <p class="footnote">No WebView2 processes were found under Onda. That happens when Onda runs as administrator, where Windows starts WebView2 separately; they aren't counted here then.</p>
+        )}
+      </Card>
+    </Section>
+  );
+}
 
 export function About() {
   const value = settings.value;
@@ -76,15 +198,23 @@ export function About() {
       </Section>
 
       <Section title="Shortcuts at a glance">
-        <ul class="cheats">
-          {cheats.map((cheat) => (
-            <li key={cheat.what}>
-              <span>{cheat.what}</span>
-              <Keys keys={cheat.keys} size="md" />
-            </li>
-          ))}
-        </ul>
+        {isWindows.value ? (
+          <ul class="cheats">
+            {cheats.map((cheat) => (
+              <li key={cheat.what}>
+                <span>{cheat.what}</span>
+                <Keys keys={cheat.keys} size="md" />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="muted">
+            Bind a desktop shortcut to <span class="mono selectable">onda --dictate</span> to start and finish dictation, or use the tray menu. See Settings › Shortcuts.
+          </p>
+        )}
       </Section>
+
+      <ResourceReport />
 
       <Section title="Help">
         <Rows>

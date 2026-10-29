@@ -1,3 +1,5 @@
+import type { DataRoute } from "../generated/core";
+
 const integer = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
 export function formatInteger(value: number): string {
@@ -35,6 +37,28 @@ export function greeting(now = new Date()): string {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
+}
+
+/** Where an AI step sent the text, or null when nothing left Onda's own pipeline. */
+export function routeLabel(route: DataRoute): string | null {
+  switch (route) {
+    case "chatgptPlan":
+      return "Polished with ChatGPT";
+    case "openaiCompatible":
+      return "Polished by your AI server";
+    case "anthropic":
+      return "Polished with Claude";
+    case "localModel":
+      return "Polished on this computer";
+    default:
+      return null;
+  }
+}
+
+/** "Good afternoon, Daniel" with the first word of the profile name, or just the greeting. */
+export function greetingFor(name: string | null | undefined, now = new Date()): string {
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? `${greeting(now)}, ${first}` : greeting(now);
 }
 
 /** "slack.exe" → "Slack"; keeps unusual names readable without guessing branding. */

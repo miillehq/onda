@@ -187,7 +187,11 @@ pub fn set_launch_at_login(name: &str, command: Option<&str>) -> Result<(), Plat
     {
         registry::write_or_delete_string(registry::RUN_KEY, name, command)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        autostart::write_or_delete(name, command)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = command;
         Err(PlatformError::UnsupportedPlatform)
@@ -199,10 +203,63 @@ pub fn launch_at_login_registered(name: &str) -> bool {
     {
         registry::has_string(registry::RUN_KEY, name)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        autostart::path(name).is_some_and(|path| path.is_file())
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = name;
         false
+    }
+}
+
+/// XDG autostart: a desktop entry in `$XDG_CONFIG_HOME/autostart` (GNOME, KDE and others).
+#[cfg(target_os = "linux")]
+mod autostart {
+    use crate::PlatformError;
+    use std::path::PathBuf;
+
+    pub fn path(name: &str) -> Option<PathBuf> {
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
+        Some(
+            config
+                .join("autostart")
+                .join(format!("{}.desktop", name.to_lowercase())),
+        )
+    }
+
+    pub fn write_or_delete(name: &str, command: Option<&str>) -> Result<(), PlatformError> {
+        let path = path(name).ok_or(PlatformError::InvalidParameter("home folder".into()))?;
+        let Some(command) = command else {
+            return match std::fs::remove_file(&path) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                    Err(PlatformError::InvalidParameter("autostart entry".into()))
+                }
+                _ => Ok(()),
+            };
+        };
+        if command.contains(['\n', '\r']) {
+            return Err(PlatformError::InvalidParameter("startup command".into()));
+        }
+        let entry = format!(
+            "[Desktop Entry]\nType=Application\nName={name}\nExec={command}\nTerminal=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n"
+        );
+        let directory = path
+            .parent()
+            .ok_or(PlatformError::InvalidParameter("autostart folder".into()))?;
+        std::fs::create_dir_all(directory)
+            .map_err(|_| PlatformError::InvalidParameter("autostart folder".into()))?;
+        let temporary = directory.join(format!(".{}.tmp", std::process::id()));
+        std::fs::write(&temporary, entry)
+            .and_then(|()| std::fs::rename(&temporary, &path))
+            .map_err(|_| {
+                let _ = std::fs::remove_file(&temporary);
+                PlatformError::InvalidParameter("autostart entry".into())
+            })
     }
 }
 
@@ -385,6 +442,27 @@ fn tone_wav(notes: &[(f32, f32)]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn autostart_entry_is_written_and_removed_under_xdg_config_home() {
+        let directory = tempfile::tempdir().unwrap();
+        // Tests in this module run on one thread per test; the variable is restored below.
+        let previous = std::env::var_os("XDG_CONFIG_HOME");
+        std::env::set_var("XDG_CONFIG_HOME", directory.path());
+        set_launch_at_login("Onda", Some("\"/opt/Onda/onda\" --background")).unwrap();
+        let entry =
+            std::fs::read_to_string(directory.path().join("autostart/onda.desktop")).unwrap();
+        assert!(entry.contains("Exec=\"/opt/Onda/onda\" --background\n"));
+        assert!(launch_at_login_registered("Onda"));
+        assert!(set_launch_at_login("Onda", Some("x\nExec=evil")).is_err());
+        set_launch_at_login("Onda", None).unwrap();
+        assert!(!launch_at_login_registered("Onda"));
+        match previous {
+            Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+    }
 
     #[test]
     fn local_date_is_a_day_key() {

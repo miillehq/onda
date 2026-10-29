@@ -133,13 +133,12 @@ fn validate_setup(setup: &WorkerSetup) -> Result<(), &'static str> {
     {
         return Err("invalid prompt");
     }
-    if setup.language.as_ref().is_some_and(|language| {
-        language.is_empty()
-            || language.len() > 8
-            || !language
-                .bytes()
-                .all(|byte| byte.is_ascii_alphabetic() || byte == b'-')
-    }) {
+    // whisper.cpp does not check a code against the model's tokens; see languages.rs.
+    if setup
+        .language
+        .as_deref()
+        .is_some_and(|language| !onda_asr::is_supported_language(language))
+    {
         return Err("invalid language");
     }
     if !setup.model_path.is_file() {

@@ -7,16 +7,19 @@ import type {
   DownloadReport,
   MicrophoneReport,
   ModelInfo,
+  ResourceUsage,
   RuntimeEvent,
   Snapshot,
   UsageReport,
 } from "../generated/api";
 import type {
+  AiProvider,
   AppError,
   AppEvent,
   DictionaryEntry,
   HistoryEntry,
   LearningProposal,
+  Profile,
   Settings,
   Snippet,
   Transform,
@@ -47,6 +50,8 @@ export const micLevel = signal(0);
 export const cloudModels = signal<CloudModel[] | null>(null);
 /** A quality profile to apply once its model finishes downloading. */
 export const pendingProfile = signal<{ modelId: string; patch: Partial<Settings> } | null>(null);
+/** The local profile (name and picture); loaded with the rest at start. */
+export const profile = signal<Profile | null>(null);
 
 export const settings = computed(() => snapshot.value?.settings ?? null);
 export const operation = computed(() => snapshot.value?.state ?? null);
@@ -63,12 +68,33 @@ export const micName = computed(() => {
   const id = snapshot.value?.settings.microphoneId ?? null;
   const device = id ? list.find((item) => item.id === id) : list.find((item) => item.isDefault);
   if (device) return device.name;
-  return id ? "Disconnected microphone" : "Windows default microphone";
+  return id ? "Disconnected microphone" : isWindows.value ? "Windows default microphone" : "System default microphone";
 });
+/** "windows", "linux", …: where Onda can type into other apps and how shortcuts work. */
+export const platform = computed(() => snapshot.value?.platform ?? "windows");
+export const isWindows = computed(() => platform.value === "windows");
 export const activeProfile = computed<AccountInfo | null>(() => snapshot.value?.profiles.find((profile) => profile.active) ?? null);
-export const aiReady = computed(() => {
+/** A ChatGPT account is connected and allowed to use its plan. */
+export const chatgptReady = computed(() => {
   const profile = activeProfile.value;
   return !!profile && profile.signedIn && profile.planUsageEnabled;
+});
+/** The chosen AI provider has what it needs: an account, or an address, model and key. */
+export const aiReady = computed(() => {
+  const value = settings.value;
+  const keys = snapshot.value?.providerKeys;
+  switch (value?.aiProvider) {
+    case "chatgpt":
+      return chatgptReady.value;
+    case "openaiCompatible":
+      return !!value.openaiBaseUrl && !!value.openaiModel;
+    case "anthropic":
+      return !!value.anthropicModel && !!keys?.anthropic;
+    case "local":
+      return !!value.localBaseUrl && !!value.localModel;
+    default:
+      return false;
+  }
 });
 export const isBusy = computed(() => {
   const phase = operation.value?.phase;
@@ -129,6 +155,9 @@ export async function loadUsage(): Promise<void> {
 export async function loadHistory(): Promise<void> {
   history.value = await ask({ command: "getHistory" }, "history");
 }
+export async function loadProfile(): Promise<void> {
+  profile.value = await ask({ command: "getProfile" }, "profile");
+}
 export async function loadDevices(): Promise<void> {
   devices.value = await ask({ command: "listAudioDevices" }, "audioDevices");
 }
@@ -147,7 +176,7 @@ export async function init(): Promise<void> {
     startupError.value = toAppError(error);
     throw error;
   }
-  await Promise.allSettled([loadCatalog(), loadDictionary(), loadSnippets(), loadTransforms(), loadUsage(), loadHistory()]);
+  await Promise.allSettled([loadCatalog(), loadDictionary(), loadSnippets(), loadTransforms(), loadUsage(), loadHistory(), loadProfile()]);
 }
 
 /* ------------------------------------------------------------------ settings */
@@ -252,6 +281,54 @@ async function run(label: string, request: Parameters<typeof ask>[0]): Promise<b
     toastError(error, label);
     return false;
   }
+}
+
+/* ------------------------------------------------------------------ profile */
+
+export async function setProfileName(name: string): Promise<boolean> {
+  try {
+    profile.value = await ask({ command: "setProfileName", args: { name: name.trim() || null } }, "profile");
+    return true;
+  } catch (error) {
+    toastError(error, "Couldn't save your name");
+    return false;
+  }
+}
+export async function chooseProfilePicture(): Promise<void> {
+  try {
+    profile.value = await ask({ command: "chooseProfilePicture" }, "profile");
+  } catch (error) {
+    toastError(error, "Couldn't use that picture");
+  }
+}
+export async function removeProfilePicture(): Promise<void> {
+  try {
+    profile.value = await ask({ command: "removeProfilePicture" }, "profile");
+  } catch (error) {
+    toastError(error, "Couldn't remove the picture");
+  }
+}
+/** Hands a rendered PNG to native code, which asks where to save it. Null when cancelled. */
+export async function saveStatsImage(pngBase64: string): Promise<string | null> {
+  return ask({ command: "saveStatsImage", args: { pngBase64 } }, "savedFile").then((saved) => saved.path);
+}
+
+/* ------------------------------------------------------------------ AI providers */
+
+export async function listProviderModels(provider: AiProvider): Promise<CloudModel[]> {
+  return ask({ command: "listProviderModels", args: { provider } }, "cloudModels");
+}
+export async function saveProviderKey(provider: AiProvider, key: string): Promise<boolean> {
+  const saved = await run("Couldn't save the key", { command: "saveProviderKey", args: { provider, key } });
+  if (saved) await refresh().catch(() => undefined);
+  return saved;
+}
+export async function removeProviderKey(provider: AiProvider): Promise<void> {
+  if (await run("Couldn't remove the key", { command: "removeProviderKey", args: { provider } })) await refresh().catch(() => undefined);
+}
+
+export async function getResourceUsage(): Promise<ResourceUsage> {
+  return ask({ command: "getResourceUsage" }, "resources");
 }
 
 export async function copyResult(): Promise<void> {

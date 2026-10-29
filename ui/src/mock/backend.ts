@@ -7,14 +7,18 @@
  *   ?theme=light|dark                      force a theme
  *   ?pill=listening|handsfree|writing|polishing|done|error|nottyped|skipped|cycle   pill window state
  *   ?pill=code&code=focusChanged[&mode=transform][&text=1][&suggestion=1]   any error card
+ *   ?platform=linux                        Linux variants (clipboard handoff, desktop shortcut)
+ *   ?provider=chatgpt|openaiCompatible|anthropic|local   AI polish provider
  */
 import type { Backend } from "../api";
-import type { AccountInfo, ApiRequest, ApiResponse, ModelInfo, RuntimeEvent, Snapshot } from "../generated/api";
-import type { AppError, DictionaryEntry, HistoryEntry, OperationResult, OperationState, Settings, Snippet, Transform } from "../generated/core";
+import type { AccountInfo, ApiRequest, ApiResponse, CloudModel, ModelInfo, ResourceUsage, RuntimeEvent, Snapshot } from "../generated/api";
+import type { AiProvider, AppError, DailyUsage, DictionaryEntry, HistoryEntry, OperationResult, OperationState, Profile, Settings, Snippet, Transform, UsageSummary } from "../generated/core";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = params.get("mock") ?? "default";
 const pillState = params.get("pill");
+const platform = params.get("platform") === "linux" ? "linux" : "windows";
+const provider = (params.get("provider") ?? "chatgpt") as AiProvider;
 
 const settings: Settings = {
   executionPreference: "auto",
@@ -40,6 +44,13 @@ const settings: Settings = {
   playSounds: true,
   onboardingCompleted: scenario !== "onboarding",
   historyDays: 3,
+  trayIcon: "auto",
+  aiProvider: provider,
+  openaiBaseUrl: provider === "openaiCompatible" ? "https://api.example.com/v1" : null,
+  openaiModel: provider === "openaiCompatible" ? "example-small" : null,
+  anthropicModel: provider === "anthropic" ? "claude-opus-5-5" : null,
+  localBaseUrl: provider === "local" ? "http://127.0.0.1:11434/v1" : null,
+  localModel: provider === "local" ? "qwen3.5:0.8b" : null,
 };
 
 const catalog: ModelInfo[] = [
@@ -140,8 +151,10 @@ const snapshot: Snapshot = {
   installedModels: scenario === "empty" || scenario === "onboarding" ? [] : [{ modelId: "whisper-tiny-en", version: "sample", sizeBytes: 77_704_715 }],
   profiles,
   cloudError: null,
-  shortcutStatus: "ready",
+  shortcutStatus: platform === "linux" ? "desktop" : "ready",
   updaterConfigured: false,
+  platform,
+  providerKeys: { openaiCompatible: provider === "openaiCompatible", anthropic: provider === "anthropic", local: false },
 };
 
 function today(): Date {
@@ -150,13 +163,104 @@ function today(): Date {
 function key(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
-const usageDays = rich
-  ? [412, 655, 503, 820, 588, 0, 0].map((words, offset) => {
+/** About four months of fictional, deterministic activity, the latest week matching Home. */
+const usageDays: DailyUsage[] = rich
+  ? Array.from({ length: 130 }, (_, offset) => {
+      const recent = [412, 655, 503, 820, 588, 0, 0][offset];
+      const wave = Math.sin(offset * 1.7) * Math.cos(offset * 0.43);
+      const words = recent ?? (wave > 0.15 ? Math.round(120 + wave * 900) : 0);
       const date = today();
       date.setDate(date.getDate() - offset);
       return { day: key(date), dictations: Math.round(words / 22), words, audioMs: Math.round((words / 142) * 60_000) };
-    })
+    }).filter((day) => day.words > 0)
   : [];
+
+/** The same rules as onda-core's stats::summarize, for the mock only. */
+function summarize(days: DailyUsage[]): UsageSummary {
+  const dayNumber = (value: string) => Math.round(Date.parse(`${value}T00:00:00Z`) / 86_400_000);
+  const active = [...new Set(days.filter((day) => day.dictations > 0).map((day) => dayNumber(day.day)))].sort((a, b) => a - b);
+  const todayNumber = dayNumber(key(today()));
+  const has = (value: number) => active.includes(value);
+  let current = 0;
+  let cursor = has(todayNumber) ? todayNumber : has(todayNumber - 1) ? todayNumber - 1 : null;
+  while (cursor !== null && has(cursor)) {
+    current += 1;
+    cursor -= 1;
+  }
+  let longest = 0;
+  let run = 0;
+  active.forEach((value, index) => {
+    run = index > 0 && active[index - 1] === value - 1 ? run + 1 : 1;
+    longest = Math.max(longest, run);
+  });
+  const words = days.reduce((sum, day) => sum + day.words, 0);
+  const audioMs = days.reduce((sum, day) => sum + day.audioMs, 0);
+  const since = days.length ? days.map((day) => day.day).sort()[0] ?? null : null;
+  return { dictations: days.reduce((sum, day) => sum + day.dictations, 0), words, audioMs, since, wordsPerMinute: audioMs >= 60_000 && words > 0 ? words / (audioMs / 60_000) : null, currentStreak: current, longestStreak: longest, activeDays: active.length };
+}
+
+let profile: Profile = { name: rich ? "Alex" : null, picture: null };
+
+const providerModels: Record<Exclude<AiProvider, "chatgpt">, CloudModel[]> = {
+  openaiCompatible: [
+    { slug: "example-small", name: "example-small", recommended: false },
+    { slug: "example-large", name: "example-large", recommended: false },
+  ],
+  anthropic: [
+    { slug: "claude-opus-5-5", name: "Claude Opus 5.5", recommended: false },
+    { slug: "claude-sonnet-5-5", name: "Claude Sonnet 5.5", recommended: false },
+    { slug: "claude-haiku-5-5", name: "Claude Haiku 5.5", recommended: false },
+  ],
+  local: [
+    { slug: "qwen3.5:0.8b", name: "qwen3.5:0.8b", recommended: false },
+    { slug: "qwen3.5:2b", name: "qwen3.5:2b", recommended: false },
+  ],
+};
+
+/** A fictional process tree shaped like Onda's on each platform. */
+function resources(): ResourceUsage {
+  const mb = 1024 * 1024;
+  const processes =
+    platform === "linux"
+      ? [
+          { pid: 4100, name: "onda", role: "app", memoryBytes: 61 * mb, cpuPercent: 0.2 },
+          { pid: 4122, name: "WebKitNetworkPr", role: "webview", memoryBytes: 14 * mb, cpuPercent: 0 },
+          { pid: 4131, name: "WebKitWebProces", role: "webview", memoryBytes: 96 * mb, cpuPercent: 0.4 },
+          { pid: 4132, name: "WebKitWebProces", role: "webview", memoryBytes: 41 * mb, cpuPercent: 0 },
+        ]
+      : [
+          { pid: 9120, name: "onda.exe", role: "app", memoryBytes: 8.8 * mb, cpuPercent: 0 },
+          { pid: 9144, name: "onda-input.exe", role: "helper", memoryBytes: 1.0 * mb, cpuPercent: 0 },
+          { pid: 9160, name: "msedgewebview2.exe", role: "webview", memoryBytes: 19.7 * mb, cpuPercent: 0 },
+          { pid: 9168, name: "msedgewebview2.exe", role: "webview", memoryBytes: 55.0 * mb, cpuPercent: 0.1 },
+          { pid: 9172, name: "msedgewebview2.exe", role: "webview", memoryBytes: 4.2 * mb, cpuPercent: 0 },
+          { pid: 9176, name: "msedgewebview2.exe", role: "webview", memoryBytes: 1.6 * mb, cpuPercent: 0 },
+          { pid: 9190, name: "msedgewebview2.exe", role: "webview", memoryBytes: 57.2 * mb, cpuPercent: 0.3 },
+          { pid: 9204, name: "msedgewebview2.exe", role: "webview", memoryBytes: 25.3 * mb, cpuPercent: 0 },
+        ];
+  return {
+    processes,
+    totalMemoryBytes: processes.reduce((sum, process) => sum + process.memoryBytes, 0),
+    totalCpuPercent: processes.reduce((sum, process) => sum + process.cpuPercent, 0),
+    memoryMeasure: platform === "linux" ? "privateResident" : "privateWorkingSet",
+    sampleMs: 500,
+  };
+}
+
+/** A small fictional avatar: a soft gradient square, drawn so no real picture is involved. */
+function samplePicture(): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const gradient = context.createLinearGradient(0, 0, 256, 256);
+    gradient.addColorStop(0, "#8a8a92");
+    gradient.addColorStop(1, "#2c2c30");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 256, 256);
+  }
+  return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+}
 
 let teachTakes = 0;
 const listeners = new Set<(event: RuntimeEvent) => void>();
@@ -359,7 +463,44 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     case "checkUpdate":
       return { type: "update", payload: { available: false, version: null } };
     case "getUsage":
-      return { type: "usage", payload: { today: key(today()), days: usageDays } };
+      return { type: "usage", payload: { today: key(today()), days: usageDays, summary: summarize(usageDays) } };
+    case "getProfile":
+      return { type: "profile", payload: profile };
+    case "setProfileName": {
+      const name = request.args.name?.trim().replace(/\s+/g, " ") ?? "";
+      if ([...name].length > 40) throw { code: "invalidInput", message: "Use a name of at most 40 characters.", retryable: false } satisfies AppError;
+      profile = { ...profile, name: name || null };
+      return { type: "profile", payload: profile };
+    }
+    case "chooseProfilePicture":
+      profile = { ...profile, picture: samplePicture() };
+      return { type: "profile", payload: profile };
+    case "removeProfilePicture":
+      profile = { ...profile, picture: null };
+      return { type: "profile", payload: profile };
+    case "saveStatsImage": {
+      // The mock offers the image as a browser download so its rendering can be inspected.
+      const link = document.createElement("a");
+      link.href = `data:image/png;base64,${request.args.pngBase64}`;
+      link.download = "Onda stats.png";
+      link.click();
+      return { type: "savedFile", payload: { path: "~/Pictures/Onda stats.png" } };
+    }
+    case "listProviderModels": {
+      if (request.args.provider === "chatgpt") return { type: "cloudModels", payload: [] };
+      if (scenario === "providerdown")
+        throw { code: "offline", message: request.args.provider === "local" ? "Nothing answered at 127.0.0.1:11434. Start your local model server (Ollama, LM Studio or llama.cpp) and try again." : "Couldn't reach api.example.com.", retryable: true } satisfies AppError;
+      return wait(300).then(() => ({ type: "cloudModels", payload: providerModels[request.args.provider as Exclude<AiProvider, "chatgpt">] }));
+    }
+    case "saveProviderKey":
+    case "removeProviderKey": {
+      const saved = request.command === "saveProviderKey";
+      const field = ({ openaiCompatible: "openaiCompatible", anthropic: "anthropic", local: "local" } as const)[request.args.provider as Exclude<AiProvider, "chatgpt">];
+      if (field) snapshot.providerKeys = { ...snapshot.providerKeys, [field]: saved };
+      return { type: "unit" };
+    }
+    case "getResourceUsage":
+      return wait(500).then(() => ({ type: "resources", payload: resources() }));
     case "signOutChatgptProfile":
       return { type: "signOut", payload: { remoteRevocationConfirmed: true } };
     case "clearResult":

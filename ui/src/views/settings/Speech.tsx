@@ -6,7 +6,7 @@ import { Callout, Dialog, Page, Row, Rows, Section } from "../../components/layo
 import type { ModelInfo } from "../../generated/api";
 import type { QualityProfile, Settings } from "../../generated/core";
 import { formatBytes } from "../../lib/format";
-import { LANGUAGES } from "../../lib/languages";
+import { LANGUAGES, languageName } from "../../lib/languages";
 import {
   aiReady,
   cancelDownload,
@@ -222,6 +222,27 @@ function AllModels() {
   );
 }
 
+/** What the language setting can and can't promise with the model in use. */
+function LanguageNotes({ language, englishOnlyModel }: { language: string | null; englishOnlyModel: string | null }) {
+  return (
+    <>
+      {englishOnlyModel && language !== "en" && (
+        <Callout tone="warn" icon={<TriangleAlert size={20} />} title={`${englishOnlyModel} understands English only`}>
+          It ignores the spoken language setting and writes everything as English. Choose a multilingual model above or in All models to dictate in {language ? languageName(language) : "other languages"}.
+        </Callout>
+      )}
+      {language === "zh" && (
+        <p class="footnote">
+          Onda's speech models have one setting for all Chinese. They learned mostly from Mandarin and may write Simplified or Traditional characters, sometimes mixed. Cantonese isn't supported: it may come out as standard written Chinese, or with mistakes.
+        </p>
+      )}
+      {language !== "zh" && (
+        <p class="footnote">The multilingual models know 99 languages; this list has the most widely used. Cantonese isn't among them: it needs a larger Whisper model (large-v3) that Onda doesn't offer.</p>
+      )}
+    </>
+  );
+}
+
 export function Speech() {
   const value = settings.value;
   const [moving, setMoving] = useState(false);
@@ -319,7 +340,9 @@ export function Speech() {
                 options={[{ value: "", label: "Auto-detect" }, ...LANGUAGES.map((language) => ({ value: language.code, label: language.name }))]}
               />
             }
-          />
+          >
+            <LanguageNotes language={value.language} englishOnlyModel={resolvedModel?.englishOnly ? resolvedModel.name : null} />
+          </Row>
           <Row icon={<Cpu size={18} />} title="Processor" description={gpus ? `Automatic uses your graphics card (${gpus}) when it helps.` : "Automatic uses your graphics card when it helps."}>
             <Segmented
               label="Processor"
