@@ -10,6 +10,15 @@ When enhancement is enabled, only the relevant transcript/source, retrieved voca
 
 Immediately before typing a dictation, Onda reads at most the two characters before the caret of the validated target to decide on a leading space; they are compared locally and never stored, logged or sent. Context requires user-enabled settings and a user-triggered operation; it reads only the focused field through bounded UIA TextPattern. Password fields and unknown identities are refused. Optional learning samples that same focused field at most three times over twelve seconds and proposes conservative corrections; it does not record keystrokes or continuously scrape windows. Logs contain subsystem, operation ID, phase, selected backend/model and durations/error codes, and, when a target check fails, the target's executable name and which identity parts changed; never text/audio/tokens/OAuth URLs. The application rotates local logs with a seven-file bound. The explicit diagnostics response contains versions, hardware, selected preference flags, shortcut status and bounded performance metrics, without transcript/context/selected text, dictionary contents, email, account credentials or model paths.
 
+Other AI providers (docs/ai-providers.md) follow the same rules: they receive text only when polish
+or a rewrite is used, only from the provider the user chose, never with a fallback to another one.
+Their API keys live in DPAPI files (Windows) or the Secret Service (Linux), never in settings, SQLite,
+logs or the webview. The local provider is loopback-only and ignores proxy settings. Local profile
+data (a name, and a 256 px PNG re-encoded from the user's picture so EXIF and GPS data are dropped)
+and content-free lifetime totals stay in SQLite. The statistics image is drawn from those numbers,
+includes the name or picture only when the user switches them on, and is saved only where the user
+chooses.
+
 ## Threat boundaries and controls
 
 | Threat or boundary | Implemented control | Remaining boundary |

@@ -24,7 +24,14 @@ Diagnostics frontend / future polished frontend
 
 `onda-asr` in the shell is a process client, not native inference. PCM crosses anonymous pipes with bounded framing. Exactly one worker is admitted per engine. Cancellation/timeout kills and reaps the child. CPU workers do not import optional GPU runtimes. A separate optional Vulkan binary probes the driver and falls back to CPU after failure, reserving deadline for recovery. The generic CPU build does not require AVX or AVX2. Six inference threads maximum and BELOW_NORMAL process priority reserve responsiveness. Fresh workers intentionally trade a modest model-load cost for crash isolation and low idle memory.
 
-`onda-cloud` keeps OAuth in Rust. Protected per-profile records use Windows DPAPI and atomic replacement. A stable opaque host ID and issued registration IDs survive restarts. JWKS/issuer/audience/expiry/nonce checks are mandatory. A durable refresh-in-progress marker and cross-process locks handle rotating token races. Network endpoints are fixed in production; loopback mock injection is test-only. The client only accepts text, uses `store:false`, and requires a successful complete stream before output is eligible for insertion.
+Linux uses the same crates with smaller platform implementations: `cpal` capture on ALSA, an
+unidentified target and a clipboard handoff instead of typing, the Secret Service for API keys,
+`/proc` for memory and process measurements, and no keyboard helper (desktop shortcuts run
+`onda --dictate`). See linux.md.
+
+`onda-cloud` keeps OAuth in Rust. It also holds the other providers (`providers.rs`: an
+OpenAI-compatible adapter, an Anthropic Messages adapter and a loopback-only local adapter) and
+their key storage (`keys.rs`). Protected per-profile records use Windows DPAPI and atomic replacement. A stable opaque host ID and issued registration IDs survive restarts. JWKS/issuer/audience/expiry/nonce checks are mandatory. A durable refresh-in-progress marker and cross-process locks handle rotating token races. Network endpoints are fixed in production; loopback mock injection is test-only. The client only accepts text, uses `store:false`, and requires a successful complete stream before output is eligible for insertion.
 
 ## Concurrency and sensitive lifetimes
 

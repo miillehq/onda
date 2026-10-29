@@ -141,3 +141,51 @@ jobs:
             .artifacts/onda-mpl-source.zip
             .artifacts/MPL-source.zip
             .artifacts/runtime/Microsoft-runtime-manifest.json
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_BUILD_JOBS: 2
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with:
+          toolchain: "1.95.0"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          shared-key: linux-gnu
+      - name: Install Tauri, audio and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev libasound2-dev libxdo-dev \
+            libdbus-1-dev cmake clang libclang-dev pkg-config xvfb dbus
+      - name: Install locked frontend and prepare Linux speech workers
+        run: |
+          npm ci
+          scripts/prepare.sh
+      - name: Format, contracts and frontend
+        run: |
+          cargo fmt --all --check
+          npm run contracts:check
+          npm run build
+      - name: Strict Rust checks
+        run: |
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo test --locked --workspace
+      - name: Native smoke in WebKitGTK
+        run: |
+          npm run dev > "$RUNNER_TEMP/vite.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -sf http://127.0.0.1:1420/ > /dev/null && break; sleep 1; done
+          mkdir -p "$RUNNER_TEMP/smoke"
+          timeout 300 dbus-run-session -- xvfb-run -a env ONDA_SMOKE_DIRECTORY="$RUNNER_TEMP/smoke" target/debug/onda
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print("\n".join(r["checks"])); sys.exit(0 if r["passed"] else 1)' "$RUNNER_TEMP/smoke/report.json"

@@ -59,3 +59,41 @@ WebView2 attribution. No secrets belong here.
 - Real CPU check: llama.cpp b11960 (sha256-verified release) + Qwen3.5-0.8B Q4_K_M
   (sha256 bd2587…dc517) on this VPS. The ignored live test passed three times, 2.3–4.0 s per
   short sentence, ~960 MB RSS. `llama-bench -t 3`: prompt 92 tok/s, generation 13.7 tok/s.
+- Commit `101c3c5`: Linux build, providers, keys, statistics, profile, tray style, process report.
+- Commit `f4ca27b`: interface (Stats and share image, General profile and tray, AI polish
+  providers, language notes, resource report, Linux variants); Cantonese and other unknown codes
+  refused in settings, engine and worker.
+- Commit `ebd6664`: Linux startup fix (DLL hardening was "unsupported"), golden tests use the
+  platform executable suffix, branded NSIS bitmaps (`scripts/installer-art.sh`), extended smoke.
+- Verified on Linux: real-model golden tests (3/3), native smoke under Xvfb/WebKitGTK (41/41),
+  Secret Service round trip with an isolated gnome-keyring 50.0 (unpacked to the scratchpad, not
+  installed), Tauri schema validation, `makensis` compile of the branded pages.
+- Real Linux bugs found and fixed by running: worker log callback enum type, MSVC-only release
+  flags, model-folder validation demanded a Windows drive, memory read as 0 (every profile fell
+  back to Fast), local dates were UTC, DLL hardening failed startup.
+- Decisions: local polish goes through a loopback OpenAI-compatible server (local-models.md);
+  WebView2 attribution is reported, not altered (windows-integration.md); Anthropic server-side
+  refusal fallbacks stay off (they would be an implicit billable fallback).
+
+- cargo-deny 0.19.7 (release binary, checksum verified): licenses and sources pass for both the
+  Windows and the Linux graph (`deny.toml` now lists both targets). Advisories fail on crates
+  already pinned on `master`: rustls 0.23.45, rustls-webpki 0.103.15, tokio 1.53.1, webpki-roots
+  1.0.9 (patch releases fix them) and zip 4.6.1 (pulled in by tauri-plugin-updater's default `zip`
+  feature; the fix needs a newer zip major, so it stays until upstream moves or the feature is
+  dropped after checking that updates never use v1-compatible archives).
+- Interface wording made provider-neutral (error titles, "AI version", rewrites), and polish
+  prefetch now contacts ChatGPT only when ChatGPT is the chosen provider.
+- Notices regenerated on Linux: the Rust side gains the new crates, and the npm side lists Linux
+  build-tool binaries instead of Windows ones (build.ps1 regenerates them on Windows).
+
+- Linux release `.deb` built (11.75 MiB); added ALSA and D-Bus to its dependencies after `ldd`.
+- Patch updates applied (rustls 0.23.46, rustls-webpki 0.103.16, tokio 1.54.1, webpki-roots
+  1.0.11). Final pass: fmt, clippy (Linux, and Windows target for platform/input), 142 tests,
+  contracts, frontend build, cargo-deny licenses/sources, golden 3/3, native smoke 41/41.
+- Linux CI job added to `.github/workflows/ci.yml` (not run; nothing was pushed).
+
+### Remaining (needs the owner)
+
+- Everything in testing.md › "Your checklist": Windows build and smoke, installer, GPU, real
+  provider keys, a real Linux desktop session.
+- zip 4.6.1 advisories via tauri-plugin-updater (see testing.md).

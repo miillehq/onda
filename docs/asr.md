@@ -148,12 +148,49 @@ distributed inference paths in this version. See [ASR references](asr-references
 | Quality | small.en Q5_1 | small Q5_1 | 1,200 MiB |
 | Advanced | Explicit catalog model ID | Explicit catalog model ID | Catalog estimate |
 
-Quality steps down to Balanced below 2 GiB available RAM; Balanced steps down to
-Fast below 1 GiB. These are selection estimates, not an OS memory reservation.
+Quality steps down to Balanced below 6 GiB of installed RAM; Balanced steps down
+to Fast below 3 GiB (`manifest.rs`). Installed rather than free RAM is used so the
+choice does not change between launches. These are selection estimates, not an OS
+memory reservation. On Linux, installed RAM comes from `/proc/meminfo`; before that
+was read, Linux reported 0 bytes and every profile stepped down to Fast.
 Automatic language detection selects multilingual weights. Language `en` permits
 English-only weights. Vocabulary candidates enter Whisper's initial prompt;
 recognition remains probabilistic, and deterministic dictionary correction is a
 separate core responsibility.
+
+### Which languages each model supports
+
+The spoken-language setting becomes whisper.cpp's language token (`set_language`), or no token
+for automatic detection. Onda never translates (`translate: false`) and reports no detected
+language.
+
+| Catalog model | Multilingual | Language tokens | Cantonese (`yue`) |
+| --- | --- | --- | --- |
+| whisper-tiny-en, whisper-base-en-q5, whisper-small-en-q5 | No | none; the setting is ignored and output is English | No |
+| whisper-tiny, whisper-base-q5, whisper-small-q5 | Yes | 99 (`onda_asr::WHISPER_LANGUAGES`) | No |
+
+- **Evidence.** The ggml files at revision `5359861c` have 51,864 (English-only) and 51,865
+  (multilingual) vocabulary entries; whisper.cpp derives 99 languages from 51,865. Large-v3 and
+  its turbo variant have 51,866 entries, the 100th language being `yue`, added to OpenAI's
+  tokenizer in the large-v3 commit (`openai/whisper@c5d4256`, `tokenizer.py`). Onda offers no
+  large-v3 model.
+- **Why `yue` is refused.** whisper.cpp 1.8.3 (vendored by whisper-rs-sys 0.15.0) computes a
+  language token as `sot + 1 + id` without checking it against the model. For a 99-language model,
+  `yue` (id 99) becomes `<|translate|>`, a prompt the model never saw in training, with no error.
+  Settings, the speech engine and the worker therefore refuse codes outside the 99.
+- **"Chinese".** Whisper has one `zh` token for all varieties of Chinese. Its training data and the
+  paper's evaluation are mostly Mandarin (FLEURS and Common Voice `zh-CN`), and output may be
+  Simplified or Traditional, sometimes mixed (OpenAI maintainers in openai/whisper discussions 277
+  and 987). The interface labels it "Chinese (Mandarin)" and explains this. For the catalog's
+  sizes the paper reports Chinese character error rates of 40.5 (tiny), 34.1 (base) and 20.8
+  (small) on FLEURS. Those are unquantized models, not Onda's Q5_1 files, so they are only a rough
+  guide.
+- **Cantonese.** It cannot be selected. Under `zh` or automatic detection, Cantonese speech is
+  decoded through the Chinese token. Community reports (ggml-org/whisper.cpp issue 2319) say
+  automatic detection labels it Chinese. How accurate the output is has not been measured;
+  Onda makes no claim either way.
+- **English-only models.** A custom selection can pair an English-only model with another
+  language. Settings › Speech and language then warns that the setting is ignored.
 
 ## Model manager
 

@@ -86,6 +86,108 @@ This proves the packaged candidate on this development host, with its existing W
 
 Record each release's actual evidence and failures instead of relabeling unverified scenarios as supported. Run a final content-leak review of logs/diagnostic export, cancel during every processing stage, simulate corruption/download loss, and compare raw/enhanced fixture outputs before promotion.
 
+## MY-29 to MY-37 batch (29 October 2026, Linux VPS)
+
+Done on an Ubuntu 26.04 VPS (4 vCPU Haswell, 8 GB, no GPU, no microphone, no Windows). Nothing
+below proves Windows, WebView2, NSIS installation, a microphone, a GPU or a real cloud provider.
+
+### Run here, and passed
+
+- `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo test --workspace` (core 51, ASR 16, cloud 23 plus 2 ignored live tests, app 19, platform
+  22, input 11; 142 in total), `npm run contracts:check`, `npm run build` (TypeScript and Vite).
+- Windows-only Rust type-checked from Linux: `cargo clippy --target x86_64-pc-windows-msvc
+  -p onda-platform -p onda-input --all-targets -- -D warnings`. This covers the new process
+  measurement code; it was compiled, not run. The app crate and onda-cloud cannot be checked for
+  Windows here, because their C dependencies need MSVC.
+- Real-model golden tests on Linux (pinned whisper tiny.en, verified download): JFK transcription,
+  cancellation, and CPU fallback after a failed GPU probe (a CPU worker stands in for the GPU).
+- Native smoke under Xvfb with WebKitGTK: all 41 checks of `ui/src/smoke.ts` pass, 14 of them new. One run while the
+  release build saturated the CPU failed at startup (WebKit fell back from its IPC protocol); the
+  same run passed on an idle machine. Watch for this under load in CI.
+- Secret Service key round trip against gnome-keyring 50.0 on a private D-Bus session (ignored
+  test `keys::tests::secret_service_round_trip`).
+- Live local polish: llama.cpp b11960 serving Qwen3.5-0.8B Q4_K_M, ignored test
+  `providers::tests::live_local_server_polishes_text`, 3 runs (see local-models.md).
+- Installer config validated against Tauri CLI 2.12.1's schema; NSIS 3.10 compiled the branded
+  MUI2 pages. The real installer was not built.
+- Linux release package: `scripts/build.sh --bundles deb` built `Onda_0.1.4_amd64.deb` (11.75 MiB,
+  12.5 min on 3 jobs). It contains `onda`, both speech workers, the desktop entry, icons and
+  notices. The binary links ALSA and D-Bus, so the package now declares them. The package was
+  inspected, not installed.
+- `cargo deny check licenses sources` passes for both the Windows and the Linux graph. `check
+  advisories` flagged crates already pinned on `master`. rustls, rustls-webpki, tokio and
+  webpki-roots are updated to their fixed patch releases. **zip 4.6.1 remains**
+  (RUSTSEC-2026-0367/0368/0369): it comes from tauri-plugin-updater's default `zip` feature, and
+  its fix needs a newer zip major. Either wait for the plugin, or turn off its default features
+  (keeping `rustls-tls` and `system-proxy`) once you confirm updates never use v1-compatible
+  archives; Onda builds NSIS updater artifacts. `npm audit` reports 0 vulnerabilities.
+- Interface reviewed in Chromium against the development mock (Stats, share preview, General,
+  AI polish), plus the Linux variants via `?platform=linux`.
+
+### Your checklist
+
+**Windows (build from this branch with `npm ci; ./scripts/build.ps1`)**
+
+1. `cargo test --workspace`, the strict clippy commands and `npm run quality` pass on Windows. This
+   branch changed the platform, cloud and app crates, and none of them has been compiled for
+   Windows.
+2. `scripts/smoke.ps1`: all 41 checks pass in WebView2, including "resource report includes the web
+   view processes".
+3. Upgrade an existing 0.1.4 profile. The database migrates to schema 4, Stats shows lifetime
+   totals equal to the old daily rows, and History, the dictionary and accounts are intact.
+   Downgrading is refused by design.
+4. Settings › General › Tray icon: Automatic, White and Black each change the notification-area
+   mark at once. Switch Windows between light and dark: Automatic follows within a second, even with
+   the main window closed. The setting survives a restart.
+5. Settings › Updates and help › What Onda is using: compare the total with Task Manager's Onda
+   entry plus "WebView2 Manager" (Memory column). Expect them within a few MB. Run once as
+   administrator: the page should say no WebView2 processes were found under Onda.
+6. Profile: choose a large JPEG from a phone (with GPS EXIF). It appears cropped. Export Stats with
+   and without name and picture, and check the saved PNGs. Confirm the stored picture holds no EXIF:
+   `sqlite3 onda.db "select hex(substr(picture,1,64)) from profile"` should start with a PNG
+   signature, and the file should not contain the original's GPS bytes.
+7. Dictate in Notepad with each provider set but polish off: no network traffic (Resource Monitor).
+
+**Installer**
+
+1. `./scripts/build.ps1` and `./scripts/build.ps1 -WithVulkan` finish. `installer-smoke.ps1`
+   passes.
+2. Open the setup .exe at 100%, 150% and 200% scaling. The Welcome and Finish pages show the dark
+   icon and white wordmark on graphite, inner pages show the black lockup top-left, and neither is
+   cropped or blurred beyond normal MUI2 stretching. Also try a high-contrast theme.
+3. Fresh install, then upgrade over 0.1.4, then uninstall from Settings › Apps. The uninstaller
+   pages are branded too. Data in `%LOCALAPPDATA%\com.miille.onda` survives uninstall.
+4. Signed build (when a certificate exists): installer, uninstaller and helpers all validate.
+
+**GPU:** follow the GPU procedure in local-models.md and the existing Vulkan whisper rows below.
+
+**Real providers (needs your keys; nothing was sent to a provider from here)**
+
+1. Anthropic: save a key, Check connection lists models, polish a dictation with
+   `claude-opus-5-5` and with a lighter model. Remove the key: polish then says to add one.
+2. OpenAI-compatible: a real HTTPS service (OpenAI itself, OpenRouter or similar), with and without
+   a key. Try a model that rejects `max_tokens`/sampling; Onda sends none of those to remote servers.
+3. Confirm each failure keeps the original text and no other provider is called: a wrong key
+   (401), a wrong model (404), rate limiting (429) and offline.
+4. Ollama and LM Studio on Windows with `qwen3.5:0.8b`. Note whether LM Studio rejects the thinking
+   switch (Onda should retry once without it).
+
+**Linux desktop (beyond this VPS)**
+
+1. A real session on GNOME Wayland and on KDE or X11. Bind `onda --dictate` and dictate with a real
+   microphone. The words land on the clipboard and Ctrl+V pastes them into another app.
+2. The tray mark appears, Black and White switch, and launch at login starts Onda in the background.
+3. `scripts/build.sh --bundles deb,appimage`, then install the .deb on a clean machine.
+
+### Not done, and why
+
+- Hold-to-talk, typing into apps, selection rewrites and context on Linux need a keyboard hook and
+  an accessibility route; see linux.md.
+- WebView2 `GetProcessInfos` and a low memory target for the hidden pill need COM code that could
+  not be compiled here; see windows-integration.md.
+- An Onda-managed embedded LLM runtime; see local-models.md for why a local server came first.
+
 ## Final local validation record (3 October 2026)
 
 ### Held shortcut and empty recognition follow-up (0.1.3)

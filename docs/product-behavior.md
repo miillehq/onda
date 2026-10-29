@@ -37,6 +37,32 @@ When ChatGPT's text fails the preservation checks, Onda keeps the original (typi
 
 The result includes original/output and a linear Unicode-safe prefix/suffix diff. Copy intentionally changes the clipboard because the user requested it. Retry paste and Undo give three seconds to return focus to the original control, then revalidate. Undo selects a uniquely identifiable inserted range only if the bounded post-paste document is unchanged. Duplicated text, intervening edits or inaccessible controls refuse undo. Onda does not issue blind Ctrl+Z.
 
+## Profile and statistics
+
+A profile name (up to 40 characters, optional) and picture (PNG, JPEG or WebP up to 10 MB, stored as
+a 256 px PNG) are kept locally. Home greets by the first word of the name ("Good afternoon, Daniel"),
+or just "Good afternoon". Stats counts only content-free numbers:
+
+- **What counts:** dictations Onda delivered (typed, or put on the clipboard where it cannot type).
+  Edits of selected text, previews and dictations that were not delivered do not count. Words are
+  counted in the local transcript, before AI polish.
+- **Days:** the local calendar day when the dictation was delivered, as recorded then. A later time
+  zone change does not move earlier days.
+- **Streak:** consecutive days with at least one dictation, ending today, or yesterday when nothing
+  has been dictated yet today. Longest streak and active days look back over the last 400 days that
+  had dictation; lifetime totals never expire.
+- **Pace:** words divided by minutes of recorded audio, including pauses, shown after one minute.
+- Days before Onda kept daily totals are not shown or estimated.
+
+Share stats renders a 1200×630 PNG with those numbers and the activity grid. Name and picture are
+off until switched on, and native code asks where to save it.
+
+## AI providers
+
+AI polish, rewrites and spoken edits use exactly one provider: ChatGPT (sign-in), an
+OpenAI-compatible server, Anthropic, or a model server on this computer. A failure keeps the local
+text, and Onda never moves to another provider. See ai-providers.md and local-models.md.
+
 ## Privacy and failures
 
 Audio is ephemeral process memory/pipes. Default settings disable context, learning and enhancement. Dictionary/settings/snippets/transforms stay in SQLite; tokens stay DPAPI protected. Dictation history is encrypted per Windows user and kept for the configured retention (default 3 days; 0 keeps it only until Onda quits). There is no remote telemetry. Diagnostics use an allowlist of versions, hardware evidence, preference modes and content-free timings. Local performance metrics do not contain transcript text.

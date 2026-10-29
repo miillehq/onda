@@ -1,4 +1,4 @@
-# Windows release engineering
+# Release engineering (Windows, and Linux packages)
 
 ## Support policy and prerequisites
 
@@ -25,6 +25,36 @@ Preparation stages genuine release workers with Tauri target-triple names: the S
 Artifacts are `target/release/bundle/nsis/*setup.exe` with adjacent SHA-256. Installation is per user with shortcuts/uninstaller. Upgrade/reinstall preserves the identifier's local data directory, SQLite schema and model assets. External configured model directories are preserved too. Keep `identifier` stable through branding changes unless implementing an explicit data migration. Uninstall does not destroy user assets by default.
 
 After final linking or against installed executables, run `collect-msvc-runtime.ps1 -ExecutablePaths @(...) -WithVulkan` to audit the full import closure. It verifies Microsoft signatures/x64 architecture/hashes, never copies System32/debug runtime DLLs, and records relative provenance. The publisher's redistribution eligibility and app-local servicing obligation are in third-party-licenses.md.
+
+### Installer branding
+
+The NSIS installer and uninstaller use the Onda brand (`tauri.conf.json` › `bundle.windows.nsis`):
+
+- `installerIcon` and `uninstallerIcon`: `icons/icon.ico`, the brand package's `onda.ico` unchanged.
+- `headerImage` and `uninstallerHeaderImage`: `icons/installer/header.bmp` (150×57). The black
+  lockup, 22 px tall and 102 px wide (the brand minimum is 100 px), on white with more than its x
+  of clear space.
+- `sidebarImage`: `icons/installer/sidebar.bmp` (164×314). The dark app icon at 88 px and the white
+  wordmark on the graphite tile (#262628 → #0F0F10 → #040404), for the Welcome and Finish pages.
+- `minimumWebview2Version` moved from the deprecated `nsis` key to `bundle.windows`, with the same
+  value.
+
+Regenerate the bitmaps with `scripts/installer-art.sh` (rsvg-convert and ImageMagick) from the brand
+masters in `icons/installer/source/`, copied unchanged from the brand package. NSIS needs
+uncompressed 24-bit BMP3 files without alpha; Windows stretches them at higher display scaling, as
+it does for every MUI2 installer.
+
+Checked on Linux: the config validates against Tauri CLI 2.12.1's schema (`config.schema.json`), and
+NSIS 3.10 compiled a MUI2 script that wires the same files the way Tauri's template does. **Not
+checked:** building the real installer, and how the pages look on Windows at 100–200% scaling and
+in high-contrast themes. See the installer checklist in testing.md.
+
+## Linux packages
+
+`scripts/build.sh [--bundles deb|appimage|deb,appimage] [--with-vulkan]` is the Linux counterpart of
+`build.ps1`: release speech workers (`prepare.sh --release`), contracts, notices, then `tauri build`
+with `tauri.linux.conf.json`, which bundles only the speech workers (no keyboard helper). The
+packages are unsigned. See [linux.md](linux.md) for what the Linux build does.
 
 ## Signing and updates
 

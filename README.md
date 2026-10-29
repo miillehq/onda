@@ -1,6 +1,6 @@
 # Onda
 
-Onda by miille: Windows voice dictation that types wherever your cursor is. Speech recognition runs locally; optional text cleanup and selection rewrites use an explicitly connected ChatGPT plan. Apache-2.0.
+Onda by miille: Windows voice dictation that types wherever your cursor is. Speech recognition runs locally. Optional text cleanup and selection rewrites use the AI provider you choose: a connected ChatGPT plan, an OpenAI-compatible server, Anthropic, or a model on this computer. A Linux build with fewer features is also available ([linux](docs/linux.md)). Apache-2.0.
 
 The repository contains the native application, the Onda interface (main window and a non-activating dictation pill), CPU and optional Vulkan ASR workers, a Windows shortcut helper, installer scripts, CI, and failure tests. Design decisions live in [DESIGN.md](DESIGN.md). This is an engineering candidate: consult [testing](docs/testing.md) for the measured results and the interactive release matrix that has not yet been certified.
 
@@ -34,6 +34,9 @@ See [release instructions](docs/release.md) for signed updates, Authenticode and
 - Separate vocabulary and replacement rules, Unicode boundaries, indexed relevant-term retrieval, snippets, import/export and immediate updates.
 - Optional scoped correction proposals: three focused-field samples over twelve seconds, only for text this app inserted, and only with learning enabled.
 - Official browser OAuth/PKCE, DPAPI credentials, account/workspace registrations, serialized refresh, account model discovery, bounded streaming, and local dictation fallback.
+- OpenAI-compatible, Anthropic and loopback-only local model providers with protected API keys, no cross-provider fallback, and per-machine model guidance.
+- Local profile and statistics (words, pace, streaks, a year of activity) from content-free counts, with an Onda-branded PNG to share.
+- A report of Onda's whole process tree, including the WebView2 processes Task Manager lists separately.
 - Selected-text transforms, custom instructions/shortcuts, spoken editing commands, original/result/diff/copy, retry insertion and guarded undo.
 - Target/window/process/control validation, password/UIPI refusal, delayed-render clipboard transactions and sequence-guarded restoration.
 - Migrations, content-free logs and performance metrics, redacted diagnostics, restrictive IPC capabilities and signed-update hooks.
@@ -56,4 +59,4 @@ Real desktop clipboard tests are explicitly opt-in because they take foreground 
 
 ## Continue development
 
-Read [architecture](docs/architecture.md), [frontend handoff](docs/frontend-handoff.md), [product behavior](docs/product-behavior.md), [security](docs/security.md), and [OpenAI sign-in](docs/openai-sign-in.md). [Benchmarks](docs/benchmarks.md) describe measured hardware and cold/warm conditions. [References](docs/references.md) records pinned source inspections and engineering decisions.
+Read [architecture](docs/architecture.md), [frontend handoff](docs/frontend-handoff.md), [product behavior](docs/product-behavior.md), [security](docs/security.md), [OpenAI sign-in](docs/openai-sign-in.md), [AI providers](docs/ai-providers.md), [local models](docs/local-models.md) and [Linux](docs/linux.md). [Benchmarks](docs/benchmarks.md) describe measured hardware and cold/warm conditions. [References](docs/references.md) records pinned source inspections and engineering decisions.

@@ -8,8 +8,9 @@ board is `docs/design/onda-concept.html` (image: `onda-concept.png`).
 - Audience and primary job: people who write a lot on Windows and want to speak instead of type,
   anywhere their cursor is. The job happens in other apps; Onda's window is for setup, review and
   teaching it words. Optimise for the hundredth dictation, not the first launch.
-- Surfaces: Windows desktop (Tauri 2, WebView2). Two webviews: the main window (`ui/index.html`)
-  and the dictation pill (`ui/pill.html`).
+- Surfaces: Windows desktop (Tauri 2, WebView2), and Linux (WebKitGTK) with fewer features; see
+  docs/linux.md. Two webviews: the main window (`ui/index.html`) and the dictation pill
+  (`ui/pill.html`).
 - Register per surface: product. First-run setup borrows a little brand warmth.
 - Desktop fidelity: branded-native. Custom identity in the content; native title bar (tinted),
   caption buttons, Snap, tray, keyboard and accessibility at the edges.
@@ -49,7 +50,8 @@ Graphics explain things wherever a paragraph would otherwise go.
 
 ## Layout and navigation
 - Layout philosophy: sidebar plus one scrolling page. Home first answers "how do I dictate?",
-  then "what did I just say?" and "what has Onda learned?". Settings are grouped the way people
+  then "what did I just say?" and "what has Onda learned?". Stats, second in the sidebar, holds
+  the long view: lifetime totals, streaks and a year of activity. Settings are grouped the way people
   think (General, Shortcuts, Microphone, Speech and language, AI polish, App styles, Privacy,
   Updates and help), with common choices first and advanced options last, behind disclosures.
 - Navigation model; breakpoints or window size classes and what collapses when: settings swap the
@@ -158,5 +160,27 @@ Graphics explain things wherever a paragraph would otherwise go.
 - 2026-10-25: Dropdowns are capped at 320 px with an ellipsis, and a wide one moves under its
   description in a narrow window, because a long microphone name squeezed the description
   into a one-word column on a 125% laptop.
+- 2026-10-29: Stats page with lifetime words, speaking pace, current and longest streaks, active
+  days and a 53-week activity grid, monochrome like the week chart (ink at four opacities). Every
+  number is defined on the page, and nothing is estimated for days before Onda counted.
+- 2026-10-29: A local profile (name and picture) greets by first name and can go on the shareable
+  image. The image is a 1200×630 graphite card with the master lockup paths and Inter; name and
+  picture are off until switched on in the share dialog, because sharing should only ever show
+  what the user chose.
+- 2026-10-29: Tray icon choice (Automatic, White, Black) in General, previewed on fixed light and
+  dark swatches. Automatic follows the taskbar and now updates on theme changes even with the main
+  window closed. Linux cannot report its panel colour, so there Automatic is white.
+- 2026-10-29: AI polish chooses a provider from four cards: ChatGPT, OpenAI-compatible, Anthropic,
+  On this computer. The "where your text goes" diagram names the real destination, and a local
+  model gets the dashed "stays here" style. Saved keys are never shown again, only "Saved" with
+  Remove.
+- 2026-10-29: "Chinese" is labelled "Chinese (Mandarin)", with a note on Whisper's single Chinese
+  setting, its scripts and Cantonese, because the old label suggested Cantonese might work.
+- 2026-10-29: Updates and help reports Onda's total memory and CPU, because Task Manager files the
+  WebView2 processes under "WebView2 Manager" and makes Onda look smaller than it is.
+- 2026-10-29: The installer uses the brand: the black lockup in the page header, and the dark app
+  icon with the white wordmark on the graphite tile for the Welcome and Finish pages.
+- 2026-10-29: On Linux the hero shows the `onda --dictate` command instead of keycaps, and a
+  finished dictation reads "Copied · press Ctrl+V", because Onda cannot type there yet.
 - 2026-10-23: Quality cards say "In use" only for the model actually running; a card picked
   but downgraded for low memory says "Selected" and the footnote names the model in use.

@@ -64,6 +64,44 @@ The message loop emits a heartbeat every 500 ms. `HelperSupervisor::start(explic
 
 Windows can silently remove a hook after exceeding its timeout; heartbeat alone cannot establish hook presence. The helper reinstalls its hook every 30 seconds while no trigger is active, limiting undetectable removal. It reconciles held trigger state every heartbeat using `GetAsyncKeyState` and emits Reset on a missed release/desktop loss. Recovery on resume/session changes is through these mechanisms, not dedicated WTS or power notifications. RDP and unusual desktop transitions require the manual matrix below. Process isolation reduces starvation risk but is not a Windows scheduler guarantee.
 
+## Task Manager and WebView2 processes
+
+Task Manager's Processes tab shows "Onda" under Apps at a few MB. The WebView2 processes that draw
+its windows ("WebView2: Onda", "WebView2: Onda dictation", GPU, Network and Storage utilities,
+Crashpad), about 180 MB together, appear in a separate "WebView2 Manager" group under Background
+processes. onda-input.exe also appears on its own (see the MY-37 screenshots).
+
+What is established:
+
+- The "WebView2: <title>" naming is a Windows 11 Task Manager feature, not a WebView2 runtime
+  setting (Microsoft, MicrosoftEdge/WebView2Feedback #711). Microsoft has not documented how Task
+  Manager decides grouping. Its end-user FAQ says the processes are "grouped by parent app", and
+  that grouping can be wrong when sorting by a column other than Name.
+- No supported API or browser argument lets a host put its WebView2 processes in its own group.
+  Setting an AppUserModelID has no effect (WebView2Feedback #5628, open for a Tauri v2 app on the
+  same Windows build, with no Microsoft answer as of October 2026; tauri-apps/tauri #15567).
+- For a non-elevated host, the WebView2 browser process is a child of the host. The known
+  exceptions (running as administrator, or a `__COMPAT_LAYER` in the environment) start it from
+  explorer.exe instead (WebView2Feedback #973, #3848).
+- Both of Onda's webviews share one user data folder, so they share one browser process group.
+
+So Onda does not try to change Task Manager's grouping: there is no supported way, and process
+re-parenting or similar tricks are out of bounds. Instead, Settings › Updates and help › "What
+Onda is using" measures Onda's whole process tree (`onda_platform::process_tree`): onda.exe,
+onda-input.exe, any speech worker and every WebView2 process below it. Memory is
+`PROCESS_MEMORY_COUNTERS_EX2.PrivateWorkingSetSize`, the measure behind Task Manager's Memory
+column (Windows 10/11 22H2 with the September 2023 update or later; older builds fall back to
+private commit and say so). CPU is the change in `GetProcessTimes` over half a second, as a share
+of all logical CPUs. The page explains the WebView2 Manager grouping in plain words, and notes when
+no WebView2 process was found under Onda (the elevated case).
+
+Not done, and why: `ICoreWebView2Environment8::GetProcessInfos` would also find WebView2 processes
+started from explorer.exe, and `MemoryUsageTargetLevel = Low` on the hidden pill could lower memory.
+Both need WebView2 COM code in the app crate, which cannot be compiled on the Linux machine this
+work was done on. Shipping it untested was not worth the risk; they are listed as follow-ups in
+testing.md. The process-tree code itself type-checks for `x86_64-pc-windows-msvc`
+(`cargo clippy --target x86_64-pc-windows-msvc -p onda-platform`) but has not run on Windows.
+
 ## Validation and support limits
 
 On the implementation host, ordinary native tests passed, and the opt-in desktop harness passed real Win32 Edit Unicode/emoji/Japanese paste, delayed-render receipt, custom-format restoration, focused-field reading, selection replacement, unchanged-document undo, stale-document refusal, cancellation after publication, external clipboard-copy races, and password refusal. The helper process probe passed startup, two 500 ms heartbeats, and clean shutdown. Test commands:
