@@ -1,4 +1,5 @@
-/** Exercises the actual hidden WebView2 -> Tauri -> native facade in an isolated debug profile. */
+/** Exercises the actual hidden webview (WebView2, or WebKitGTK on Linux) -> Tauri -> native facade
+ *  in an isolated debug profile. */
 import { call } from "./api";
 import type { ApiRequest } from "./generated/api";
 import { refresh } from "./lib/store";
@@ -83,7 +84,29 @@ export async function runSmoke(): Promise<void> {
     }
     check(await rejected({ command: "teachWord", args: { durationMs: 100 } }, "invalidInput"), "teaching take length is bounded");
     check(await rejected({ command: "teachWord", args: { durationMs: 2500 } }, "noModel"), "teaching a word needs a speech model before recording");
-    check((await call({ command: "listAudioDevices" })).type === "audioDevices", "WASAPI device enumeration available");
+    check((await call({ command: "listAudioDevices" })).type === "audioDevices", "audio device enumeration available");
+    // Profile and statistics: stored locally, normalized, and never invented.
+    const named = await call({ command: "setProfileName", args: { name: "  Smoke   Tester " } });
+    check(named.type === "profile" && named.payload.name === "Smoke Tester", "profile name normalized and stored");
+    check(await rejected({ command: "setProfileName", args: { name: "x".repeat(41) } }, "invalidInput"), "overlong profile name refused");
+    const usageReport = await call({ command: "getUsage" });
+    check(usageReport.type === "usage" && usageReport.payload.summary.dictations === 0 && usageReport.payload.summary.since === null && usageReport.payload.summary.currentStreak === 0, "fresh profile has no invented statistics");
+    check(await rejected({ command: "saveStatsImage", args: { pngBase64: btoa("<svg/>") } }, "invalidInput"), "only PNG statistics images are saved");
+    // AI providers: addresses are checked before saving and failures name what to fix.
+    const current = await call({ command: "getSettings" });
+    if (current.type === "settings") {
+      check(await rejected({ command: "updateSettings", args: { settings: { ...current.payload, aiProvider: "local", localBaseUrl: "http://192.168.1.2:11434/v1" } } }, "invalidInput"), "local provider refuses addresses off this computer");
+      check(await rejected({ command: "updateSettings", args: { settings: { ...current.payload, openaiBaseUrl: "http://api.example.com/v1" } } }, "invalidInput"), "remote provider needs HTTPS");
+      check(await rejected({ command: "updateSettings", args: { settings: { ...current.payload, language: "yue" } } }, "invalidInput"), "languages the models lack are refused");
+      check((await call({ command: "updateSettings", args: { settings: { ...current.payload, aiProvider: "local", localBaseUrl: "http://127.0.0.1:9/v1", localModel: "smoke" } } })).type === "settings", "local provider settings saved");
+      check(await rejected({ command: "listProviderModels", args: { provider: "local" } }, "offline"), "unreachable local server reported as offline");
+      check(await rejected({ command: "saveProviderKey", args: { provider: "anthropic", key: "not a key" } }, "invalidInput"), "malformed API key refused before storage");
+      await call({ command: "updateSettings", args: { settings: current.payload } });
+    }
+    // The whole process tree, web view included, as Task Manager does not show it.
+    const resources = await call({ command: "getResourceUsage" });
+    check(resources.type === "resources" && resources.payload.processes.some((process) => process.role === "app") && resources.payload.totalMemoryBytes > 0, "resource report measures the Onda process");
+    check(resources.type === "resources" && resources.payload.processes.some((process) => process.role === "webview"), "resource report includes the web view processes");
     if(window.__ONDA_REPLAY__){const replay=await call({command:"replayDebugFixture"});check(replay.type==="result"&&replay.payload.inserted,"real CPU fixture reached controlled Windows field");const completed=await call({command:"getSnapshot"});check(completed.type==="snapshot"&&completed.payload.state.phase==="completed"&&completed.payload.state.route==="local","full dictation pipeline completed locally");
       const replayed=replay.type==="result"?replay.payload:null;const kept=await call({command:"getHistory"});const entry=kept.type==="history"?kept.payload.find(item=>item.id===replayed?.operationId):undefined;check(!!entry&&entry.inserted&&entry.mode==="dictation"&&entry.output===replayed?.output&&entry.errorCode===null,"fixture dictation recorded in history");
       check((await call({command:"deleteHistoryEntry",args:{id:entry?.id??""}})).type==="unit","history entry deleted");const cleared=await call({command:"getHistory"});check(cleared.type==="history"&&!cleared.payload.some(item=>item.id===entry?.id),"deleted entry is gone");}

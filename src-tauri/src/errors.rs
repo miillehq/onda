@@ -115,6 +115,13 @@ pub fn cloud(error: onda_cloud::CloudError) -> AppError {
             true,
         );
     }
+    if matches!(error, E::UnsupportedPlatform) {
+        return AppError::new(
+            ErrorCode::Cloud,
+            "Sign in with ChatGPT needs Windows' protected storage. On this system, choose another provider in AI polish.",
+            false,
+        );
+    }
     let code = match &error {
         E::Cancelled => ErrorCode::Cancelled,
         E::Timeout => ErrorCode::InferenceTimeout,

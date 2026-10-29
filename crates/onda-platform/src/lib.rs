@@ -145,6 +145,7 @@ pub enum PlatformError {
 }
 
 /// Restrict implicit DLL lookup to system directories. Call once before optional native engines.
+/// Windows-only: other systems have no current-directory library search to restrict.
 pub fn harden_dll_search() -> Result<(), PlatformError> {
     #[cfg(windows)]
     {
@@ -160,6 +161,6 @@ pub fn harden_dll_search() -> Result<(), PlatformError> {
     }
     #[cfg(not(windows))]
     {
-        Err(PlatformError::UnsupportedPlatform)
+        Ok(())
     }
 }

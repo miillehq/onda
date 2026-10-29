@@ -52,7 +52,8 @@ async fn gpu_probe_failure_falls_back_to_real_cpu_transcription() {
     let model = PathBuf::from(std::env::var_os("ONDA_ASR_TEST_MODEL").expect("set model"));
     let worker_directory =
         PathBuf::from(std::env::var_os("ONDA_ASR_WORKER_DIR").expect("set worker directory"));
-    let cpu_worker = worker_directory.join("onda-asr-worker.exe");
+    let cpu_worker =
+        worker_directory.join(format!("onda-asr-worker{}", std::env::consts::EXE_SUFFIX));
     let mut hardware = onda_asr::HardwareInfo::detect();
     hardware.vulkan_loader_present = true;
     hardware.gpus = vec![onda_asr::GpuInfo {
