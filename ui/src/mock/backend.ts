@@ -141,7 +141,7 @@ function idle(): OperationState {
 
 const snapshot: Snapshot = {
   appName: "Onda",
-  version: "0.1.4",
+  version: "0.2.0",
   contractVersion: 1,
   state: idle(),
   settings,
@@ -459,7 +459,7 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     case "retryTransformation":
       return { type: "result", payload: snapshot.result as OperationResult };
     case "exportDiagnostics":
-      return { type: "text", payload: JSON.stringify({ app: "Onda", version: "0.1.4", note: "Sample diagnostics from the development mock." }, null, 2) };
+      return { type: "text", payload: JSON.stringify({ app: "Onda", version: "0.2.0", note: "Sample diagnostics from the development mock." }, null, 2) };
     case "checkUpdate":
       return { type: "update", payload: { available: false, version: null } };
     case "getUsage":
