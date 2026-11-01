@@ -99686,7 +99686,7 @@ SOFTWARE.
 
 
 ========================================================================
-@rolldown/binding-linux-x64-gnu 1.2.15
+@rolldown/binding-win32-x64-msvc 1.2.15
 License: MIT
 
 ========================================================================
@@ -100157,11 +100157,11 @@ SOFTWARE.
 
 
 ========================================================================
-@tauri-apps/cli-linux-x64-gnu 2.12.1
+@tauri-apps/cli-win32-x64-msvc 2.12.1
 License: Apache-2.0 OR MIT
 
 ========================================================================
-@typescript/typescript-linux-x64 7.0.2
+@typescript/typescript-win32-x64 7.0.2
 License: Apache-2.0
 
 --- LICENSE ---
@@ -101264,7 +101264,7 @@ defined by the Mozilla Public License, v. 2.0.
 
 
 ========================================================================
-lightningcss-linux-x64-gnu 1.33.0
+lightningcss-win32-x64-msvc 1.33.0
 License: MPL-2.0
 
 --- LICENSE ---

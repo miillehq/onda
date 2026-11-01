@@ -6590,7 +6590,7 @@
   },
   {
     "ecosystem": "npm",
-    "name": "@rolldown/binding-linux-x64-gnu",
+    "name": "@rolldown/binding-win32-x64-msvc",
     "version": "1.2.15",
     "license": "MIT",
     "noticeFiles": []
@@ -6627,14 +6627,14 @@
   },
   {
     "ecosystem": "npm",
-    "name": "@tauri-apps/cli-linux-x64-gnu",
+    "name": "@tauri-apps/cli-win32-x64-msvc",
     "version": "2.12.1",
     "license": "Apache-2.0 OR MIT",
     "noticeFiles": []
   },
   {
     "ecosystem": "npm",
-    "name": "@typescript/typescript-linux-x64",
+    "name": "@typescript/typescript-win32-x64",
     "version": "7.0.2",
     "license": "Apache-2.0",
     "noticeFiles": [
@@ -6671,7 +6671,7 @@
   },
   {
     "ecosystem": "npm",
-    "name": "lightningcss-linux-x64-gnu",
+    "name": "lightningcss-win32-x64-msvc",
     "version": "1.33.0",
     "license": "MPL-2.0",
     "noticeFiles": [
