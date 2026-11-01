@@ -49,7 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .join("\n")
     );
     if std::env::args().any(|argument| argument == "--check") {
-        if std::fs::read_to_string(&destination)? != content {
+        // A Windows checkout with core.autocrlf has CRLF line endings; only the text matters.
+        if std::fs::read_to_string(&destination)?.replace("\r\n", "\n") != content {
             return Err("Generated frontend contracts have drifted; run npm run contracts.".into());
         }
         return Ok(());

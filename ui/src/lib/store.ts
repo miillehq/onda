@@ -334,9 +334,9 @@ export async function getResourceUsage(): Promise<ResourceUsage> {
 export async function copyResult(): Promise<void> {
   if (await run("Couldn't copy", { command: "copyResult" })) toast({ tone: "ok", title: "Copied" }, 2400);
 }
-/** Copy the AI version that Onda's checks kept out of the document. */
+/** Copy the polished version that Onda's checks kept out of the document. */
 export async function copySuggestion(): Promise<void> {
-  if (await run("Couldn't copy", { command: "copySuggestion" })) toast({ tone: "ok", title: "Copied the AI version" }, 2400);
+  if (await run("Couldn't copy", { command: "copySuggestion" })) toast({ tone: "ok", title: "Copied the polished version" }, 2400);
 }
 /** Acknowledge a failure so Onda reads as ready again; its text stays in History. */
 export const dismissError = (operationId: string) => run("Couldn't dismiss", { command: "dismissError", args: { operationId } });
@@ -369,7 +369,7 @@ export async function copyHistoryEntry(id: string): Promise<void> {
   if (await run("Couldn't copy", { command: "copyHistoryEntry", args: { id } })) toast({ tone: "ok", title: "Copied" }, 2400);
 }
 export async function copyHistorySuggestion(id: string): Promise<void> {
-  if (await run("Couldn't copy", { command: "copyHistorySuggestion", args: { id } })) toast({ tone: "ok", title: "Copied the AI version" }, 2400);
+  if (await run("Couldn't copy", { command: "copyHistorySuggestion", args: { id } })) toast({ tone: "ok", title: "Copied the polished version" }, 2400);
 }
 
 export async function deleteHistoryEntry(id: string): Promise<void> {

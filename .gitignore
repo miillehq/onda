@@ -10,6 +10,8 @@
 *.wav.tmp
 *.pfx
 *.pem
+# A generated test-only key; its public half is test-jwks.json beside it.
+!crates/onda-cloud/src/oauth/fixtures/test-private-key.pem
 *.key
 *.bin
 *.gguf

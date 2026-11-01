@@ -71,7 +71,7 @@ export function Suggestion({ kept, suggestion, onCopy }: { kept: string; suggest
   return (
     <div class="suggestion">
       <div class="suggestion-head">
-        <span class="suggestion-label">AI version, not used</span>
+        <span class="suggestion-label">Polished version, not used</span>
         <Button variant="ghost" size="sm" icon={<Copy size={15} />} onClick={onCopy}>
           Copy
         </Button>

@@ -3,7 +3,7 @@ import { useState } from "preact/hooks";
 import { ask } from "../../api";
 import { Button, Select, Switch } from "../../components/controls";
 import { Dialog, Page, Row, Rows, Section } from "../../components/layout";
-import { plural } from "../../lib/format";
+import { plural, providerName } from "../../lib/format";
 import { navigate } from "../../lib/router";
 import { aiReady, clearHistory, history, isWindows, saveSettings, settings, toast, toastError } from "../../lib/store";
 import { retentionPhrase } from "../History";
@@ -65,7 +65,7 @@ export function Privacy() {
           <ul class="ticks">
             <li>
               <Check size={16} aria-hidden="true" />
-              {value.aiProvider === "local" ? "Written text, to a model on this computer (it never leaves it), for AI polish" : `Written text, to ${{ chatgpt: "ChatGPT", openaiCompatible: "your AI server", anthropic: "Anthropic" }[value.aiProvider]}, for AI polish`}{" "}
+              {value.aiProvider === "local" ? "Written text, to your local model for AI polish" : `Written text, to ${providerName(value)} for AI polish`}{" "}
               {value.enhancementEnabled && aiReady.value ? "(on)" : "(off)"}
             </li>
             <li>
@@ -98,7 +98,7 @@ export function Privacy() {
           <Row
             icon={<ScanText size={18} />}
             title="Use nearby text for context"
-            description="Only sent to ChatGPT, and only with AI polish on."
+            description={value.aiProvider === "local" ? "Goes only to your local model, with AI polish on." : `Only sent to ${providerName(value)}, and only with AI polish on.`}
             control={
               <Button size="sm" variant="ghost" onClick={() => navigate("settings/ai")}>
                 {value.contextEnabled ? "On" : "Off"} · Change

@@ -114,9 +114,13 @@ export async function renderStatsImage(card: StatsCard, canvas = document.create
 
   // Four headline numbers.
   const { summary } = card;
+  // A shared image shows numbers, never a placeholder dash: active days stand in for a pace that
+  // needs a minute of recording first.
   const stats: [string, string, string][] = [
     ["Words dictated", formatInteger(summary.words), ""],
-    ["Speaking pace", summary.wordsPerMinute ? String(Math.round(summary.wordsPerMinute)) : "—", summary.wordsPerMinute ? "wpm" : ""],
+    summary.wordsPerMinute
+      ? ["Speaking pace", String(Math.round(summary.wordsPerMinute)), "wpm"]
+      : ["Active days", formatInteger(summary.activeDays), ""],
     ["Current streak", formatInteger(summary.currentStreak), summary.currentStreak === 1 ? "day" : "days"],
     ["Longest streak", formatInteger(summary.longestStreak), summary.longestStreak === 1 ? "day" : "days"],
   ];
@@ -159,7 +163,9 @@ export async function renderStatsImage(card: StatsCard, canvas = document.create
   context.fillStyle = TEXT_3;
   context.font = `500 16px ${FONT}`;
   const since = summary.since ? `Since ${formatDate(summary.since)} · ` : "";
-  context.fillText(`${since}${plural(summary.activeDays, "active day")} · ${plural(summary.dictations, "dictation")}`, PADDING, footerY);
+  // Active days move into the headline numbers when there is no pace yet; don't say them twice.
+  const days = summary.wordsPerMinute ? `${plural(summary.activeDays, "active day")} · ` : "";
+  context.fillText(`${since}${days}${plural(summary.dictations, "dictation")}`, PADDING, footerY);
   context.textAlign = "right";
   context.fillText("Onda by miille", CARD_WIDTH - PADDING, footerY);
   return canvas;

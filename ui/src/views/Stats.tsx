@@ -6,7 +6,7 @@ import { Avatar, pictureUrl } from "../components/Avatar";
 import { Button, Switch } from "../components/controls";
 import { Card, Dialog, EmptyState, Page, Section } from "../components/layout";
 import { activityGrid, parseDay } from "../lib/activity";
-import { formatInteger, greetingFor, plural } from "../lib/format";
+import { formatInteger, plural } from "../lib/format";
 import { navigate } from "../lib/router";
 import { isWindows, loadUsage, profile, saveStatsImage, toast, toastError, usage } from "../lib/store";
 import { canvasBase64, renderStatsImage } from "../lib/statsImage";
@@ -48,7 +48,7 @@ function ActivityGrid() {
           if (node) node.scrollLeft = node.scrollWidth;
         }}
       >
-        <div class="activity-months" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${WEEKS}, var(--cell))` }}>
+        <div class="activity-months" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}>
           {grid.months.map((month) => (
             <span key={month.column} style={{ gridColumn: `${month.column + 1} / span 4` }}>
               {month.label}
@@ -119,7 +119,7 @@ function ShareDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
       onClose={onClose}
       size="lg"
       title="Share your stats"
-      description="An image of these numbers and your activity grid. It never includes what you said, and it's saved only where you choose."
+      description="Numbers and your activity grid only, never what you said."
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -158,13 +158,14 @@ export function Stats() {
   const report = usage.value;
   const summary = report?.summary;
   const person = profile.value;
+  // Who these numbers belong to, not another greeting: Home already says good afternoon.
   const header = (
     <div class="stats-person">
       <Avatar profile={person} size={56} />
       <div>
-        <p class="stats-greeting">{greetingFor(person?.name)}</p>
+        <p class="stats-greeting">{person?.name || "Your dictation"}</p>
         <p class="stats-since">
-          {summary?.since ? `Counting since ${longDate(summary.since)}` : "Nothing counted yet"} ·{" "}
+          {summary?.since ? `Since ${longDate(summary.since)}` : "Nothing counted yet"} ·{" "}
           <a
             href="#settings/general"
             onClick={(event) => {
@@ -181,7 +182,7 @@ export function Stats() {
   return (
     <Page
       title="Stats"
-      lede={`Counted on this ${isWindows.value ? "PC" : "computer"} from dictations Onda delivered. Only numbers are kept, never what you said.`}
+      lede={`Counted on this ${isWindows.value ? "PC" : "computer"}. Only numbers are kept, never what you said.`}
       actions={
         summary && summary.dictations > 0 ? (
           <Button icon={<Share2 size={16} />} onClick={() => setSharing(true)}>
@@ -207,42 +208,35 @@ export function Stats() {
               foot={summary.wordsPerMinute ? "Across all your recordings" : "Shown after a minute of recording"}
             />
             <Tile icon={<Flame size={16} />} label="Current streak" value={formatInteger(summary.currentStreak)} unit={summary.currentStreak === 1 ? "day" : "days"} foot={`Longest ${plural(summary.longestStreak, "day")}`} />
-            <Tile icon={<ChartNoAxesColumn size={16} />} label="Active days" value={formatInteger(summary.activeDays)} foot="Days with at least one dictation" />
+            <Tile icon={<ChartNoAxesColumn size={16} />} label="Active days" value={formatInteger(summary.activeDays)} foot="Days you dictated" />
           </div>
-          <Section title="Activity" description={`The last ${WEEKS} weeks. Darker squares are days with more words.`}>
+          <Section title="Activity" description="The past year. Darker days had more words.">
             <ActivityGrid />
           </Section>
         </>
       )}
-      <Section title="How these are counted">
+      {/* The definitions are there for anyone who asks, not in the way of the numbers. */}
+      <details class="disclosure stats-help">
+        <summary>How these are counted</summary>
         <dl class="stats-rules">
           <div>
             <dt>What counts</dt>
-            <dd>
-              A dictation counts once Onda delivers it: typed into the app{isWindows.value ? "" : ", or put on the clipboard on systems where Onda can't type"}. Edits of selected text, previews and dictations
-              that failed don't count. Words are counted in Onda's transcript, before any AI polish.
-            </dd>
-          </div>
-          <div>
-            <dt>Days and time zone</dt>
-            <dd>Each dictation is filed under this computer's local date at the time. Changing time zone later doesn't move earlier days.</dd>
+            <dd>Dictations Onda typed{isWindows.value ? "" : " or put on the clipboard"}. Rewrites, previews and failed dictations don't. Words are counted before AI polish.</dd>
           </div>
           <div>
             <dt>Streak</dt>
-            <dd>Consecutive days with at least one dictation, ending today, or yesterday if you haven't dictated yet today. Longest streak and active days look back over the last 400 days that had dictation.</dd>
+            <dd>Days in a row with a dictation, up to today, or yesterday if you haven't dictated yet today.</dd>
           </div>
           <div>
             <dt>Speaking pace</dt>
-            <dd>Words divided by minutes of recording, including pauses while you hold the shortcut, so it reads lower than reading aloud.</dd>
+            <dd>Words per minute of recording. Pauses count, so it reads lower than reading aloud.</dd>
           </div>
           <div>
-            <dt>Earlier dictations</dt>
-            <dd>
-              {summary?.since ? `The first day counted is ${longDate(summary.since)}. ` : ""}Dictations from before your copy of Onda kept daily totals aren't included, and none are estimated.
-            </dd>
+            <dt>Days</dt>
+            <dd>Each dictation counts on this computer's date at the time. Dictations from before Onda kept these numbers aren't included.</dd>
           </div>
         </dl>
-      </Section>
+      </details>
       <ShareDialog open={sharing} onClose={() => setSharing(false)} />
     </Page>
   );

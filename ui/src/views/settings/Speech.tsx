@@ -233,11 +233,11 @@ function LanguageNotes({ language, englishOnlyModel }: { language: string | null
       )}
       {language === "zh" && (
         <p class="footnote">
-          Onda's speech models have one setting for all Chinese. They learned mostly from Mandarin and may write Simplified or Traditional characters, sometimes mixed. Cantonese isn't supported: it may come out as standard written Chinese, or with mistakes.
+          One setting covers all Chinese. The models learned mostly from Mandarin and may mix Simplified and Traditional characters. Cantonese isn't supported.
         </p>
       )}
       {language !== "zh" && (
-        <p class="footnote">The multilingual models know 99 languages; this list has the most widely used. Cantonese isn't among them: it needs a larger Whisper model (large-v3) that Onda doesn't offer.</p>
+        <p class="footnote">The multilingual models know 99 languages; this list has the most common.</p>
       )}
     </>
   );

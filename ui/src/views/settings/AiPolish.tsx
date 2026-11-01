@@ -259,7 +259,7 @@ function KeyField({ provider, saved, required }: { provider: AiProvider; saved: 
 }
 
 /** Model name with suggestions from the server; checking also confirms the connection. */
-function ModelField({ provider, value, field, ready, hint }: { provider: AiProvider; value: string | null; field: "openaiModel" | "anthropicModel" | "localModel"; ready: boolean; hint: string }) {
+function ModelField({ provider, value, field, ready, hint, suggest }: { provider: AiProvider; value: string | null; field: "openaiModel" | "anthropicModel" | "localModel"; ready: boolean; hint: string; suggest?: string }) {
   const [models, setModels] = useState<CloudModel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -282,6 +282,8 @@ function ModelField({ provider, value, field, ready, hint }: { provider: AiProvi
     else setModels(null);
   }, [provider, ready]);
   const listId = `models-${provider}`;
+  // The newest light model the account lists (Anthropic lists newest first).
+  const suggested = suggest ? models?.find((model) => model.slug.startsWith(suggest)) : undefined;
   return (
     <div class="provider-field">
       <label class="field-label" for={`model-${provider}`}>
@@ -323,6 +325,12 @@ function ModelField({ provider, value, field, ready, hint }: { provider: AiProvi
         </p>
       ) : null}
       <p class="field-hint">{hint}</p>
+      {/* Polish stays off until a model is chosen, so offer the light one in a click. */}
+      {!value && suggested && (
+        <Button size="sm" onClick={() => void saveSettings({ [field]: suggested.slug })}>
+          Use {suggested.name}
+        </Button>
+      )}
     </div>
   );
 }
@@ -379,18 +387,18 @@ function ChatgptSetup({ cloudError }: { cloudError: { message: string } | null |
 function OpenaiSetup({ value }: { value: Settings }) {
   const keys = snapshot.value?.providerKeys;
   return (
-    <Section title="Server" description="Any service or server that speaks OpenAI's Chat Completions API. Your text is sent to the address below.">
+    <Section title="Server" description="Any service that speaks OpenAI's Chat Completions API. Your text goes to this address.">
       <Card class="provider-card">
         <AddressField
           id="openai-url"
           label="Server address"
-          hint="Usually ends in /v1. HTTPS is required, except for an address on this computer."
+          hint="Usually ends in /v1. Must be https://, except on this computer."
           value={value.openaiBaseUrl}
           placeholder="https://api.example.com/v1"
           onSave={(openaiBaseUrl) => void saveSettings({ openaiBaseUrl })}
         />
         <KeyField provider="openaiCompatible" saved={!!keys?.openaiCompatible} required={false} />
-        <ModelField provider="openaiCompatible" field="openaiModel" value={value.openaiModel} ready={!!value.openaiBaseUrl} hint="Suggestions come from the server's model list; you can also type a name it accepts." />
+        <ModelField provider="openaiCompatible" field="openaiModel" value={value.openaiModel} ready={!!value.openaiBaseUrl} hint="Pick from the server's list or type a model name." />
       </Card>
     </Section>
   );
@@ -399,10 +407,10 @@ function OpenaiSetup({ value }: { value: Settings }) {
 function AnthropicSetup({ value }: { value: Settings }) {
   const saved = !!snapshot.value?.providerKeys.anthropic;
   return (
-    <Section title="Anthropic" description="Onda talks to Anthropic's own Messages API at api.anthropic.com. Each polish is billed to your Anthropic account.">
+    <Section title="Anthropic" description="Text goes to api.anthropic.com. Each polish is billed to your Anthropic account.">
       <Card class="provider-card">
         <KeyField provider="anthropic" saved={saved} required />
-        <ModelField provider="anthropic" field="anthropicModel" value={value.anthropicModel} ready={saved} hint="Claude Opus 5.5 is Anthropic's default; lighter models answer sooner and cost less. Models that support it are asked for low effort, which suits clean-up." />
+        <ModelField provider="anthropic" field="anthropicModel" value={value.anthropicModel} ready={saved} suggest="claude-haiku" hint="Claude Haiku is quick and inexpensive, which is all clean-up needs." />
       </Card>
     </Section>
   );
@@ -412,7 +420,7 @@ function LocalSetup({ value }: { value: Settings }) {
   const keys = snapshot.value?.providerKeys;
   return (
     <>
-      <Section title="Local server" description="Onda talks to a model server running on this computer. Only addresses on this computer are allowed, so your text never leaves it.">
+      <Section title="Local server" description="A model server running on this computer. Your text never leaves it.">
         <Card class="provider-card">
           <div class="provider-field">
             <span class="field-label">Server</span>
@@ -424,45 +432,41 @@ function LocalSetup({ value }: { value: Settings }) {
               ))}
             </div>
           </div>
-          <AddressField id="local-url" label="Address" hint="127.0.0.1, ::1 or localhost only. Older llama.cpp builds listen on port 8080." value={value.localBaseUrl} placeholder="http://127.0.0.1:11434/v1" onSave={(localBaseUrl) => void saveSettings({ localBaseUrl })} />
-          <ModelField provider="local" field="localModel" value={value.localModel} ready={!!value.localBaseUrl} hint="Onda asks the model not to think out loud, which keeps small models quick." />
+          <AddressField id="local-url" label="Address" hint="Only 127.0.0.1, ::1 or localhost. Older llama.cpp builds use port 8080." value={value.localBaseUrl} placeholder="http://127.0.0.1:11434/v1" onSave={(localBaseUrl) => void saveSettings({ localBaseUrl })} />
+          <ModelField provider="local" field="localModel" value={value.localModel} ready={!!value.localBaseUrl} hint="A small model is enough. Onda asks it to answer without thinking out loud, which keeps it quick." />
           <KeyField provider="local" saved={!!keys?.local} required={false} />
         </Card>
       </Section>
-      <Section title="Which model for this computer" description="Polish is short work, so small models do it well. Speeds are rough; the first request after starting the server also loads the model.">
+      <Section title="Which model to run" description="Clean-up is short work, so a small model does it well. The first request after starting the server is slower while it loads.">
         <div class="table-wrap">
           <table class="plain-table">
             <thead>
               <tr>
-                <th scope="col">Computer</th>
+                <th scope="col">Your computer</th>
                 <th scope="col">Try</th>
                 <th scope="col">Memory</th>
-                <th scope="col">What to expect</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>CPU only, 8 GB</td>
-                <td class="mono">Qwen3.5 0.8B (Q4_K_M)</td>
+                <td>No graphics card, 8 GB</td>
+                <td class="mono">Qwen3.5 0.8B</td>
                 <td>About 1 GB</td>
-                <td>2–4 s for a sentence on 3 cores of a 2013-era CPU (measured); light clean-up only</td>
               </tr>
               <tr>
                 <td>Recent laptop, 16 GB</td>
-                <td class="mono">Qwen3.5 2B (Q4_K_M)</td>
+                <td class="mono">Qwen3.5 2B</td>
                 <td>About 2 GB</td>
-                <td>Better wording; integrated graphics help through Vulkan builds</td>
               </tr>
               <tr>
-                <td>Dedicated GPU, 8 GB+</td>
-                <td class="mono">Qwen3.5 4B (Q4_K_M)</td>
+                <td>Graphics card, 8 GB+</td>
+                <td class="mono">Qwen3.5 4B</td>
                 <td>About 3–4 GB</td>
-                <td>Fast on the GPU; turns thinking off in the template</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="footnote">Qwen3.5 models are Apache-2.0 and run in Ollama, LM Studio and llama.cpp. Onda doesn't download or run them itself. Only the CPU figure was measured; GPU speeds are untested.</p>
+        <p class="footnote">Use the Q4_K_M build in Ollama, LM Studio or llama.cpp. Onda doesn't download or run models itself.</p>
       </Section>
     </>
   );
@@ -475,7 +479,7 @@ export function AiPolish() {
   const target = destination(value);
   const ready = aiReady.value;
   return (
-    <Page title="AI polish" lede="Optionally let an AI model tidy punctuation, filler words and formatting: ChatGPT, a service you choose, Anthropic, or a model on this computer.">
+    <Page title="AI polish" lede="Optionally let an AI model tidy punctuation, filler words and formatting.">
       <div class="sent-diagram" aria-label={target.local ? "Your text stays on this computer" : `What is sent to ${target.name}`}>
         <div class="sent-box is-local">
           <AudioLines size={18} aria-hidden="true" />
@@ -496,12 +500,12 @@ export function AiPolish() {
           {target.local ? <Computer size={18} aria-hidden="true" /> : <Sparkles size={18} aria-hidden="true" />}
           <span>
             <b>{target.name}</b>
-            <span class="flow-sub">{target.local ? `${target.detail} · never leaves it` : target.detail}</span>
+            <span class="flow-sub">{target.local ? "Stays on this computer" : target.detail}</span>
           </span>
         </div>
       </div>
 
-      <Section title="Provider" description="Only the provider you choose is ever used. If it fails, Onda types your original words; it never tries another provider.">
+      <Section title="Provider" description="Onda uses only the one you pick. If it fails, your original words are typed.">
         <ProviderPicker value={value.aiProvider} />
       </Section>
 

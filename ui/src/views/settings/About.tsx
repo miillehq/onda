@@ -58,7 +58,7 @@ function ResourceReport() {
       title="What Onda is using"
       description={
         isWindows.value
-          ? "Onda draws its windows with Microsoft Edge WebView2. Task Manager lists those processes separately, under “WebView2 Manager” in Background processes, so Onda itself looks smaller there than it is. Windows decides that grouping; apps can't change it. This total includes them."
+          ? "Includes the WebView2 processes that draw Onda's windows. Task Manager lists those separately, as “WebView2 Manager”."
           : "Onda draws its windows with WebKitGTK, whose processes (WebKitWebProcess, WebKitNetworkProcess) appear separately in System Monitor. This total includes them."
       }
     >
@@ -69,7 +69,7 @@ function ResourceReport() {
               <Gauge size={16} aria-hidden="true" /> Onda in total
             </p>
             <p class="tile-value tabular">{report ? formatBytes(report.totalMemoryBytes) : "…"}</p>
-            <p class="field-hint">{report ? `${report.totalCpuPercent.toFixed(1)}% of the CPU over half a second · ${report.processes.length} processes` : "Measuring…"}</p>
+            <p class="field-hint">{report ? `${report.totalCpuPercent.toFixed(1)}% CPU · ${report.processes.length} processes` : "Measuring…"}</p>
           </div>
           <Button size="sm" icon={<RefreshCw size={15} />} busy={measuring} onClick={() => void measure()}>
             Measure again

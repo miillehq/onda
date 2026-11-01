@@ -59,7 +59,7 @@ function ErrorCard({ error, operation }: { error: AppError; operation: Operation
   const section = presentation.action?.route;
   const [copied, setCopied] = useState(false);
   const saved = result.value;
-  // The AI version is the thing to copy only when its polish was what failed; after any
+  // The polished version is the thing to copy only when its polish was what failed; after any
   // other failure the words to copy are the ones Onda meant to type.
   const suggestion = error.code === "invalidEnhancement" ? saved?.suggestion ?? null : null;
   // A failed rewrite leaves the selection in place, so copying it again would do nothing.
@@ -92,7 +92,7 @@ function ErrorCard({ error, operation }: { error: AppError; operation: Operation
             {canCopy && (
               <button type="button" class="pill-button is-primary" onClick={() => void copy()} disabled={copied}>
                 {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
-                {copied ? "Copied" : suggestion ? "Copy AI version" : "Copy"}
+                {copied ? "Copied" : suggestion ? "Copy polished version" : "Copy"}
               </button>
             )}
             {section && (

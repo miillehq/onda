@@ -436,7 +436,8 @@ pub fn export_contracts(check: bool) -> Result<(), Box<dyn std::error::Error>> {
             .join("\n")
     );
     if check {
-        if std::fs::read_to_string(path)? != content {
+        // A Windows checkout with core.autocrlf has CRLF line endings; only the text matters.
+        if std::fs::read_to_string(path)?.replace("\r\n", "\n") != content {
             return Err("IPC contracts drifted; run npm run contracts.".into());
         }
     } else {

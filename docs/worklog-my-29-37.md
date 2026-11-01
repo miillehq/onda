@@ -97,3 +97,42 @@ WebView2 attribution. No secrets belong here.
 - Everything in testing.md › "Your checklist": Windows build and smoke, installer, GPU, real
   provider keys, a real Linux desktop session.
 - zip 4.6.1 advisories via tauri-plugin-updater (see testing.md).
+
+### 2026-10-29, Windows review (Claude, desktop session)
+
+Ran the branch on Windows 11 for the first time: dev build in an isolated `ONDA_DEV_PROFILE`,
+CABLE Output (VB-Audio Virtual Cable) as the microphone fed by a radio stream. Onboarding, the
+microphone test, a Fast model download and three dictations into Onda's practice box worked end
+to end; Stats counted them (85 words, 3 dictations; the failed attempt was not counted), and the
+process report, profile name, share image and provider forms worked. Providers and local models
+were reviewed in code only (no keys or local server here).
+
+Fixed:
+- Privacy still said context is "Only sent to ChatGPT" with another provider chosen; both
+  Privacy lines now name the chosen provider.
+- Activity grid labelled a month at the week holding its 1st ("Nov" over a week that is still
+  October) and needed a sideways scrollbar at 1120 px; months now start at their first Monday and
+  the year fits the card. The share image showed "—" for an unknown pace; Active days stands in.
+- Anthropic had no default model and its hint pointed at Claude Opus 5.5; the hint now suggests
+  Claude Haiku and offers it in one click once the account's models are listed.
+- The greeting example couldn't show a name; it now previews it.
+- Copy trimmed where it was long or carried test-machine detail: AI polish (lede, provider,
+  servers, the local-model table without the VPS timing), Stats (lede, definitions behind a
+  closed "How these are counted"), General, Updates and help, Speech (Cantonese only under
+  Chinese), onboarding. "AI version" reads "polished version".
+
+Tooling found by running on Windows: the cloud tests' key fixture (`fixtures/test-private-key.pem`)
+was never committed because `.gitignore` excludes `*.pem`, so no fresh checkout could build
+those tests or clippy's all-targets pass; it now has an exception. Both contract drift checks
+compared bytes, so a checkout with `core.autocrlf` always failed; they compare text now. After
+that, every check passes on Windows (fmt, contracts, build, clippy twice, 128 tests, quality).
+
+Checked and left as is: provider routing and the no-fallback rule, Anthropic request shape
+(`anthropic-version: 2026-10-21`, no sampling parameters, `output_config.effort` only where the
+Models API reports it), stream and error handling, key storage, picture decoding limits, stats
+maths and the lifetime totals, language refusal.
+
+Open: "Automatic" tray icon updates only on app theme changes (a taskbar-only change waits for
+a restart); migration 004 is one-way, so 0.1.4 can't open a database this branch has upgraded;
+dictation that starts while a Chromium app reports its window pane instead of the text box still
+fails as a focus change (seen here in Onda's own window), the fix the owner deferred on master.

@@ -44,7 +44,7 @@ function ProfileEditor() {
             if (event.key === "Enter") event.currentTarget.blur();
           }}
         />
-        <p class="field-hint">Onda greets you with it: “{greetingFor(name)}”.</p>
+        <p class="field-hint">{name.trim() ? `Onda will say “${greetingFor(name)}”.` : "Used in greetings and on Stats."}</p>
         <div class="profile-actions">
           <Button size="sm" icon={<ImagePlus size={15} />} busy={busy} onClick={() => void pick()}>
             {person?.picture ? "Replace picture…" : "Choose picture…"}
@@ -55,7 +55,7 @@ function ProfileEditor() {
             </Button>
           )}
         </div>
-        <p class="field-hint">PNG, JPEG or WebP up to 10 MB. Onda keeps a 256-pixel copy without the file's details (such as location).</p>
+        <p class="field-hint">PNG, JPEG or WebP. Onda keeps a small copy without its location or other details.</p>
       </div>
     </div>
   );
@@ -109,7 +109,7 @@ export function General() {
   if (!value) return null;
   return (
     <Page title="General" lede={`How Onda looks and behaves on your ${isWindows.value ? "PC" : "computer"}.`}>
-      <Section title="Profile" description="Shown in greetings and on Stats. Kept only on this computer, and added to a shared image only if you switch it on there.">
+      <Section title="Profile" description="Kept on this computer. A shared stats image includes it only if you switch it on there.">
         <ProfileEditor />
       </Section>
 
@@ -152,7 +152,7 @@ export function General() {
         title="Tray icon"
         description={
           isWindows.value
-            ? "The Onda mark in the notification area. Automatic follows the taskbar: white on a dark taskbar, black on a light one."
+            ? "Automatic is white on a dark taskbar and black on a light one."
             : "The Onda mark in the top bar or panel. Linux doesn't report the panel's colour, so Automatic uses white, which suits most dark panels; choose Black for a light one."
         }
       >

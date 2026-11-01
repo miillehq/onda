@@ -52,12 +52,16 @@ export function activityGrid(days: DailyUsage[], today: string, weekCount: numbe
     if (cell.dictations > 0 && busiest > 0) cell.level = Math.min(4, Math.max(1, Math.ceil((cell.words / busiest) * 4))) as ActivityDay["level"];
   }
   const weeks = Array.from({ length: weekCount }, (_, week) => cells.slice(week * 7, week * 7 + 7));
+  // A month is labelled at the first column whose Monday falls in it. Labelling the week that
+  // holds the 1st named a month that had barely begun, such as "Nov" above a week that is still
+  // October.
   const months: ActivityGrid["months"] = [];
   weeks.forEach((week, column) => {
-    const first = week.find((cell) => cell.date.getDate() === 1);
-    if (first || column === 0) months.push({ column, label: (first ?? week[0]!).date.toLocaleDateString(undefined, { month: "short" }) });
+    const monday = week[0]!.date;
+    const previous = weeks[column - 1]?.[0]?.date;
+    if (!previous || previous.getMonth() !== monday.getMonth()) months.push({ column, label: monday.toLocaleDateString(undefined, { month: "short" }) });
   });
-  // A leading label squeezed against the next month's would overlap it.
-  if (months.length > 1 && months[1]!.column - months[0]!.column < 2) months.shift();
+  // A leading partial month squeezed against the next label would overlap it.
+  if (months.length > 1 && months[1]!.column - months[0]!.column < 3) months.shift();
   return { weeks, months, activeDays: cells.filter((cell) => cell.dictations > 0 && !cell.future).length };
 }
