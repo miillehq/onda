@@ -134,8 +134,8 @@ below proves Windows, WebView2, NSIS installation, a microphone, a GPU or a real
    Windows.
 2. `scripts/smoke.ps1`: all 41 checks pass in WebView2, including "resource report includes the web
    view processes".
-3. Upgrade an existing 0.1.4 profile. The database migrates to schema 4, Stats shows lifetime
-   totals equal to the old daily rows, and History, the dictionary and accounts are intact.
+3. Upgrade an existing 0.1.4 profile. The database migrates to schema 5, Stats shows lifetime
+   totals, active days and streaks equal to the old daily rows, and History, the dictionary and accounts are intact.
    Downgrading is refused by design.
 4. Settings › General › Tray icon: Automatic, White and Black each change the notification-area
    mark at once. Switch Windows between light and dark: Automatic follows within a second, even with

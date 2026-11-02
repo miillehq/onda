@@ -70,7 +70,7 @@ impl Runtime {
         let today = onda_platform::local_date();
         let store = lock(&self.store)?;
         let days = store.daily_usage(days)?;
-        let summary = onda_core::stats::summarize(&store.lifetime_usage()?, &days, &today);
+        let summary = onda_core::stats::summarize(&store.lifetime_usage()?, &today);
         Ok(UsageReport {
             today,
             days,
