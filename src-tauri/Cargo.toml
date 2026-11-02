@@ -46,5 +46,8 @@ uuid = { version = "1", features = ["v4"] }
 ts-rs = { version = "12", features = ["serde-compat", "no-serde-warnings"] }
 hound = "3.5"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 [dev-dependencies]
 tempfile = "3"

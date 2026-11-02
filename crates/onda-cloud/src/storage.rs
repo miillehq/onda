@@ -1,4 +1,5 @@
-//! DPAPI storage and cross-process locking for rotating account credentials.
+//! Protected storage and cross-process locking for rotating account credentials: DPAPI on
+//! Windows, a key in the desktop keyring on Linux.
 
 use crate::{unix_time, AccountProfile, CloudError, Result};
 use fs2::FileExt;
@@ -14,8 +15,10 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 const MAX_STORED_BYTES: u64 = 1024 * 1024;
 const STATE_FILE: &str = "host.json";
 const PROFILE_DIRECTORY: &str = "accounts";
-const FILE_PREFIX: &[u8] = b"ONDA-DPAPI-1\0";
 #[cfg(windows)]
+const FILE_PREFIX: &[u8] = b"ONDA-DPAPI-1\0";
+#[cfg(not(windows))]
+const FILE_PREFIX: &[u8] = b"ONDA-KEYRING-1\0";
 const PROTECTION_ENTROPY: &[u8] = b"onda/chatgpt/credential-record/v1";
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -84,7 +87,7 @@ pub(crate) struct AccountStore {
 
 impl AccountStore {
     pub fn new(root: PathBuf) -> Result<Self> {
-        if !cfg!(windows) {
+        if !cfg!(any(windows, target_os = "linux")) {
             return Err(CloudError::UnsupportedPlatform);
         }
         fs::create_dir_all(root.join(PROFILE_DIRECTORY)).map_err(|_| CloudError::Storage)?;
@@ -305,11 +308,14 @@ pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().ok_or(CloudError::Storage)?;
     let temporary = parent.join(format!(".{}.tmp", Uuid::new_v4()));
     let result = (|| {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary)
-            .map_err(|_| CloudError::Storage)?;
+        let mut options = OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temporary).map_err(|_| CloudError::Storage)?;
         file.write_all(bytes).map_err(|_| CloudError::Storage)?;
         file.sync_all().map_err(|_| CloudError::Storage)?;
         drop(file);
@@ -347,7 +353,19 @@ fn replace_file(source: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+/// `rename` replaces atomically; syncing the directory makes the new entry durable.
+#[cfg(unix)]
+fn replace_file(source: &Path, destination: &Path) -> Result<()> {
+    fs::rename(source, destination).map_err(|_| CloudError::Storage)?;
+    if let Some(parent) = destination.parent() {
+        File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| CloudError::Storage)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(any(windows, unix)))]
 fn replace_file(_source: &Path, _destination: &Path) -> Result<()> {
     Err(CloudError::UnsupportedPlatform)
 }
@@ -360,11 +378,19 @@ fn protect(bytes: &[u8]) -> Result<Vec<u8>> {
 fn unprotect(bytes: &[u8]) -> Result<Vec<u8>> {
     crypt_bytes(bytes, true, PROTECTION_ENTROPY)
 }
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+fn protect(bytes: &[u8]) -> Result<Vec<u8>> {
+    onda_platform::protect_for(PROTECTION_ENTROPY, bytes).map_err(|_| CloudError::Storage)
+}
+#[cfg(target_os = "linux")]
+fn unprotect(bytes: &[u8]) -> Result<Vec<u8>> {
+    onda_platform::unprotect_for(PROTECTION_ENTROPY, bytes).map_err(|_| CloudError::Storage)
+}
+#[cfg(not(any(windows, target_os = "linux")))]
 fn protect(_bytes: &[u8]) -> Result<Vec<u8>> {
     Err(CloudError::UnsupportedPlatform)
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 fn unprotect(_bytes: &[u8]) -> Result<Vec<u8>> {
     Err(CloudError::UnsupportedPlatform)
 }

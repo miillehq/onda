@@ -271,7 +271,16 @@ pub fn resample_to_16khz(input: &[f32], input_rate: u32) -> Result<Vec<f32>, Pla
     }
     output.drain(..delay);
     output.truncate(wanted);
+    clamp_overshoot(&mut output);
     Ok(output)
+}
+
+/// Resampling a clipped recording rings slightly past full scale; the speech workers accept
+/// only samples within ±1, so the overshoot is cut back to it.
+fn clamp_overshoot(samples: &mut [f32]) {
+    for sample in samples {
+        *sample = sample.clamp(-1.0, 1.0);
+    }
 }
 
 fn diagnostics(samples: &[f32], sample_rate: u32, channels: u16) -> AudioDiagnostics {
@@ -400,6 +409,7 @@ impl RecordingBuffer {
             self.process_chunk()?;
         }
         self.output.truncate(wanted);
+        clamp_overshoot(&mut self.output);
         let rms = (self.energy / self.source_frames.max(1) as f64).sqrt();
         let diagnostics = AudioDiagnostics {
             source_sample_rate: self.source_rate,
@@ -1088,6 +1098,23 @@ mod tests {
             .collect();
         let output = resample_to_16khz(&input, 48_000).unwrap();
         assert!(diagnostics(&output[1000..15000], 16000, 1).rms < 0.01);
+    }
+    #[test]
+    fn clipped_input_resamples_within_full_scale() {
+        // A loud source clipped to a square wave: band-limiting it rings past ±1.
+        let input: Vec<f32> = (0..44_100)
+            .map(|index| if (index / 50) % 2 == 0 { 1.0 } else { -1.0 })
+            .collect();
+        let batch = resample_to_16khz(&input, 44_100).unwrap();
+        let mut recording = RecordingBuffer::new(44_100, 1, 2).unwrap();
+        for &sample in &input {
+            recording.push(sample).unwrap();
+        }
+        let live = recording.finish().unwrap().samples;
+        for output in [batch, live] {
+            assert!(output.iter().all(|sample| sample.abs() <= 1.0));
+            assert!(output.iter().any(|sample| sample.abs() > 0.99));
+        }
     }
     #[test]
     fn silence_and_clipping_diagnostics_are_content_free() {

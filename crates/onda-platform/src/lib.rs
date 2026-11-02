@@ -1,5 +1,5 @@
-//! Sensitive desktop operations remain in the native backend, outside the renderer. Windows has
-//! the full set; Linux has microphone capture, the clipboard and process measurements.
+//! Sensitive desktop operations remain in the native backend, outside the renderer. Windows uses
+//! UI Automation and SendInput; Linux uses the accessibility bus (AT-SPI) and desktop portals.
 mod audio;
 #[cfg(windows)]
 mod clipboard;
@@ -8,6 +8,12 @@ pub mod debug_fixture;
 mod desktop;
 #[cfg(target_os = "linux")]
 mod linux_clipboard;
+#[cfg(target_os = "linux")]
+mod linux_target;
+#[cfg(target_os = "linux")]
+mod linux_typing;
+#[cfg(target_os = "linux")]
+pub mod portal;
 mod processes;
 mod protect;
 mod target;
@@ -23,11 +29,12 @@ pub use desktop::{
     set_caption_colors, set_launch_at_login, show_without_activation, system_uses_light_theme, Cue,
 };
 pub use processes::{process_tree, MemoryMeasure, ProcessSample};
-pub use protect::{protect_user_data, unprotect_user_data};
+pub use protect::{protect_for, protect_user_data, unprotect_for, unprotect_user_data};
 
-/// Whether Onda can type into the focused field of another app. Without it (Linux), dictation
-/// completes by putting its words on the clipboard for the user to paste.
-pub const TYPES_INTO_APPS: bool = cfg!(windows);
+#[cfg(target_os = "linux")]
+pub use linux_target::start_focus_tracking;
+#[cfg(target_os = "linux")]
+pub use linux_typing::{allow_typing, restore_typing, stop_typing, typing_access, TypingAccess};
 pub use target::{
     ControlFingerprint, InsertionOutcome, PasteShortcut, TargetSnapshot, WindowsTargetService,
     MAX_TEXT_CHARACTERS,

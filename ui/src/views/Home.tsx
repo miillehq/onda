@@ -50,6 +50,8 @@ import {
   isWindows,
   profile,
   usage,
+  commandShortcutOnly,
+  thisDevice,
 } from "../lib/store";
 
 const TYPING_WPM = 40;
@@ -101,7 +103,7 @@ function Hero({ onPractice }: { onPractice: () => void }) {
   if (!value) return null;
   return (
     <section class="hero" aria-labelledby="hero-title">
-      {isWindows.value ? (
+      {!commandShortcutOnly.value ? (
         <div class="hero-copy">
           <p class="hero-eyebrow">Your dictation shortcut</p>
           <Keys keys={value.pushToTalk.keys} size="hero" />
@@ -110,7 +112,13 @@ function Hero({ onPractice }: { onPractice: () => void }) {
             <br />
             Let go to type.
           </h2>
-          <p class="hero-text">Works in any app, wherever your cursor is.</p>
+          <p class="hero-text">
+            {isWindows.value || snapshot.value?.typingAccess === "allowed"
+              ? "Works in any app, wherever your cursor is."
+              : snapshot.value?.typingAccess === "notAllowed"
+                ? "Works in any app. Allow typing in Shortcuts so Onda can paste for you."
+                : "Works in any app. Where Onda can't type, your words wait on the clipboard for Ctrl+V."}
+          </p>
           <div class="hero-actions">
             <Button variant="inverse" icon={<Mic size={16} />} onClick={onPractice}>
               Try it here
@@ -127,9 +135,9 @@ function Hero({ onPractice }: { onPractice: () => void }) {
           <h2 id="hero-title" class="hero-title">
             Press to talk.
             <br />
-            Press again, then paste.
+            Press again to finish.
           </h2>
-          <p class="hero-text">Bind the command to a key in your desktop's settings. Your words wait on the clipboard for Ctrl+V.</p>
+          <p class="hero-text">Bind the command to a key in your desktop's settings. Where Onda can't type, your words wait on the clipboard for Ctrl+V.</p>
           <div class="hero-actions">
             <Button variant="inverse" icon={<Keyboard size={16} />} onClick={() => navigate("settings/shortcuts")}>
               Set up the shortcut
@@ -192,7 +200,7 @@ function SetupCallout() {
       ) : operation.value?.error?.code === "noModel" ? (
         <span data-testid="operation-error">{operation.value.error.message}</span>
       ) : (
-        "Speech recognition runs on this PC, so Onda needs its model once."
+        `Speech recognition runs on ${thisDevice.value}, so Onda needs its model once.`
       )}
     </Callout>
   );
@@ -396,7 +404,7 @@ function ResultCard() {
     return (
       <section class="card result is-empty">
         <EmptyState art={<HistoryIcon size={20} />} title="Your last dictation shows up here">
-          Earlier ones stay in History {retentionPhrase(days)}, encrypted on this PC, so you can always copy them again.
+          Earlier ones stay in History {retentionPhrase(days)}, encrypted on {thisDevice.value}, so you can always copy them again.
         </EmptyState>
       </section>
     );

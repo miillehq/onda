@@ -21,6 +21,8 @@ import {
   settings,
   settingsPending,
   snapshot,
+  thisDevice,
+  yourDevice,
 } from "../../lib/store";
 
 type Profile = Exclude<QualityProfile, "custom">;
@@ -273,7 +275,7 @@ export function Speech() {
               <Mark height={14} />
             </span>
             <span>
-              <b>Onda, on this PC</b>
+              <b>Onda, on {thisDevice.value}</b>
               <span class="flow-sub">{resolvedModel?.name ?? "Speech model"}</span>
             </span>
           </div>
@@ -290,7 +292,7 @@ export function Speech() {
         </div>
         <p class="flow-foot">
           <ShieldCheck size={16} aria-hidden="true" />
-          <b>Your audio never leaves your PC.</b>
+          <b>Your audio never leaves {yourDevice.value}.</b>
           <span>{value.enhancementEnabled && aiReady.value ? (value.aiProvider === "local" ? "AI polish uses a model on this computer, so your text stays here too." : `With AI polish on, only the written text goes to ${providerName(value)}.`) : "AI polish is off, so your text stays here too."}</span>
         </p>
       </div>

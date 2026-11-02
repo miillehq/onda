@@ -166,6 +166,12 @@ pub enum ApiRequest {
     },
     /// Memory and CPU of Onda's own process tree, including its web view processes.
     GetResourceUsage,
+    /// Linux: asks the desktop to let Onda press the paste shortcut in other apps.
+    AllowTyping,
+    /// Linux: stops typing into other apps and forgets the permission.
+    StopTyping,
+    /// Asks the desktop again to approve Onda's shortcuts, or restarts a stopped helper.
+    RestartShortcuts,
 }
 
 /// What the local model heard for one spoken take of a word.
@@ -287,6 +293,9 @@ pub struct Snapshot {
     pub platform: String,
     /// Whether each provider has a saved API key; keys themselves never leave native code.
     pub provider_keys: ProviderKeys,
+    /// "allowed", "notAllowed" or "unavailable": whether dictation may press paste in other
+    /// apps. Always "allowed" on Windows; on Linux it needs the desktop's permission.
+    pub typing_access: String,
 }
 #[derive(Clone, Serialize, Deserialize, TS, Default)]
 #[serde(rename_all = "camelCase")]

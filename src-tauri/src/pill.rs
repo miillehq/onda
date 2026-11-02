@@ -167,7 +167,8 @@ impl Pill {
         if let Ok(hwnd) = window.hwnd() {
             onda_platform::show_without_activation(hwnd.0 as isize);
         }
-        // GTK honours the window's focusable(false); Wayland compositors may ignore the position.
+        // GTK honours focusable(false); on Wayland desktops Onda runs through XWayland so the
+        // position and "always on top" hold (see `run`).
         #[cfg(not(windows))]
         let _ = window.show();
     }
@@ -187,6 +188,29 @@ impl Pill {
     pub fn hide_now(&self, app: &AppHandle) {
         self.generation.fetch_add(1, Ordering::AcqRel);
         hide(app);
+    }
+}
+
+/// On X11 (and XWayland) a window manager may still give a newly shown window the focus, even
+/// one that declines it, which would take the keyboard from the app being dictated into. An
+/// override-redirect window is outside window management altogether: it is never focused and
+/// stays where it is placed. It must be set before the window is first shown: a window manager
+/// that has already framed the window keeps it inside that frame.
+#[cfg(target_os = "linux")]
+pub fn make_overlay(app: &AppHandle) {
+    use gtk::prelude::{GtkWindowExt, WidgetExt};
+    let Some(window) = app.get_webview_window(LABEL) else {
+        return;
+    };
+    let Ok(gtk_window) = window.gtk_window() else {
+        return;
+    };
+    gtk_window.set_accept_focus(false);
+    gtk_window.set_focus_on_map(false);
+    gtk_window.set_type_hint(gtk::gdk::WindowTypeHint::Notification);
+    gtk_window.realize();
+    if let Some(gdk_window) = gtk_window.window() {
+        gdk_window.set_override_redirect(true);
     }
 }
 

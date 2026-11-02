@@ -7,7 +7,7 @@ import { Card, Page, Row, Rows, Section } from "../../components/layout";
 import type { ResourceUsage, UpdateInfo } from "../../generated/api";
 import { formatBytes } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { getResourceUsage, isWindows, settings, snapshot, toastError } from "../../lib/store";
+import { cancelKeys, commandShortcutOnly, getResourceUsage, isWindows, settings, snapshot, toastError } from "../../lib/store";
 
 const ROLE_NAMES: Record<string, string> = {
   app: "Onda",
@@ -161,7 +161,7 @@ export function About() {
     ...(value.toggleEnabled ? [{ keys: value.toggleShortcut.keys, what: "Hands-free on and off" }] : []),
     { keys: value.transformShortcut.keys, what: "Rewrite selected text" },
     { keys: value.commandShortcut.keys, what: "Edit selected text with your voice" },
-    { keys: [0x1b], what: "Cancel" },
+    { keys: cancelKeys(value.pushToTalk.keys), what: "Cancel" },
     { keys: [0xa2, 0x4b], what: "Search Onda (in the app)" },
   ];
   return (
@@ -198,7 +198,7 @@ export function About() {
       </Section>
 
       <Section title="Shortcuts at a glance">
-        {isWindows.value ? (
+        {!commandShortcutOnly.value ? (
           <ul class="cheats">
             {cheats.map((cheat) => (
               <li key={cheat.what}>

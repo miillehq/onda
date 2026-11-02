@@ -27,6 +27,9 @@ import {
   settings,
   snapshot,
   toastError,
+  isWindows,
+  thisDevice,
+  yourDevice,
 } from "../lib/store";
 import { ChatgptModelSelect, modelAdvice } from "./settings/AiPolish";
 import { MicTest } from "./settings/Microphone";
@@ -48,7 +51,7 @@ function Art({ step }: { step: Step }) {
       return (
         <div class="art-chip">
           <Cpu size={56} strokeWidth={1.4} />
-          <span>Runs on this PC</span>
+          <span>Runs on {thisDevice.value}</span>
         </div>
       );
     case "try": {
@@ -109,7 +112,7 @@ function Welcome() {
             <Lock size={18} />
           </span>
           <span>
-            <b>Private by default.</b> Speech recognition runs on this PC. Audio is never uploaded.
+            <b>Private by default.</b> Speech recognition runs on {thisDevice.value}. Audio is never uploaded.
           </span>
         </li>
         <li>
@@ -148,7 +151,7 @@ function MicrophoneStep() {
           wide
           value={value.microphoneId ?? ""}
           onChange={(id) => void saveSettings({ microphoneId: id || null })}
-          options={[{ value: "", label: "Windows default" }, ...(devices.value ?? []).map((device) => ({ value: device.id, label: device.name }))]}
+          options={[{ value: "", label: isWindows.value ? "Windows default" : "System default" }, ...(devices.value ?? []).map((device) => ({ value: device.id, label: device.name }))]}
         />
       </div>
       <div class="card">
@@ -170,9 +173,9 @@ function ModelStep() {
   const installed = installedIds.value.has(id);
   const progress = downloads.value[id];
   const keepCustom = resolvedReady && value.qualityProfile === "custom";
-  const description = resolvedReady ? "Already on this PC." : english ? "Quick and accurate for English." : "Detects the language automatically.";
+  const description = resolvedReady ? `Already on ${thisDevice.value}.` : english ? "Quick and accurate for English." : "Detects the language automatically.";
   return (
-    <StepBody title="Get the speech model" lede="Onda recognises speech on your PC, so it needs a model once. You can switch to a more accurate one later.">
+    <StepBody title="Get the speech model" lede={`Onda recognises speech on ${yourDevice.value}, so it needs a model once. You can switch to a more accurate one later.`}>
       <div class="setup-field">
         <span class="field-label">What will you speak?</span>
         <Segmented

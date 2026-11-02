@@ -1,6 +1,6 @@
 # Onda
 
-Onda by miille: Windows voice dictation that types wherever your cursor is. Speech recognition runs locally. Optional text cleanup and selection rewrites use the AI provider you choose: a connected ChatGPT plan, an OpenAI-compatible server, Anthropic, or a model on this computer. A Linux build with fewer features is also available ([linux](docs/linux.md)). Apache-2.0.
+Onda by miille: Windows voice dictation that types wherever your cursor is. Speech recognition runs locally. Optional text cleanup and selection rewrites use the AI provider you choose: a connected ChatGPT plan, an OpenAI-compatible server, Anthropic, or a model on this computer. It also runs on Linux, where the desktop approves its shortcuts and typing once ([linux](docs/linux.md)). Apache-2.0.
 
 The repository contains the native application, the Onda interface (main window and a non-activating dictation pill), CPU and optional Vulkan ASR workers, a Windows shortcut helper, installer scripts, CI, and failure tests. Design decisions live in [DESIGN.md](DESIGN.md). This is an engineering candidate: consult [testing](docs/testing.md) for the measured results and the interactive release matrix that has not yet been certified.
 

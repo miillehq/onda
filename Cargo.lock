@@ -3072,6 +3072,7 @@ name = "onda-app"
 version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
+ "gtk",
  "hound",
  "onda-asr",
  "onda-cloud",
@@ -3126,6 +3127,7 @@ dependencies = [
  "futures-util",
  "jsonwebtoken",
  "keyring",
+ "onda-platform",
  "rand 0.8.8",
  "reqwest 0.12.28",
  "serde",
@@ -3167,10 +3169,12 @@ dependencies = [
 name = "onda-input"
 version = "0.1.0"
 dependencies = [
+ "onda-platform",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "windows-sys 0.59.0",
+ "zbus 5.19.0",
 ]
 
 [[package]]
@@ -3179,7 +3183,9 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "cpal",
+ "keyring",
  "libc",
+ "ring",
  "rtrb",
  "rubato",
  "serde",
@@ -3188,6 +3194,7 @@ dependencies = [
  "tracing",
  "windows 0.58.0",
  "windows-sys 0.59.0",
+ "zbus 5.19.0",
  "zeroize",
 ]
 

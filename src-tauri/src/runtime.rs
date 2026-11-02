@@ -236,13 +236,18 @@ impl Runtime {
         tauri::async_runtime::spawn(async move {
             actor.action_loop(receiver).await;
         });
-        if !cfg!(windows) {
-            // The keyboard hook helper is Windows-only; desktop shortcuts run `onda --dictate`.
-            *lock(&service.shortcut_status)? = "desktop".into();
-        } else if register_global_shortcuts {
+        if register_global_shortcuts {
             service.start_helper()?;
         } else {
             *lock(&service.shortcut_status)? = "disabled for isolated test".into();
+        }
+        #[cfg(target_os = "linux")]
+        {
+            onda_platform::start_focus_tracking();
+            // A permission allowed at an earlier launch restarts without a dialog.
+            let _ = std::thread::Builder::new()
+                .name("onda-typing-restore".into())
+                .spawn(move || onda_platform::restore_typing(&data_directory));
         }
         Ok(service)
     }
@@ -271,11 +276,11 @@ impl Runtime {
         if let Ok(state) = lock(&self.state) {
             let current = state.snapshot();
             if let Some(tray) = self.app.tray_by_id("main") {
-                let _ = tray.set_tooltip(Some(format!(
-                    "{} · {}",
-                    onda_core::APP_NAME,
-                    tray_status(&current.phase)
-                )));
+                let status = tray_status(&current.phase);
+                let _ = tray.set_tooltip(Some(format!("{} · {}", onda_core::APP_NAME, status)));
+                // GNOME and KDE show no tray tooltips; the label beside the icon shows the state.
+                #[cfg(target_os = "linux")]
+                let _ = tray.set_title((status != "Ready").then_some(status));
             }
             tracing::info!(subsystem="operation",operation_id=current.operation_id.as_deref().unwrap_or("none"),phase=?current.phase,route=?current.route,"state transition");
             drop(state);
@@ -460,7 +465,9 @@ impl Runtime {
         }
     }
 
-    fn start_helper(self: &Arc<Self>) -> AppResult<()> {
+    /// Windows' keyboard hook, or on Linux the shortcuts portal session; both run in the
+    /// `onda-input` helper process and report the same events.
+    pub(crate) fn start_helper(self: &Arc<Self>) -> AppResult<()> {
         let service = self.clone();
         let helper = std::thread::Builder::new()
             .name("onda-input-supervisor".into())
@@ -476,8 +483,13 @@ impl Runtime {
                             Ok(config) => config.clone(),
                             Err(_) => break,
                         };
+                        let helper = if cfg!(windows) {
+                            "onda-input.exe"
+                        } else {
+                            "onda-input"
+                        };
                         match onda_input::HelperSupervisor::start(
-                            service.worker_directory.join("onda-input.exe"),
+                            service.worker_directory.join(helper),
                             config,
                         ) {
                             Ok(value) => {
@@ -552,6 +564,19 @@ impl Runtime {
                             ..
                         })) => {
                             service.queue_helper_action(Action::Stop);
+                        }
+                        // Linux: no shortcuts portal, so a desktop shortcut runs `onda --dictate`;
+                        // or the user dismissed the approval and can ask again in Shortcuts.
+                        Ok(Some(onda_input::HelperEvent::Error { code }))
+                            if !cfg!(windows) && (code == "unsupported" || code == "declined") =>
+                        {
+                            service.cancel_immediate();
+                            service.shortcut_status(if code == "unsupported" {
+                                "desktop"
+                            } else {
+                                "declined"
+                            });
+                            break;
                         }
                         Ok(Some(
                             onda_input::HelperEvent::Reset { .. }
@@ -1527,8 +1552,15 @@ impl Runtime {
         output: &str,
         fallback: bool,
     ) -> AppResult<()> {
-        if !onda_platform::TYPES_INTO_APPS {
-            return self.hand_off_to_clipboard(active, output, fallback).await;
+        if cfg!(not(windows)) {
+            let target = active.target.clone();
+            let typeable =
+                tokio::task::spawn_blocking(move || WindowsTargetService::new().can_type(&target))
+                    .await
+                    .unwrap_or(false);
+            if !typeable {
+                return self.hand_off_to_clipboard(active, output, fallback).await;
+            }
         }
         let target = active.target.clone();
         let text = output.to_owned();
@@ -1610,8 +1642,9 @@ impl Runtime {
         Ok(())
     }
 
-    /// Where Onda cannot type into other apps (Linux), a dictation completes by putting the words
-    /// on the clipboard with the privacy markers; the pill and Home say to press Ctrl+V.
+    /// Where Onda cannot type into the focused app (Linux, without the paste permission or a
+    /// field it can edit), a dictation completes by putting the words on the clipboard with the
+    /// privacy markers; the pill and Home say to press Ctrl+V.
     async fn hand_off_to_clipboard(
         self: &Arc<Self>,
         active: &ActiveOperation,
@@ -1647,8 +1680,8 @@ impl Runtime {
         Ok(())
     }
 
-    /// Desktop shortcuts on Linux run `onda --dictate`; it starts or finishes hands-free
-    /// dictation like the toggle shortcut does on Windows.
+    /// `onda --dictate`, for Linux desktops without a shortcuts portal: it starts or finishes
+    /// hands-free dictation like the hands-free shortcut does.
     pub fn toggle_dictation(&self) {
         self.queue_helper_action(Action::Toggle);
     }

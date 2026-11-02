@@ -20,7 +20,7 @@ node scripts/generate-notices.mjs
 overlay=()
 if [[ " ${prepare[*]} " == *" --with-vulkan "* ]]; then
   mkdir -p .artifacts
-  printf '%s\n' '{"bundle":{"externalBin":["binaries/onda-asr-worker","binaries/onda-asr-avx2-worker","binaries/onda-asr-vulkan-worker"]}}' > .artifacts/linux-bundle-config.json
+  printf '%s\n' '{"bundle":{"externalBin":["binaries/onda-input","binaries/onda-asr-worker","binaries/onda-asr-avx2-worker","binaries/onda-asr-vulkan-worker"]}}' > .artifacts/linux-bundle-config.json
   overlay=(--config .artifacts/linux-bundle-config.json)
 fi
 npm run tauri build -- --bundles "$bundles" "${overlay[@]}"

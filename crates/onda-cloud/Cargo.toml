@@ -26,6 +26,7 @@ zeroize = { version = "1.8", features = ["derive"] }
 tracing = "0.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+onda-platform = { path = "../onda-platform" }
 keyring = { version = "3.6", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 
 [target.'cfg(windows)'.dependencies]

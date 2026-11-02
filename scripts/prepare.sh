@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Linux counterpart of prepare.ps1: builds the speech workers Tauri bundles as sidecars.
-# The Windows shortcut helper (onda-input) is not built: Linux uses desktop shortcuts instead.
+# Linux counterpart of prepare.ps1: builds the speech workers and the shortcut helper (which
+# talks to the desktop's shortcuts portal) that Tauri bundles as sidecars.
 #   scripts/prepare.sh [--release] [--with-vulkan]
 set -euo pipefail
 
@@ -35,6 +35,7 @@ for flag in GGML_AVX GGML_AVX2 GGML_FMA GGML_F16C GGML_SSE42 GGML_BMI2; do
   avx2_flags+=(--config "env.$flag.value='ON'")
 done
 
+cargo build --locked -p onda-input --bin onda-input "${release_arguments[@]}"
 cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker "${linux_flags[@]}" "${release_arguments[@]}"
 # The default worker is SSE2-only so it runs on any x86-64 CPU; this one needs AVX2/FMA/F16C.
 avx2_target="$repository/target/avx2"
@@ -43,6 +44,7 @@ cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker --t
 
 binaries="$repository/src-tauri/binaries"
 mkdir -p "$binaries"
+install -m 755 "target/$mode/onda-input" "$binaries/onda-input-$triple"
 install -m 755 "target/$mode/onda-asr-worker" "$binaries/onda-asr-worker-$triple"
 install -m 755 "$avx2_target/$mode/onda-asr-worker" "$binaries/onda-asr-avx2-worker-$triple"
 install -m 755 "$avx2_target/$mode/onda-asr-worker" "target/$mode/onda-asr-avx2-worker"

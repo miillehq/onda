@@ -7,7 +7,7 @@ import { presentError } from "../lib/errors";
 import { appName, plural, routeLabel } from "../lib/format";
 import { navigate } from "../lib/router";
 import { Suggestion } from "../components/feedback";
-import { clearHistory, copyHistoryEntry, copyHistorySuggestion, deleteHistoryEntry, history, isWindows, settings, toast } from "../lib/store";
+import { clearHistory, copyHistoryEntry, copyHistorySuggestion, deleteHistoryEntry, history, isWindows, settings, thisDevice, toast } from "../lib/store";
 
 const PAGE_SIZE = 60;
 
@@ -144,7 +144,7 @@ export function History() {
       title="History"
       lede={
         <>
-          What you said, kept {retentionPhrase(days)} and encrypted on this PC.{" "}
+          What you said, kept {retentionPhrase(days)} and encrypted on {thisDevice.value}.{" "}
           <button type="button" class="link-button" onClick={() => navigate("settings/privacy")}>
             Change
           </button>
@@ -204,7 +204,7 @@ export function History() {
       <Dialog
         open={confirming}
         title="Clear history?"
-        description={`This deletes ${plural(entries.length, "entry", "entries")} from this PC. You can't undo it.`}
+        description={`This deletes ${plural(entries.length, "entry", "entries")} from ${thisDevice.value}. You can't undo it.`}
         onClose={() => setConfirming(false)}
         footer={
           <>

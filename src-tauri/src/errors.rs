@@ -18,23 +18,24 @@ pub fn platform(error: onda_platform::PlatformError) -> AppError {
         E::AlreadyRecording=>(ErrorCode::Busy,"Microphone capture is already active.",true),
         E::NotRecording=>(ErrorCode::InvalidInput,"No microphone capture is active.",false),
         E::DeviceDisconnected=>(ErrorCode::AudioDisconnected,"Microphone disconnected. Choose a connected input and retry.",true),
-        E::AudioRouteChanged=>(ErrorCode::AudioRouteChanged,"Windows changed or invalidated the microphone stream. Select your microphone in Settings and retry.",true),
-        E::AudioPermissionDenied=>(ErrorCode::AudioPermissionDenied,"Windows denied microphone access. Enable microphone access for desktop apps in Windows privacy settings and retry.",true),
+        E::AudioRouteChanged=>(ErrorCode::AudioRouteChanged,if cfg!(windows){"Windows changed or invalidated the microphone stream. Select your microphone in Settings and retry."}else{"The system changed or closed the microphone stream. Select your microphone in Settings and retry."},true),
+        E::AudioPermissionDenied=>(ErrorCode::AudioPermissionDenied,if cfg!(windows){"Windows denied microphone access. Enable microphone access for desktop apps in Windows privacy settings and retry."}else{"The system denied microphone access. Check your sound and privacy settings and retry."},true),
         E::AudioBackendFailed(kind)=>return audio_backend(kind),
         E::RecordingLimit|E::AudioOverflow=>(ErrorCode::AudioLimit,"Recording reached its limit or lost audio; retry a shorter recording.",true),
         E::TargetChanged=>(ErrorCode::FocusChanged,"The focused app, control, or selection changed. Your text is available to copy.",true),
         E::SecureField=>(ErrorCode::PasswordField,"Password and secure controls cannot receive dictation.",false),
         E::ElevatedTarget=>(ErrorCode::ElevatedTarget,"Windows blocked insertion into an elevated app. Copy the result manually.",false),
-        E::TargetUnavailable(_)|E::SelectionUnavailable=>(ErrorCode::UnsupportedControl,"This app did not expose a safe accessible text target.",true),
+        E::TargetUnavailable(_)|E::SelectionUnavailable if cfg!(windows)=>(ErrorCode::UnsupportedControl,"This app did not expose a safe accessible text target.",true),
+        E::TargetUnavailable(_)|E::SelectionUnavailable=>(ErrorCode::UnsupportedControl,"This app doesn't show Onda its text field. Apps built with GTK or Qt do; browsers and Electron apps need the desktop's accessibility support on.",true),
         E::EmptySelection=>(ErrorCode::SelectionRequired,"Select text in your target app before using a transform or spoken editing shortcut.",true),
         E::UnsupportedClipboardFormat(_)=>(ErrorCode::ClipboardUnsupported,"The clipboard contains a format that cannot be preserved safely. Copy the result manually.",true),
         E::Clipboard(_)=>(ErrorCode::ClipboardBusy,"Clipboard transaction failed. Your result is available to copy.",true),
         E::InjectionFailed|E::ModifiersHeld=>(ErrorCode::Insertion,"Insertion failed or modifier keys are still held. Release the shortcut and retry.",true),
         E::TextLimit|E::InvalidParameter(_)=>(ErrorCode::InvalidInput,"Native operation parameters are invalid.",false),
         E::Audio(_)=>(ErrorCode::NoMicrophone,"The selected microphone is unavailable or could not start.",true),
-        E::Timeout=>(ErrorCode::InferenceTimeout,"A Windows operation timed out.",true),
+        E::Timeout=>(ErrorCode::InferenceTimeout,if cfg!(windows){"A Windows operation timed out."}else{"A system operation timed out."},true),
         E::UnsupportedPlatform if cfg!(windows)=>(ErrorCode::Internal,"Windows 10 or Windows 11 is required.",false),
-        E::UnsupportedPlatform=>(ErrorCode::UnsupportedControl,"This needs Windows; on this system Onda can only copy dictation to the clipboard.",false),
+        E::UnsupportedPlatform=>(ErrorCode::UnsupportedControl,"Onda can't type or edit text in this app. Allow typing in Settings › Shortcuts; until then, dictation is copied for you to paste.",false),
         E::Protection=>return AppError::storage(),
     };
     AppError::new(code, message, retryable)
@@ -45,9 +46,10 @@ fn audio_backend(kind: onda_platform::AudioBackendFailure) -> AppError {
     use onda_platform::AudioBackendFailure as E;
     let message = match kind {
         E::DeviceBusy => "The microphone is busy. Close apps using it exclusively and retry.",
-        E::HostUnavailable => "Windows audio is unavailable. Check the audio service and retry.",
+        E::HostUnavailable if cfg!(windows) => "Windows audio is unavailable. Check the audio service and retry.",
+        E::HostUnavailable => "The sound system is unavailable. Check that PipeWire or PulseAudio is running and retry.",
         E::UnsupportedConfig | E::UnsupportedOperation | E::InvalidInput => "The microphone driver rejected its recording format. Select another input in Settings and retry.",
-        E::ResourceExhausted => "Windows could not allocate resources for recording. Close unused apps and retry.",
+        E::ResourceExhausted => "The system could not allocate resources for recording. Close unused apps and retry.",
         E::BackendError | E::Other => "The microphone driver stopped recording. Check the input or virtual microphone connection and retry.",
     };
     AppError::new(ErrorCode::AudioBackend, message, true)
@@ -55,6 +57,10 @@ fn audio_backend(kind: onda_platform::AudioBackendFailure) -> AppError {
 
 pub fn asr(error: onda_asr::AsrError) -> AppError {
     use onda_asr::AsrError as E;
+    // These reasons are fixed strings, never audio or text, and tell the checks apart.
+    if let E::InvalidAudio(reason) | E::InvalidOptions(reason) = &error {
+        tracing::warn!(subsystem = "asr", reason, "transcription input refused");
+    }
     let (code, message) = match error {
         E::Cancelled => (ErrorCode::Cancelled, "Local transcription was cancelled."),
         E::Busy | E::DownloadBusy => (
@@ -111,14 +117,18 @@ pub fn cloud(error: onda_cloud::CloudError) -> AppError {
     if matches!(error, E::Storage) {
         return AppError::new(
             ErrorCode::Cloud,
-            "Protected ChatGPT storage is unavailable. Local dictation remains available.",
+            if cfg!(windows) {
+                "Protected ChatGPT storage is unavailable. Local dictation remains available."
+            } else {
+                "Onda keeps your ChatGPT sign-in in the desktop keyring, and none is available or it's locked. Local dictation remains available."
+            },
             true,
         );
     }
     if matches!(error, E::UnsupportedPlatform) {
         return AppError::new(
             ErrorCode::Cloud,
-            "Sign in with ChatGPT needs Windows' protected storage. On this system, choose another provider in AI polish.",
+            "Sign in with ChatGPT isn't available on this system. Choose another provider in AI polish.",
             false,
         );
     }

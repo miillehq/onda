@@ -27,7 +27,8 @@ export function modifierKind(key: number): ModifierKind | null {
 }
 
 const MODIFIER_ORDER: ModifierKind[] = ["ctrl", "shift", "alt", "win"];
-const MODIFIER_LABEL: Record<ModifierKind, string> = { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: "Win" };
+/** The Windows key is the Super key elsewhere; WebView2 reports Windows in its user agent. */
+const MODIFIER_LABEL: Record<ModifierKind, string> = { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: navigator.userAgent.includes("Windows") ? "Win" : "Super" };
 const MODIFIER_CODE: Record<ModifierKind, number> = { ctrl: VK.leftControl, shift: VK.leftShift, alt: VK.leftAlt, win: VK.leftWin };
 
 const NAMED: Record<number, string> = {

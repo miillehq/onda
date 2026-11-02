@@ -151,10 +151,11 @@ const snapshot: Snapshot = {
   installedModels: scenario === "empty" || scenario === "onboarding" ? [] : [{ modelId: "whisper-tiny-en", version: "sample", sizeBytes: 77_704_715 }],
   profiles,
   cloudError: null,
-  shortcutStatus: platform === "linux" ? "desktop" : "ready",
+  shortcutStatus: "ready",
   updaterConfigured: false,
   platform,
   providerKeys: { openaiCompatible: provider === "openaiCompatible", anthropic: provider === "anthropic", local: false },
+  typingAccess: platform === "linux" ? "notAllowed" : "allowed",
 };
 
 function today(): Date {
@@ -501,6 +502,17 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     }
     case "getResourceUsage":
       return wait(500).then(() => ({ type: "resources", payload: resources() }));
+    case "allowTyping":
+      return wait(600).then(() => {
+        snapshot.typingAccess = "allowed";
+        return { type: "unit" };
+      });
+    case "stopTyping":
+      snapshot.typingAccess = "notAllowed";
+      return { type: "unit" };
+    case "restartShortcuts":
+      snapshot.shortcutStatus = "ready";
+      return { type: "unit" };
     case "signOutChatgptProfile":
       return { type: "signOut", payload: { remoteRevocationConfirmed: true } };
     case "clearResult":

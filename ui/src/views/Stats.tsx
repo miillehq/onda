@@ -49,11 +49,15 @@ function ActivityGrid() {
         }}
       >
         <div class="activity-months" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}>
-          {grid.months.map((month) => (
-            <span key={month.column} style={{ gridColumn: `${month.column + 1} / span 4` }}>
-              {month.label}
-            </span>
-          ))}
+          {grid.months.map((month) => {
+            // A label in the last weeks would add columns past the year; it ends at the grid's edge.
+            const span = Math.min(4, WEEKS - month.column);
+            return (
+              <span key={month.column} style={{ gridColumn: `${month.column + 1} / span ${span}`, ...(span < 4 ? { justifySelf: "end" } : {}) }}>
+                {month.label}
+              </span>
+            );
+          })}
         </div>
         <div class="activity-grid" role="grid" aria-label={`Dictation activity for the last ${WEEKS} weeks, ${plural(grid.activeDays, "active day")}`}>
           {grid.weeks.map((week, column) => (

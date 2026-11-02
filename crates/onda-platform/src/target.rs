@@ -126,20 +126,49 @@ impl WindowsTargetService {
             Err(PlatformError::UnsupportedPlatform)
         }
     }
-    /// Elsewhere the target cannot be identified, so dictation hands its words to the clipboard
-    /// (see `TYPES_INTO_APPS`) and nothing that needs the field (selection, context) is read.
+    /// On Linux the snapshot is unidentified when no app reports a focused field.
     pub fn snapshot(&self) -> Result<TargetSnapshot, PlatformError> {
         #[cfg(windows)]
         {
             crate::windows_target::snapshot()
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_target::snapshot()
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             Ok(TargetSnapshot::unidentified())
         }
     }
     pub fn revalidate(&self, target: &TargetSnapshot) -> Result<(), PlatformError> {
-        validate_identity(target, &self.snapshot()?)
+        let actual = self.snapshot()?;
+        // On Linux an app without accessibility reports no field before or after; there is
+        // nothing to compare, and the paste goes wherever the keyboard is.
+        if cfg!(target_os = "linux")
+            && target.focused_runtime_id.is_empty()
+            && actual.focused_runtime_id.is_empty()
+        {
+            return Ok(());
+        }
+        validate_identity(target, &actual)
+    }
+    /// Whether a dictation into `target` can be typed rather than handed over on the clipboard.
+    pub fn can_type(&self, target: &TargetSnapshot) -> bool {
+        #[cfg(windows)]
+        {
+            let _ = target;
+            true
+        }
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_target::can_type(target)
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
+        {
+            let _ = target;
+            false
+        }
     }
     /// Selected text requires a single UIA TextPattern range and refuses password controls.
     pub fn selected_text(
@@ -152,7 +181,11 @@ impl WindowsTargetService {
         {
             crate::windows_target::read_text(target, max_characters, true)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_target::read_text(target, max_characters, true)
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             let _ = target;
             Err(PlatformError::UnsupportedPlatform)
@@ -178,7 +211,11 @@ impl WindowsTargetService {
         {
             crate::windows_target::preceding_text(target, max_characters)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_target::preceding_text(target, max_characters)
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             let _ = target;
             Err(PlatformError::UnsupportedPlatform)
@@ -195,7 +232,11 @@ impl WindowsTargetService {
         {
             crate::windows_target::read_text(target, max_characters, false)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_target::read_text(target, max_characters, false)
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             let _ = target;
             Err(PlatformError::UnsupportedPlatform)
@@ -229,7 +270,11 @@ impl WindowsTargetService {
         {
             crate::clipboard::paste(self, target, text, shortcut, &should_cancel)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_target::paste(target, text, shortcut, &should_cancel)
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             let _ = shortcut;
             Err(PlatformError::UnsupportedPlatform)
@@ -308,7 +353,17 @@ impl WindowsTargetService {
             )?;
             self.replace_selection_guarded(target, needle, replacement, shortcut, should_cancel)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_target::select_unique_text(
+                target,
+                expected_document,
+                needle,
+                &should_cancel,
+            )?;
+            self.replace_selection_guarded(target, needle, replacement, shortcut, should_cancel)
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             let _ = (target, needle, replacement, shortcut);
             Err(PlatformError::UnsupportedPlatform)

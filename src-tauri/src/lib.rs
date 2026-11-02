@@ -319,10 +319,13 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .skip_taskbar(true)
         .focusable(false)
         .focused(false)
-        // Created visible (tao's only non-activating show), then hidden natively; see pill.rs.
+        // Windows: created visible (tao's only non-activating show), then hidden natively; see
+        // pill.rs. Linux: created hidden, so it is an overlay before it is first shown.
         .position(-32000.0, -32000.0)
-        .visible(true)
+        .visible(cfg!(windows))
         .build()?;
+    #[cfg(target_os = "linux")]
+    pill::make_overlay(app.handle());
     pill::hide(app.handle());
     if settings.launch_at_login {
         // Re-register so the entry follows the executable after updates or moves.
@@ -337,7 +340,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         true,
         None::<&str>,
     )?;
-    // Without the Windows keyboard helper, the tray (and desktop shortcuts) start dictation.
+    // On Linux the tray can start dictation too, for desktops without a shortcuts portal.
     let dictate = MenuItem::with_id(
         app,
         "dictate",
@@ -399,8 +402,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// `onda --dictate` starts hands-free dictation, or finishes it if one is recording. On Linux,
-/// where Onda has no keyboard hook, bind it to a desktop shortcut.
+/// `onda --dictate` starts hands-free dictation, or finishes it if one is recording. On Linux
+/// desktops without a shortcuts portal, bind it to a desktop shortcut.
 const DICTATE_ARGUMENT: &str = "--dictate";
 
 /// A second launch either toggles dictation or opens the window.
@@ -419,6 +422,16 @@ fn second_instance(app: &tauri::AppHandle, arguments: Vec<String>) {
 
 /// Native startup failures remain visible instead of silent exits.
 pub fn run() {
+    // A Wayland compositor places windows itself, ignores "always on top" and may focus a window
+    // as it appears, which would put the pill where it likes and take the keyboard from the app
+    // being dictated into. Through XWayland the pill keeps its place and never takes focus.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GDK_BACKEND").is_none()
+        && std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && std::env::var_os("DISPLAY").is_some()
+    {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
     let mut builder = tauri::Builder::default();
     // An isolated profile must neither activate the user's app nor share its global shortcuts.
     if !isolated() {

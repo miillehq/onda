@@ -164,7 +164,7 @@ export function General() {
           <Row
             icon={<PanelBottom size={18} />}
             title="Show the dictation pill"
-            description={isWindows.value ? "A small indicator above the taskbar shows when Onda is listening. It never takes focus from your app." : "A small indicator at the bottom of the screen shows when Onda is listening. Some Wayland desktops place it themselves."}
+            description={`A small indicator ${isWindows.value ? "above the taskbar" : "at the bottom of the screen"} shows when Onda is listening. It never takes focus from your app.`}
             control={<Switch checked={value.showPill} label="Show the dictation pill" onChange={(showPill) => void saveSettings({ showPill })} />}
           >
             <span class={`pill-capsule pill-preview${value.showPill ? "" : " is-off"}`} aria-hidden="true">

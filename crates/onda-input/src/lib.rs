@@ -80,6 +80,32 @@ impl Default for HelperConfig {
     }
 }
 
+/// Reads the configuration line the supervisor writes first to a helper's stdin.
+pub fn read_config() -> Result<HelperConfig, InputError> {
+    use std::io::Read;
+    let input = std::io::stdin();
+    let mut reader = input.lock().take((MAX_PROTOCOL_LINE_BYTES + 1) as u64);
+    let mut bytes = Vec::new();
+    // Read one byte at a time only once at startup to avoid stealing later commands into a buffer.
+    loop {
+        let mut byte = [0];
+        if reader.read(&mut byte)? == 0 {
+            return Err(InputError::Protocol("missing configuration".into()));
+        }
+        bytes.push(byte[0]);
+        if byte[0] == b'\n' {
+            break;
+        }
+    }
+    if bytes.len() > MAX_PROTOCOL_LINE_BYTES {
+        return Err(InputError::Protocol("oversized configuration".into()));
+    }
+    let config: HelperConfig =
+        serde_json::from_slice(&bytes).map_err(|error| InputError::Protocol(error.to_string()))?;
+    config.validate()?;
+    Ok(config)
+}
+
 impl HelperConfig {
     /// Reject ambiguous, oversized, or modifier-only shortcuts before installing a hook.
     pub fn validate(&self) -> Result<(), InputError> {

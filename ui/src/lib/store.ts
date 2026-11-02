@@ -25,6 +25,7 @@ import type {
   Transform,
 } from "../generated/core";
 import { presentError } from "./errors";
+import { modifierKind, VK } from "./keys";
 import { levelFromRms } from "./level";
 import { navigate, parseRoute } from "./router";
 
@@ -73,6 +74,16 @@ export const micName = computed(() => {
 /** "windows", "linux", …: where Onda can type into other apps and how shortcuts work. */
 export const platform = computed(() => snapshot.value?.platform ?? "windows");
 export const isWindows = computed(() => platform.value === "windows");
+/** "this PC" on Windows, "this computer" elsewhere; `yourDevice` likewise. */
+export const thisDevice = computed(() => (isWindows.value ? "this PC" : "this computer"));
+export const yourDevice = computed(() => (isWindows.value ? "your PC" : "your computer"));
+/** Linux desktops without a shortcuts portal start dictation through `onda --dictate` instead. */
+export const commandShortcutOnly = computed(() => !isWindows.value && snapshot.value?.shortcutStatus === "desktop");
+/** Esc on Windows. On Linux the desktop would take Esc from every app, so it goes with the
+ *  dictation modifiers, which can still be held while pressing it. */
+export function cancelKeys(pushToTalk: readonly number[]): number[] {
+  return isWindows.value ? [VK.escape] : [...pushToTalk.filter((key) => modifierKind(key) !== null), VK.escape];
+}
 export const activeProfile = computed<AccountInfo | null>(() => snapshot.value?.profiles.find((profile) => profile.active) ?? null);
 /** A ChatGPT account is connected and allowed to use its plan. */
 export const chatgptReady = computed(() => {
@@ -325,6 +336,20 @@ export async function saveProviderKey(provider: AiProvider, key: string): Promis
 }
 export async function removeProviderKey(provider: AiProvider): Promise<void> {
   if (await run("Couldn't remove the key", { command: "removeProviderKey", args: { provider } })) await refresh().catch(() => undefined);
+}
+
+/** Linux: the desktop shows its permission dialog; typing starts if the user allows it. */
+export async function allowTyping(): Promise<void> {
+  if (await run("Typing wasn't turned on", { command: "allowTyping" })) toast({ tone: "ok", title: "Onda can type into apps" }, 2400);
+  await refresh().catch(() => undefined);
+}
+export async function stopTyping(): Promise<void> {
+  await run("Couldn't turn typing off", { command: "stopTyping" });
+  await refresh().catch(() => undefined);
+}
+export async function restartShortcuts(): Promise<void> {
+  await run("Couldn't ask again", { command: "restartShortcuts" });
+  await refresh().catch(() => undefined);
 }
 
 export async function getResourceUsage(): Promise<ResourceUsage> {

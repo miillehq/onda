@@ -6,7 +6,7 @@ import { Callout, Card, Page, Row, Rows, Section } from "../../components/layout
 import type { AccountInfo, CloudModel } from "../../generated/api";
 import { toAppError } from "../../api";
 import type { AiProvider, Settings } from "../../generated/core";
-import { activeProfile, aiReady, chatgptReady, cloudModels, isWindows, listProviderModels, oauthStatus, refresh, removeProviderKey, saveProviderKey, saveSettings, settings, snapshot, toast, toastError } from "../../lib/store";
+import { activeProfile, aiReady, chatgptReady, cloudModels, isWindows, listProviderModels, oauthStatus, refresh, removeProviderKey, saveProviderKey, saveSettings, settings, snapshot, thisDevice, toast, toastError } from "../../lib/store";
 
 async function act(label: string, request: Parameters<typeof ask>[0]): Promise<void> {
   try {
@@ -23,7 +23,7 @@ function AccountRow({ account }: { account: AccountInfo }) {
       const result = await ask({ command: "signOutChatgptProfile", args: { profileId: account.id } }, "signOut");
       await refresh();
       if (result.remoteRevocationConfirmed) toast({ tone: "ok", title: "Signed out" });
-      else toast({ tone: "info", title: "Signed out on this PC", body: "ChatGPT didn't confirm it removed access. You can remove Onda in your ChatGPT account settings." }, 9000);
+      else toast({ tone: "info", title: `Signed out on ${thisDevice.value}`, body: "ChatGPT didn't confirm it removed access. You can remove Onda in your ChatGPT account settings." }, 9000);
     } catch (error) {
       toastError(error, "Couldn't sign out");
     }
@@ -525,7 +525,7 @@ export function AiPolish() {
           <Row
             icon={<ScanText size={18} />}
             title="Use nearby text for context"
-            description={`Onda reads a little text around your cursor so the model can match names and tone. Only sent with polish on${isWindows.value ? "" : ", and not available on Linux yet"}.`}
+            description="Onda reads a little text around your cursor so the model can match names and tone. Only sent with polish on."
             control={<Switch checked={value.contextEnabled} label="Use nearby text for context" onChange={(contextEnabled) => void saveSettings({ contextEnabled })} />}
           />
           {value.aiProvider === "chatgpt" && <ModelPicker />}

@@ -136,3 +136,32 @@ Open: "Automatic" tray icon updates only on app theme changes (a taskbar-only ch
 a restart); migration 004 is one-way, so 0.1.4 can't open a database this branch has upgraded;
 dictation that starts while a Chromium app reports its window pane instead of the text box still
 fails as a focus change (seen here in Onda's own window), the fix the owner deferred on master.
+
+### 2026-11-02, Linux parity and lifetime streaks (Claude, desktop session)
+
+Stats: active days and the longest streak were counted from the daily rows Onda reads (the
+latest 366 active days), so both stopped growing after a year of use. They are running totals
+now, like words; migration 005 backfills them from the existing rows.
+
+Linux, to match Windows (details in [linux](linux.md)):
+- Shortcuts: `onda-input` now builds for Linux and binds every shortcut through the global
+  shortcuts portal; the supervisor and events are unchanged. Cancel is Esc with the dictation
+  modifiers. Without the portal the app falls back to `onda --dictate`; a dismissed approval can
+  be asked again from Shortcuts.
+- Typing: an "Allow" in Shortcuts starts a remote desktop portal session (keyboard only, restore
+  token for later launches) and dictation pastes as on Windows. Without it, fields that accept
+  AT-SPI edits get the text directly; elsewhere it goes on the clipboard.
+- The focused field: AT-SPI identifies it, refuses password fields, and reads it for spacing,
+  selections, context, undo and learning from corrections.
+- ChatGPT sign-in and History are encrypted under a key in the desktop keyring.
+- The app runs through XWayland on Wayland desktops, and the pill is an override-redirect window
+  made before its first show; the tray shows the state beside the icon.
+- The Linux bundle adds the shortcut helper and the Vulkan worker.
+
+Found while testing in WSL: clipped input rang past ±1 after resampling and the speech workers
+refused the recording (Windows too; clamped now); the newest month label could widen the
+activity grid past the year (Windows too); process names were cut to 15 characters; about a
+dozen strings said "PC" on Linux.
+
+Not verified here: the GNOME portals themselves, the tray on a real panel, browsers and Electron
+apps with accessibility on, ChatGPT sign-in end to end, Vulkan on a real GPU, KDE.

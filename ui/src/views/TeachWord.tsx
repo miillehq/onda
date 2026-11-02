@@ -7,7 +7,7 @@ import { Dialog } from "../components/layout";
 import type { TeachTake } from "../generated/api";
 import type { AppError, DictionaryEntry } from "../generated/core";
 import { presentError } from "../lib/errors";
-import { dictionary, micLevel, toast } from "../lib/store";
+import { dictionary, micLevel, thisDevice, toast } from "../lib/store";
 
 /** Long enough to say a name and stop; short enough that silence doesn't invite guesses. */
 const TAKE_MS = 2500;
@@ -101,7 +101,7 @@ export function TeachWord({ entry, onClose }: { entry: DictionaryEntry; onClose:
     <Dialog
       open
       title={`Teach Onda how “${word}” sounds`}
-      description="Say just the word, the way you normally would. Onda listens on this PC, and anything it writes differently becomes a replacement."
+      description={`Say just the word, the way you normally would. Onda listens on ${thisDevice.value}, and anything it writes differently becomes a replacement.`}
       onClose={onClose}
       footer={
         <>

@@ -506,6 +506,23 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::GetResourceUsage => Ok(O::Resources(self.resource_usage().await?)),
+            R::AllowTyping => {
+                self.allow_typing().await?;
+                Ok(O::Unit)
+            }
+            R::StopTyping => {
+                #[cfg(target_os = "linux")]
+                tokio::task::spawn_blocking(onda_platform::stop_typing)
+                    .await
+                    .map_err(|_| {
+                        AppError::new(ErrorCode::Internal, "Typing worker stopped.", true)
+                    })?;
+                Ok(O::Unit)
+            }
+            R::RestartShortcuts => {
+                self.restart_shortcuts()?;
+                Ok(O::Unit)
+            }
             R::ClearHistory => {
                 lock(&self.history)?.clear();
                 lock(&self.store)?.prune_history(i64::MAX)?;
@@ -569,6 +586,8 @@ impl Runtime {
             .selected_model(&settings)
             .ok()
             .map(|model| model.id.to_owned());
+        // Awaited before the locks below, which must not be held across it.
+        let typing_access = typing_access().await;
         Ok(Snapshot {
             app_name: onda_core::APP_NAME.into(),
             version: onda_core::APP_VERSION.into(),
@@ -592,7 +611,51 @@ impl Runtime {
             updater_configured: updater_configured(),
             platform: std::env::consts::OS.into(),
             provider_keys: self.provider_keys(),
+            typing_access,
         })
+    }
+
+    /// Linux asks the desktop for permission to press the paste shortcut in other apps.
+    async fn allow_typing(&self) -> AppResult<()> {
+        #[cfg(target_os = "linux")]
+        {
+            let allowed = tokio::task::spawn_blocking(onda_platform::allow_typing)
+                .await
+                .map_err(|_| AppError::new(ErrorCode::Internal, "Typing worker stopped.", true))?;
+            allowed.map_err(|error| match error {
+                onda_platform::PlatformError::Cancelled => AppError::new(
+                    ErrorCode::Cancelled,
+                    "Typing wasn't allowed. Onda keeps copying dictation for you to paste.",
+                    true,
+                ),
+                onda_platform::PlatformError::UnsupportedPlatform => AppError::new(
+                    ErrorCode::UnsupportedControl,
+                    "This desktop can't let apps type. Onda keeps copying dictation for you to paste.",
+                    false,
+                ),
+                _ => AppError::new(
+                    ErrorCode::Insertion,
+                    "The desktop couldn't start typing. Try again.",
+                    true,
+                ),
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Asks the desktop again after the user dismissed the shortcut approval, or restarts the
+    /// helper after it stopped.
+    fn restart_shortcuts(self: &Arc<Self>) -> AppResult<()> {
+        let finished = lock(&self.helper_join)?
+            .as_ref()
+            .is_none_or(|helper| helper.is_finished());
+        if finished {
+            self.shortcut_status("starting");
+            self.start_helper()
+        } else {
+            self.helper_generation.fetch_add(1, Ordering::AcqRel);
+            Ok(())
+        }
     }
 
     fn hardware_report(&self) -> HardwareReport {
@@ -1297,6 +1360,27 @@ impl Drop for UpdateReservation<'_> {
 }
 
 /// Put text on the clipboard off the async runtime, with the platform's privacy markers.
+/// "allowed", "notAllowed" or "unavailable": whether dictation may press paste in other apps.
+async fn typing_access() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        use onda_platform::TypingAccess as A;
+        let access = tokio::task::spawn_blocking(onda_platform::typing_access)
+            .await
+            .unwrap_or(A::Unavailable);
+        match access {
+            A::Allowed => "allowed",
+            A::NotAllowed => "notAllowed",
+            A::Unavailable => "unavailable",
+        }
+        .into()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        "allowed".into()
+    }
+}
+
 async fn copy_text(text: String) -> AppResult<()> {
     tokio::task::spawn_blocking(move || onda_platform::copy_text_to_clipboard(&text))
         .await

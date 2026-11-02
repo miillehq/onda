@@ -1,4 +1,4 @@
-import { Copy, Mic, MousePointer2, Pencil, Plus, Sparkles, Trash2, WandSparkles, X } from "lucide-preact";
+import { Copy, Keyboard, Mic, MousePointer2, Pencil, Plus, Sparkles, Trash2, WandSparkles, X } from "lucide-preact";
 import { useEffect, useState } from "preact/hooks";
 import { ask, toAppError } from "../api";
 import { consumeEditorIntent, editorIntent } from "../app/intents";
@@ -8,7 +8,7 @@ import { Callout, Dialog, Page } from "../components/layout";
 import { ShortcutRecorder } from "../components/ShortcutRecorder";
 import type { OperationResult, Transform } from "../generated/core";
 import { navigate } from "../lib/router";
-import { aiReady, copyResult, isBusy, lastResult, saveSettings, settings, toast, toastError, transforms } from "../lib/store";
+import { aiReady, commandShortcutOnly, copyResult, isBusy, lastResult, saveSettings, settings, toast, toastError, transforms } from "../lib/store";
 
 function RewriteDialog({ transform, onClose }: { transform: Transform | null; onClose: () => void }) {
   const [name, setName] = useState(transform?.name ?? "");
@@ -203,6 +203,11 @@ export function Rewrites() {
         </Button>
       }
     >
+      {commandShortcutOnly.value && (
+        <Callout tone="warn" icon={<Keyboard size={20} />} title="Rewrite shortcuts need your desktop's shortcuts portal">
+          This desktop doesn't offer one, so only dictation works, through <span class="mono selectable">onda --dictate</span>. GNOME 48 and KDE Plasma 6 have it.
+        </Callout>
+      )}
       {!aiReady.value && (
         <Callout
           tone="info"

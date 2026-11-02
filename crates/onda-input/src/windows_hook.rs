@@ -1,6 +1,6 @@
 use onda_input::{
-    HelperCommand, HelperConfig, HelperEvent, InputError, ShortcutMatcher, EVENT_QUEUE_CAPACITY,
-    HEARTBEAT_INTERVAL_MS, MAX_PROTOCOL_LINE_BYTES,
+    HelperCommand, HelperEvent, InputError, ShortcutMatcher, EVENT_QUEUE_CAPACITY,
+    HEARTBEAT_INTERVAL_MS,
 };
 use std::{
     cell::RefCell,
@@ -118,7 +118,7 @@ unsafe extern "system" fn keyboard_hook(code: i32, message: WPARAM, data: LPARAM
 }
 
 pub fn run() -> Result<(), InputError> {
-    let config = read_config()?;
+    let config = onda_input::read_config()?;
     let bindings = config.bindings.clone();
     let mut matcher = ShortcutMatcher::new(config)?;
     let input_desktop = InputDesktop::current()?;
@@ -329,31 +329,6 @@ fn seed_modifiers(matcher: &mut ShortcutMatcher) {
     for key in MODIFIER_KEYS {
         matcher.seed_key(key, unsafe { GetAsyncKeyState(key as i32) } < 0);
     }
-}
-
-fn read_config() -> Result<HelperConfig, InputError> {
-    use std::io::Read;
-    let input = std::io::stdin();
-    let mut reader = input.lock().take((MAX_PROTOCOL_LINE_BYTES + 1) as u64);
-    let mut bytes = Vec::new();
-    // Read one byte at a time only once at startup to avoid stealing later commands into a buffer.
-    loop {
-        let mut byte = [0];
-        if reader.read(&mut byte)? == 0 {
-            return Err(InputError::Protocol("missing configuration".into()));
-        }
-        bytes.push(byte[0]);
-        if byte[0] == b'\n' {
-            break;
-        }
-    }
-    if bytes.len() > MAX_PROTOCOL_LINE_BYTES {
-        return Err(InputError::Protocol("oversized configuration".into()));
-    }
-    let config: HelperConfig =
-        serde_json::from_slice(&bytes).map_err(|error| InputError::Protocol(error.to_string()))?;
-    config.validate()?;
-    Ok(config)
 }
 
 #[cfg(test)]

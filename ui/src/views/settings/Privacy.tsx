@@ -5,7 +5,7 @@ import { Button, Select, Switch } from "../../components/controls";
 import { Dialog, Page, Row, Rows, Section } from "../../components/layout";
 import { plural, providerName } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { aiReady, clearHistory, history, isWindows, saveSettings, settings, toast, toastError } from "../../lib/store";
+import { aiReady, clearHistory, history, isWindows, saveSettings, settings, thisDevice, toast, toastError, yourDevice } from "../../lib/store";
 import { retentionPhrase } from "../History";
 
 const NEVER = ["Recordings of your voice", "Your words in logs or diagnostics", "Analytics or usage tracking"];
@@ -43,11 +43,11 @@ export function Privacy() {
     }
   };
   return (
-    <Page title="Privacy" lede="Onda is built to keep what you say on your PC.">
+    <Page title="Privacy" lede={`Onda is built to keep what you say on ${yourDevice.value}.`}>
       <div class="privacy-grid">
         <section class="card privacy-card" aria-labelledby="privacy-local">
           <h3 id="privacy-local">
-            <HardDrive size={18} aria-hidden="true" /> Stays on this PC
+            <HardDrive size={18} aria-hidden="true" /> Stays on {thisDevice.value}
           </h3>
           <ul class="ticks">
             {local.map((item) => (
@@ -111,7 +111,7 @@ export function Privacy() {
             description={
               isWindows.value
                 ? "So you can copy a dictation again if it didn't make it into your app. Encrypted with your Windows account and deleted automatically."
-                : "So you can copy a dictation again. On Linux, Onda keeps it only until it quits, because it never saves history unencrypted."
+                : "So you can copy a dictation again if it didn't make it into your app. Encrypted with a key in your desktop keyring and deleted automatically. Without a keyring, it's kept only until Onda quits."
             }
             control={
               <Select
@@ -155,7 +155,7 @@ export function Privacy() {
       <Dialog
         open={confirming}
         title="Clear history?"
-        description={`This deletes ${plural(kept, "entry", "entries")} from this PC. You can't undo it.`}
+        description={`This deletes ${plural(kept, "entry", "entries")} from ${thisDevice.value}. You can't undo it.`}
         onClose={() => setConfirming(false)}
         footer={
           <>
