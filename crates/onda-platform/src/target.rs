@@ -191,6 +191,24 @@ impl WindowsTargetService {
             Err(PlatformError::UnsupportedPlatform)
         }
     }
+    /// The selection a rewrite replaces, read when it starts and again just before the paste.
+    /// On Linux, an app that shows Onda no field has its selection copied through the typing
+    /// permission instead; a rewrite starts from a tapped shortcut, so its keys are up by the
+    /// time the copy shortcut is pressed.
+    pub fn selected_text_for_rewrite(
+        &self,
+        target: &TargetSnapshot,
+        max_characters: usize,
+    ) -> Result<String, PlatformError> {
+        #[cfg(target_os = "linux")]
+        {
+            if target.focused_runtime_id.is_empty() {
+                validate_limit(max_characters)?;
+                return crate::linux_target::copy_selection(max_characters);
+            }
+        }
+        self.selected_text(target, max_characters)
+    }
     /// Read only the focused control, once per explicitly triggered contextual operation.
     pub fn context(
         &self,
@@ -303,7 +321,7 @@ impl WindowsTargetService {
         if should_cancel() {
             return Err(PlatformError::Cancelled);
         }
-        let current = self.selected_text(target, MAX_TEXT_CHARACTERS)?;
+        let current = self.selected_text_for_rewrite(target, MAX_TEXT_CHARACTERS)?;
         if current != expected_selection {
             return Err(PlatformError::TargetChanged);
         }

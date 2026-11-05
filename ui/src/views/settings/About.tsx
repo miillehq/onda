@@ -1,4 +1,4 @@
-import { Download, Gauge, RefreshCw, RotateCcw } from "lucide-preact";
+import { ClipboardCopy, Download, Gauge, RefreshCw, RotateCcw } from "lucide-preact";
 import { useEffect, useState } from "preact/hooks";
 import iconUrl from "../../assets/onda-icon-dark.svg";
 import { ask } from "../../api";
@@ -7,7 +7,7 @@ import { Card, Page, Row, Rows, Section } from "../../components/layout";
 import type { ResourceUsage, UpdateInfo } from "../../generated/api";
 import { formatBytes } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { cancelKeys, commandShortcutOnly, getResourceUsage, isWindows, settings, snapshot, toastError } from "../../lib/store";
+import { cancelKeys, commandShortcutOnly, getResourceUsage, isWindows, settings, snapshot, toast, toastError } from "../../lib/store";
 
 const ROLE_NAMES: Record<string, string> = {
   app: "Onda",
@@ -134,6 +134,7 @@ export function About() {
   const value = settings.value;
   const info = snapshot.value;
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [diagnostics, setDiagnostics] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   if (!value || !info) return null;
@@ -154,6 +155,16 @@ export function About() {
     } catch (error) {
       setInstalling(false);
       toastError(error, "Update not installed");
+    }
+  };
+  const copyDiagnostics = async () => {
+    try {
+      const text = await ask({ command: "exportDiagnostics" }, "text");
+      setDiagnostics(text);
+      await navigator.clipboard.writeText(text);
+      toast({ tone: "ok", title: "Diagnostics copied", body: "They contain settings and timings only, never your words." });
+    } catch (error) {
+      toastError(error, "Couldn't copy diagnostics");
     }
   };
   const cheats: { keys: number[]; what: string }[] = [
@@ -228,6 +239,23 @@ export function About() {
               </Button>
             }
           />
+          <Row
+            icon={<ClipboardCopy size={18} />}
+            title="Diagnostics for support"
+            description="Settings, hardware and timings only. Never your words or audio."
+            control={
+              <Button size="sm" onClick={() => void copyDiagnostics()}>
+                Copy diagnostics
+              </Button>
+            }
+          >
+            {diagnostics && (
+              <details class="disclosure is-inline">
+                <summary>See what's included</summary>
+                <pre class="code selectable">{diagnostics}</pre>
+              </details>
+            )}
+          </Row>
         </Rows>
         <p class="footnote">Onda is open source under the Apache 2.0 licence. Speech recognition uses whisper.cpp and OpenAI Whisper models (MIT).</p>
       </Section>

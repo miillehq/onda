@@ -690,7 +690,7 @@ impl Runtime {
                 Some(
                     targets
                         .selected_text(&target, onda_platform::MAX_TEXT_CHARACTERS)
-                        .map_err(errors::platform)?,
+                        .map_err(errors::selection)?,
                 )
             } else {
                 None
@@ -1755,8 +1755,8 @@ impl Runtime {
             let service = WindowsTargetService::new();
             let target = service.snapshot().map_err(errors::platform)?;
             let selected = service
-                .selected_text(&target, onda_platform::MAX_TEXT_CHARACTERS)
-                .map_err(errors::platform)?;
+                .selected_text_for_rewrite(&target, onda_platform::MAX_TEXT_CHARACTERS)
+                .map_err(errors::selection)?;
             Ok::<_, AppError>((target, selected))
         })
         .await

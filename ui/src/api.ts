@@ -50,5 +50,5 @@ export function toAppError(error: unknown): AppError {
     const value = error as { code: unknown; message: unknown; retryable?: unknown };
     return { code: String(value.code) as AppError["code"], message: String(value.message), retryable: value.retryable === true };
   }
-  return { code: "internal", message: "Something went wrong. Try again, or export diagnostics from Settings.", retryable: true };
+  return { code: "internal", message: "Something went wrong. Try again, or copy diagnostics from Settings › Updates and help.", retryable: true };
 }

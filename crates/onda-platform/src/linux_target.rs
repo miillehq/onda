@@ -45,6 +45,11 @@ const PASTE_SETTLE: Duration = Duration::from_millis(800);
 const CALL_TIMEOUT: Duration = Duration::from_millis(1500);
 /// How long the paste keeps the clipboard before the previous text comes back.
 const CLIPBOARD_HOLD: Duration = Duration::from_millis(500);
+/// Copying a selection: each try first gives the rewrite shortcut's keys time to come up,
+/// then the app time to fill the clipboard.
+const COPY_KEYS_UP: Duration = Duration::from_millis(250);
+const COPY_SETTLE: Duration = Duration::from_millis(400);
+const COPY_ATTEMPTS: usize = 3;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Object {
@@ -435,6 +440,11 @@ pub(crate) fn read_text(
     max_characters: usize,
     selected: bool,
 ) -> Result<String, PlatformError> {
+    if target.focused_runtime_id.is_empty() {
+        return Err(PlatformError::TargetUnavailable(
+            "the app shows no text field".into(),
+        ));
+    }
     let object = field(target)?;
     let text = if selected {
         match selection(&object)? {
@@ -453,6 +463,51 @@ pub(crate) fn read_text(
     if selected && text.is_empty() {
         return Err(PlatformError::EmptySelection);
     }
+    Ok(text)
+}
+
+/// The selection in an app that shows Onda no field, copied with Ctrl+Insert through the typing
+/// permission; the clipboard gets its text back afterwards. Ctrl+Insert copies in browsers,
+/// Electron, GTK, Qt and LibreOffice, and unlike Ctrl+C it never interrupts a terminal program.
+/// The rewrite shortcut's own keys may still be down at first, so the copy is tried again.
+pub(crate) fn copy_selection(max_characters: usize) -> Result<String, PlatformError> {
+    if linux_typing::typing_access() != linux_typing::TypingAccess::Allowed {
+        return Err(PlatformError::UnsupportedPlatform);
+    }
+    let previous = crate::linux_clipboard::read_text();
+    // A marker rather than an empty clipboard, which some clipboard managers refill.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or_default();
+    let marker = format!("onda-selection-{nanos:x}");
+    crate::linux_clipboard::copy_text(&marker)?;
+    let copied = (|| -> Result<Option<String>, PlatformError> {
+        for _ in 0..COPY_ATTEMPTS {
+            std::thread::sleep(COPY_KEYS_UP);
+            linux_typing::press_chord(&[linux_typing::KEY_CONTROL, linux_typing::KEY_INSERT])?;
+            let deadline = Instant::now() + COPY_SETTLE;
+            while Instant::now() < deadline {
+                match crate::linux_clipboard::read_text() {
+                    Some(text) if !text.is_empty() && text != marker => return Ok(Some(text)),
+                    _ => std::thread::sleep(Duration::from_millis(40)),
+                }
+            }
+        }
+        Ok(None)
+    })();
+    // Put the clipboard back, unless something else was copied meanwhile.
+    let current = crate::linux_clipboard::read_text();
+    let ours = current.as_deref() == Some(marker.as_str())
+        || matches!((&current, &copied), (Some(current), Ok(Some(text))) if current == text);
+    if ours {
+        let _ = match previous {
+            Some(previous) => crate::linux_clipboard::copy_text(&previous),
+            None => crate::linux_clipboard::clear(),
+        };
+    }
+    let text = copied?.ok_or(PlatformError::EmptySelection)?;
+    check_limit(&text, max_characters)?;
     Ok(text)
 }
 

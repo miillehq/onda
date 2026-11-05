@@ -1,11 +1,10 @@
-import { BrainCircuit, Check, ClipboardCopy, Cloud, Eraser, HardDrive, History as HistoryIcon, Minus, ScanText } from "lucide-preact";
+import { BrainCircuit, Check, Cloud, Eraser, HardDrive, History as HistoryIcon, Minus, ScanText } from "lucide-preact";
 import { useState } from "preact/hooks";
-import { ask } from "../../api";
 import { Button, Select, Switch } from "../../components/controls";
 import { Dialog, Page, Row, Rows, Section } from "../../components/layout";
 import { plural, providerName } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { aiReady, clearHistory, history, isWindows, saveSettings, settings, thisDevice, toast, toastError, yourDevice } from "../../lib/store";
+import { aiReady, clearHistory, history, isWindows, saveSettings, settings, thisDevice, toast, yourDevice } from "../../lib/store";
 import { retentionPhrase } from "../History";
 
 const NEVER = ["Recordings of your voice", "Your words in logs or diagnostics", "Analytics or usage tracking"];
@@ -20,7 +19,6 @@ const RETENTION = [
 
 export function Privacy() {
   const value = settings.value;
-  const [diagnostics, setDiagnostics] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   if (!value) return null;
   const kept = history.value?.length ?? 0;
@@ -32,16 +30,6 @@ export function Privacy() {
     "Your dictionary and snippets",
     "Daily word counts (numbers only)",
   ];
-  const copyDiagnostics = async () => {
-    try {
-      const text = await ask({ command: "exportDiagnostics" }, "text");
-      setDiagnostics(text);
-      await navigator.clipboard.writeText(text);
-      toast({ tone: "ok", title: "Diagnostics copied", body: "They contain settings and timings only, never your words." });
-    } catch (error) {
-      toastError(error, "Couldn't copy diagnostics");
-    }
-  };
   return (
     <Page title="Privacy" lede={`Onda is built to keep what you say on ${yourDevice.value}.`}>
       <div class="privacy-grid">
@@ -132,23 +120,6 @@ export function Privacy() {
               </Button>
             }
           />
-          <Row
-            icon={<ClipboardCopy size={18} />}
-            title="Diagnostics for support"
-            description="Settings, hardware and timings only. Never your words or audio."
-            control={
-              <Button size="sm" onClick={() => void copyDiagnostics()}>
-                Copy diagnostics
-              </Button>
-            }
-          >
-            {diagnostics && (
-              <details class="disclosure is-inline">
-                <summary>See what's included</summary>
-                <pre class="code selectable">{diagnostics}</pre>
-              </details>
-            )}
-          </Row>
         </Rows>
       </Section>
 

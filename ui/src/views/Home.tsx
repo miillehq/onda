@@ -211,8 +211,11 @@ function OperationError() {
   const dismissed = useSignal<string | null>(null);
   if (!state || state.phase !== "error" || !state.error || state.error.code === "noModel" || dismissed.value === state.operationId) return null;
   const presentation = presentError(state.error);
+  const saved = lastResult.value?.operationId === state.operationId ? lastResult.value : null;
   // Offer the polished version only when its polish is what failed.
-  const suggestion = state.error.code === "invalidEnhancement" && lastResult.value?.operationId === state.operationId ? lastResult.value.suggestion : null;
+  const suggestion = state.error.code === "invalidEnhancement" ? saved?.suggestion ?? null : null;
+  // History holds nothing for an operation that failed before it had any text.
+  const action = presentation.action?.route === "history" && !saved ? undefined : presentation.action;
   const dismiss = () => {
     dismissed.value = state.operationId;
     if (state.operationId) void dismissError(state.operationId);
@@ -228,9 +231,9 @@ function OperationError() {
               Copy polished version
             </Button>
           ) : (
-            presentation.action && (
-              <Button variant="primary" size="sm" onClick={() => navigate(presentation.action!.route)}>
-                {presentation.action.label}
+            action && (
+              <Button variant="primary" size="sm" onClick={() => navigate(action.route)}>
+                {action.label}
               </Button>
             )
           )}

@@ -41,6 +41,25 @@ pub fn platform(error: onda_platform::PlatformError) -> AppError {
     AppError::new(code, message, retryable)
 }
 
+/// Reading the selection a rewrite or voice edit starts from. Nothing is saved yet, so the
+/// message never points to History or the clipboard.
+pub fn selection(error: onda_platform::PlatformError) -> AppError {
+    use onda_platform::PlatformError as E;
+    match error {
+        E::TargetChanged => AppError::new(
+            ErrorCode::SelectionRequired,
+            "The selection changed before Onda could read it. Select the text again, then use the shortcut.",
+            true,
+        ),
+        E::UnsupportedPlatform if !cfg!(windows) => AppError::new(
+            ErrorCode::UnsupportedControl,
+            "Onda can't read the selection in this app. Allow typing in Settings › Shortcuts so it can copy it, then try again.",
+            true,
+        ),
+        other => platform(other),
+    }
+}
+
 /// Describes driver failure categories without exposing device/backend diagnostic strings.
 fn audio_backend(kind: onda_platform::AudioBackendFailure) -> AppError {
     use onda_platform::AudioBackendFailure as E;
@@ -271,6 +290,28 @@ mod provider_error_tests {
         );
         assert_eq!(error.code, ErrorCode::Unauthorized);
         assert!(!error.message.contains("invalid_api_key") && !error.message.contains("req_1"));
+    }
+}
+
+#[cfg(test)]
+mod selection_error_tests {
+    use super::*;
+    use onda_platform::PlatformError;
+
+    #[test]
+    fn an_unread_selection_never_points_to_saved_text() {
+        for failure in [
+            PlatformError::TargetChanged,
+            PlatformError::UnsupportedPlatform,
+            PlatformError::EmptySelection,
+        ] {
+            let error = selection(failure);
+            assert!(!error.message.contains("History") && !error.message.contains("to copy"));
+        }
+        assert_eq!(
+            selection(PlatformError::TargetChanged).code,
+            ErrorCode::SelectionRequired
+        );
     }
 }
 

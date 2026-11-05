@@ -56,9 +56,10 @@ function Timer() {
 function ErrorCard({ error, operation }: { error: AppError; operation: OperationState }) {
   const presentation = presentError(error);
   const mic = MIC_CODES.has(error.code);
-  const section = presentation.action?.route;
   const [copied, setCopied] = useState(false);
   const saved = result.value;
+  // History holds nothing for an operation that failed before it had any text.
+  const section = presentation.action?.route === "history" && !saved ? undefined : presentation.action?.route;
   // The polished version is the thing to copy only when its polish was what failed; after any
   // other failure the words to copy are the ones Onda meant to type.
   const suggestion = error.code === "invalidEnhancement" ? saved?.suggestion ?? null : null;

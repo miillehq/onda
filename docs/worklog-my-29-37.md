@@ -165,3 +165,21 @@ dozen strings said "PC" on Linux.
 
 Not verified here: the GNOME portals themselves, the tray on a real panel, browsers and Electron
 apps with accessibility on, ChatGPT sign-in end to end, Vulkan on a real GPU, KDE.
+
+### 2026-11-02, fixes from the owner's Ubuntu test (Claude, desktop session)
+
+- Hold to talk only worked as press-and-press-again, and holding failed: GNOME reports a held
+  shortcut's keyboard repeats as more presses (xdg-desktop-portal-gnome grabs without ignoring
+  repeats), and the matcher took each one as "pressed again, stop". Repeats within 0.7 s of the
+  last press with no release between are now ignored.
+- The dictation shortcut stopped working after a while: a tapped rewrite (or hands-free) was
+  latched like a hold-to-talk tap and blocked every other shortcut until it was pressed again.
+  Only hold-to-talk and voice edit are held now, and a latched press is dropped once nothing
+  has been running for 1.5 s (cancelled from the tray, or failed).
+- A rewrite in Gmail said the focus had moved and pointed to History, which was empty: the
+  browser shows no field without accessibility, so reading the selection failed. With typing
+  allowed the selection is now copied with Ctrl+Insert, copied again just before the paste to
+  check it is unchanged, and the clipboard put back. Selection
+  failures say what happened, and error cards offer History only when the operation saved text
+  (Windows too).
+- Diagnostics for support moved from Privacy to Updates and help.
