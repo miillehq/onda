@@ -68,6 +68,32 @@ fn inspect_linux(hardware: &mut HardwareInfo) {
     .any(|path| std::path::Path::new(path).exists());
 }
 
+/// Installed memory from `hw.memsize`, and free memory as free pages times the page size. Profile
+/// selection uses installed memory, so without this every Mac stepped down to the Fast models.
+/// GPU adapters are not enumerated on macOS.
+#[cfg(target_os = "macos")]
+fn inspect_macos(hardware: &mut HardwareInfo) {
+    fn sysctl<T: Copy + Default>(name: &std::ffi::CStr) -> Option<T> {
+        let mut value = T::default();
+        let mut size = std::mem::size_of::<T>();
+        let status = unsafe {
+            libc::sysctlbyname(
+                name.as_ptr(),
+                &mut value as *mut T as *mut libc::c_void,
+                &mut size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        (status == 0 && size == std::mem::size_of::<T>()).then_some(value)
+    }
+    hardware.total_memory_bytes = sysctl::<u64>(c"hw.memsize").unwrap_or(0);
+    let free_pages = sysctl::<u32>(c"vm.page_free_count").unwrap_or(0);
+    let page_size = sysctl::<u64>(c"hw.pagesize").unwrap_or(0);
+    hardware.available_memory_bytes =
+        (u64::from(free_pages) * page_size).min(hardware.total_memory_bytes);
+}
+
 impl HardwareInfo {
     /// Inspect CPU/RAM and DXGI adapters without loading optional GPU runtimes.
     pub fn detect() -> Self {
@@ -86,6 +112,8 @@ impl HardwareInfo {
         inspect_windows(&mut hardware);
         #[cfg(target_os = "linux")]
         inspect_linux(&mut hardware);
+        #[cfg(target_os = "macos")]
+        inspect_macos(&mut hardware);
         hardware
     }
 
@@ -222,6 +250,19 @@ mod tests {
             hardware.total_memory_bytes
         );
         assert!(hardware.available_memory_bytes > 0);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_reports_installed_memory_so_profiles_do_not_step_down() {
+        let hardware = HardwareInfo::detect();
+        // Any Mac that runs the tests has more than 4 GiB; 0 sent Balanced and Quality to Fast.
+        assert!(
+            hardware.total_memory_bytes > 4 << 30,
+            "installed memory must be reported in bytes, got {}",
+            hardware.total_memory_bytes
+        );
+        assert!(hardware.available_memory_bytes <= hardware.total_memory_bytes);
     }
 
     #[test]
