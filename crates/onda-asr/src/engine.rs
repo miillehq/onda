@@ -599,5 +599,22 @@ mod tests {
             validate_input(&[0.1], &options),
             Err(AsrError::InvalidOptions("unsupported language"))
         ));
+        // Regional and ISO 639-3 spellings Whisper does not know are refused, not guessed at.
+        for unknown in ["zh-HK", "cmn"] {
+            options.language = Some(unknown.into());
+            assert!(
+                matches!(
+                    validate_input(&[0.1], &options),
+                    Err(AsrError::InvalidOptions("unsupported language"))
+                ),
+                "{unknown} reached the worker"
+            );
+        }
+        // A three-letter code Whisper does support passes.
+        options.language = Some("haw".into());
+        assert!(!matches!(
+            validate_input(&[0.1], &options),
+            Err(AsrError::InvalidOptions("unsupported language"))
+        ));
     }
 }

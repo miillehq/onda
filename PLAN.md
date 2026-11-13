@@ -55,6 +55,11 @@ Rulings:
   a webkit regression on macOS waits for a release check.
 - Slice 8, follow-up for the next contract PR: the mock saves a duplicate dictionary entry that
   Rust refuses; add a contract example and the refusal to the mock.
+- Slice 10: replacements first (this PR), retirements later, each named:
+  `languages.rs` `the_catalog_language_table_matches_whisper_order_and_excludes_cantonese` is
+  replaced by `engine.rs` `languages_the_models_lack_never_reach_the_worker` (now also zh-HK, cmn
+  refused and haw accepted); `api.rs` `public_account_dto_contains_no_credentials` is replaced by
+  `the_account_sent_to_the_interface_has_only_its_public_fields`.
 - Slice 10: Ruling: `ui/src/smoke.ts` stays until every check in it maps to an L6 test by name —
   the smoke is the only real-shell coverage today — cost if wrong: two suites run for a while.
 - Slice 11: Ruling: macOS lands first as compile-only stubs, then features — a build that fails
