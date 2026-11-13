@@ -21,6 +21,8 @@ with an identical tree.
 | 2026-11-13 | L2 probe | each audit drift turns the mock red: code-point name counting fails "the name limit counts graphemes"; demo settings on a fresh install fail "a fresh profile starts from Rust's default settings"; skipping validation fails all 9 refusals | windows-x64, local | the old behaviour restored one at a time in `ui/src/mock/`, `npx vitest run` |
 | 2026-11-13 | L6 | the real app answers the same 15 examples on a fresh profile and shows no mock badge; all 3 spec files pass | windows-x64, local | `npm run build:e2e`; `npm run test:e2e` |
 | 2026-11-13 | L6 probe | a changed Rust message fails `00-contract.spec.ts` ("History can be kept for 30 days at most." vs the example) | windows-x64, local | planted in `crates/onda-core/src/contracts.rs`, rebuilt, run red, restored |
+| 2026-11-13 | L1 | the interface logic in `ui/src/lib` (word diff, shortcut keys, activity grid, formatting, microphone level, error routes): 20 tests | windows-x64, local | `npm run test:unit` |
+| 2026-11-13 | L1 probe | one planted bug per module turns its tests red: diff ties, Esc accepted, Sunday-first weeks, the MB threshold, an error action to a missing route, swapped attack and release | windows-x64, local | each planted in `ui/src/lib/`, `npx vitest run tests/unit/lib.test.ts`, restored |
 
 ## Unverified
 
