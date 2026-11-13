@@ -45,3 +45,6 @@ $env:CMAKE_ASM_COMPILER = $clang
 # An x64 LLVM (emulated on ARM) would target x64 by default; name ARM64 explicitly.
 $env:CMAKE_C_COMPILER_TARGET = 'aarch64-pc-windows-msvc'
 $env:CMAKE_CXX_COMPILER_TARGET = 'aarch64-pc-windows-msvc'
+# The cmake crate sets CMAKE_CXX_FLAGS itself, which drops CMake's default /EHsc; without it
+# clang-cl compiles whisper.cpp with C++ exceptions disabled and rejects its try blocks.
+$env:CXXFLAGS_aarch64_pc_windows_msvc = '/EHsc'

@@ -14,7 +14,7 @@ try {
     $avx2TargetDirectory = Join-Path $repositoryDirectory 'target/avx2'
     $previousArmEnvironment = @{}
     if (-not $x86) {
-        foreach ($name in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'CMAKE_GENERATOR', 'CMAKE_GENERATOR_INSTANCE', 'CMAKE_GENERATOR_PLATFORM', 'CMAKE_GENERATOR_TOOLSET', 'CMAKE_C_COMPILER', 'CMAKE_CXX_COMPILER', 'CMAKE_ASM_COMPILER', 'CMAKE_C_COMPILER_TARGET', 'CMAKE_CXX_COMPILER_TARGET')) { $previousArmEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+        foreach ($name in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'CMAKE_GENERATOR', 'CMAKE_GENERATOR_INSTANCE', 'CMAKE_GENERATOR_PLATFORM', 'CMAKE_GENERATOR_TOOLSET', 'CMAKE_C_COMPILER', 'CMAKE_CXX_COMPILER', 'CMAKE_ASM_COMPILER', 'CMAKE_C_COMPILER_TARGET', 'CMAKE_CXX_COMPILER_TARGET', 'CXXFLAGS_aarch64_pc_windows_msvc')) { $previousArmEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
         . (Join-Path $PSScriptRoot 'arm64-toolchain.ps1')
     }
     try {
