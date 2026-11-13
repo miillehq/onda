@@ -32,10 +32,16 @@ foreach ($environmentLine in $developerEnvironmentLines) {
     [Environment]::SetEnvironmentVariable($environmentName, $environmentLine.Substring($separatorIndex + 1), 'Process')
 }
 $env:PATH = "$ninjaDirectory;$(Split-Path -Parent $clang);$env:PATH"
+# Visual Studio generator settings from the environment (the runner image sets an instance) make
+# CMake reject Ninja.
+foreach ($name in @('CMAKE_GENERATOR_INSTANCE', 'CMAKE_GENERATOR_PLATFORM', 'CMAKE_GENERATOR_TOOLSET')) {
+    [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+}
 $env:CMAKE_GENERATOR = 'Ninja'
 # whisper-rs-sys forwards CMAKE_* variables to CMake, which then compiles with clang-cl.
 $env:CMAKE_C_COMPILER = $clang
 $env:CMAKE_CXX_COMPILER = $clang
+$env:CMAKE_ASM_COMPILER = $clang
 # An x64 LLVM (emulated on ARM) would target x64 by default; name ARM64 explicitly.
 $env:CMAKE_C_COMPILER_TARGET = 'aarch64-pc-windows-msvc'
 $env:CMAKE_CXX_COMPILER_TARGET = 'aarch64-pc-windows-msvc'
