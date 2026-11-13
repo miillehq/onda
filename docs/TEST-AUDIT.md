@@ -5,6 +5,10 @@ Inventory: 227 files, about 37,200 source lines; Tauri 2, Preact, Vite, a Rust w
 191 test functions in 42 files, all Rust; CI: `ci.yml` (windows-2022, ubuntu-24.04) and `release.yml`
 (windows-2022); runs: none, because the repository had no remote (published as `miillehq/onda` on 2026-11-13).
 
+This is a snapshot of the repository on 2026-11-12 and is not updated. [PLAN.md](../PLAN.md) and
+[VERIFICATION.md](../VERIFICATION.md) say what changed since. The pre-Keel records it cites from
+`docs/testing.md` were later removed from that file and remain in its git history.
+
 ## Summary
 The Rust side is tested well: 191 tests, most of them asserting real behaviour, with strong coverage of shortcut matching, text validation, dictionary matching, OAuth, model downloads and migrations, and all 166 that run on Windows pass today.
 Nothing tests the TypeScript UI below the in-app smoke run, the mock the UI is built against has drifted from the Rust defaults, and 11 of 17 planted bugs got past the suite, mostly in pruning, state and platform glue.

@@ -137,7 +137,7 @@ GPU inference limited to half the remaining time so a hung driver leaves a CPU
 recovery budget.
 Integrated Intel/AMD graphics therefore always retain CPU dictation. Vulkan is
 the optional cross-vendor backend; CUDA and DirectML were researched and are not
-distributed inference paths in this version. See [ASR references](asr-references.md).
+distributed inference paths in this version. See [references](references.md).
 
 ## Profiles and languages
 

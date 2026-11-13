@@ -1,6 +1,6 @@
 # Third-party licenses and provenance
 
-Onda is licensed Apache-2.0; see `LICENSE` and `NOTICE`. No proprietary artwork, branding, private protocol, or competitor source was copied. Native competitor implementation research and pinned source links are recorded in `native-references.md`. WhimprFlow and Handy informed API/workflow decisions, not a source-code transplant.
+Onda is licensed Apache-2.0; see `LICENSE` and `NOTICE`. No proprietary artwork, branding, private protocol, or competitor source was copied. Research sources and pinned links are in [references.md](references.md). WhimprFlow and Handy informed API/workflow decisions, not a source-code transplant.
 
 The authoritative dependency versions are `Cargo.lock` and `package-lock.json`. `node scripts/generate-notices.mjs` builds `THIRD_PARTY_NOTICES.txt` and `docs/dependency-inventory.json` from the installed locked source trees, preserving available LICENSE/COPYING/NOTICE files. `scripts/build.ps1` generates these before bundling and the NSIS resources include the license/notices. The inventory includes build-only, optional and other-platform dependencies; it is not a claim that every package is shipped in the Windows executable.
 

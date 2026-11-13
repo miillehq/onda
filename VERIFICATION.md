@@ -1,8 +1,9 @@
 # Verification ledger
 
 Append-only. One row per claim; a claim names the level, the platform and the run (a CI run link
-or the exact local command and commit). Anything not here is "built", not "tested". Records from
-before Keel are in [docs/testing.md](docs/testing.md) and were not re-verified.
+or the exact local command and commit). Anything not here is "built", not "tested". Checks made
+before the project followed Keel (October 2026) are not carried over; they remain in the git
+history of `docs/testing.md` and were not re-verified.
 
 Commits: the 2026-11-12 runs used `852860d`, which the attribution cleanup rewrote to `60eb6d6`
 with an identical tree.

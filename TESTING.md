@@ -2,7 +2,7 @@
 
 Strategy only: what each level proves, the tool, the command and where it runs. Evidence goes in
 [VERIFICATION.md](VERIFICATION.md). The audit behind this plan is [docs/TEST-AUDIT.md](docs/TEST-AUDIT.md);
-pre-Keel validation records and the manual release matrix are in [docs/testing.md](docs/testing.md).
+the manual release matrix and the opt-in tests are in [docs/testing.md](docs/testing.md).
 
 ## Levels
 
