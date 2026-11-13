@@ -27,8 +27,15 @@ export function modifierKind(key: number): ModifierKind | null {
 }
 
 const MODIFIER_ORDER: ModifierKind[] = ["ctrl", "shift", "alt", "win"];
-/** The Windows key is the Super key elsewhere; WebView2 reports Windows in its user agent. */
-const MODIFIER_LABEL: Record<ModifierKind, string> = { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: navigator.userAgent.includes("Windows") ? "Win" : "Super" };
+/** Modifier names as the keyboard prints them. WebView2 reports Windows in its user agent and
+ *  WKWebView reports Macintosh; a Mac reads the Windows key as Command and Alt as Option, and
+ *  Linux calls the Windows key Super. */
+export function modifierLabels(userAgent: string): Record<ModifierKind, string> {
+  if (userAgent.includes("Windows")) return { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: "Win" };
+  if (userAgent.includes("Macintosh")) return { ctrl: "Control", shift: "Shift", alt: "Option", win: "Command" };
+  return { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: "Super" };
+}
+const MODIFIER_LABEL = modifierLabels(navigator.userAgent);
 const MODIFIER_CODE: Record<ModifierKind, number> = { ctrl: VK.leftControl, shift: VK.leftShift, alt: VK.leftAlt, win: VK.leftWin };
 
 const NAMED: Record<number, string> = {
@@ -87,7 +94,8 @@ export function virtualKey(event: KeyboardEvent): number | null {
 }
 
 /** Normalise a recorded set into the stored chord: left-hand modifiers, one primary key. */
-export function chordFrom(keys: Iterable<number>): { keys: number[]; problem: string | null } {
+export function chordFrom(keys: Iterable<number>, labels: Record<ModifierKind, string> = MODIFIER_LABEL): { keys: number[]; problem: string | null } {
+  const [first, second, third, last] = MODIFIER_ORDER.map((kind) => labels[kind]);
   const kinds = new Set<ModifierKind>();
   const primaries: number[] = [];
   for (const key of keys) {
@@ -96,12 +104,19 @@ export function chordFrom(keys: Iterable<number>): { keys: number[]; problem: st
     else if (!primaries.includes(key)) primaries.push(key);
   }
   const modifiers = MODIFIER_ORDER.filter((kind) => kinds.has(kind)).map((kind) => MODIFIER_CODE[kind]);
-  if (primaries.length === 0) return { keys: modifiers, problem: "Add one key that isn't Ctrl, Shift, Alt or Win." };
-  if (primaries.length > 1) return { keys: [...modifiers, ...primaries], problem: "Use only one key besides Ctrl, Shift, Alt and Win." };
+  if (primaries.length === 0) return { keys: modifiers, problem: `Add one key that isn't ${first}, ${second}, ${third} or ${last}.` };
+  if (primaries.length > 1) return { keys: [...modifiers, ...primaries], problem: `Use only one key besides ${first}, ${second}, ${third} and ${last}.` };
   if (primaries[0] === VK.escape) return { keys: modifiers, problem: "Esc is reserved for cancelling." };
   const chord = [...modifiers, primaries[0] as number];
   if (chord.length > 4) return { keys: chord, problem: "Use at most four keys." };
   return { keys: chord, problem: null };
+}
+
+/** Esc cancels on Windows, and on macOS, where Onda takes Esc only while it is listening. A Linux
+ *  desktop would take a bound Esc from every app, so there it goes with the dictation modifiers,
+ *  which can still be held while pressing it. */
+export function cancelChord(platform: string, pushToTalk: readonly number[]): number[] {
+  return platform === "linux" ? [...pushToTalk.filter((key) => modifierKind(key) !== null), VK.escape] : [VK.escape];
 }
 
 export function sameChord(left: readonly number[], right: readonly number[]): boolean {

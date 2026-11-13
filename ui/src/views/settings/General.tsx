@@ -8,7 +8,7 @@ import { Wave } from "../../components/Wave";
 import type { TrayIconStyle } from "../../generated/core";
 import { greetingFor } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { chooseProfilePicture, isWindows, profile, removeProfilePicture, saveSettings, setProfileName, settings } from "../../lib/store";
+import { chooseProfilePicture, isMac, isWindows, profile, removeProfilePicture, saveSettings, setProfileName, settings } from "../../lib/store";
 
 function ProfileEditor() {
   const person = profile.value;
@@ -153,7 +153,9 @@ export function General() {
         description={
           isWindows.value
             ? "Automatic is white on a dark taskbar and black on a light one."
-            : "The Onda mark in the top bar or panel. Linux doesn't report the panel's colour, so Automatic uses white, which suits most dark panels; choose Black for a light one."
+            : isMac.value
+              ? "The Onda mark in the menu bar. Automatic is white in Dark Mode and black in Light Mode."
+              : "The Onda mark in the top bar or panel. Linux doesn't report the panel's colour, so Automatic uses white, which suits most dark panels; choose Black for a light one."
         }
       >
         <TrayIconPicker value={value.trayIcon} />

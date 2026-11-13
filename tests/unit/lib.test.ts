@@ -6,7 +6,7 @@ import { activityGrid, dayKey, parseDay } from "../../ui/src/lib/activity";
 import { wordDiff } from "../../ui/src/lib/diff";
 import { presentError } from "../../ui/src/lib/errors";
 import { appName, formatBytes, formatClock, formatDuration, greeting, greetingFor, pasteKeys, providerName, routeLabel } from "../../ui/src/lib/format";
-import { chordFrom, keyLabel, orderedKeys, sameChord, shortcutText, virtualKey, VK } from "../../ui/src/lib/keys";
+import { cancelChord, chordFrom, keyLabel, modifierLabels, orderedKeys, sameChord, shortcutText, virtualKey, VK } from "../../ui/src/lib/keys";
 import { languageName } from "../../ui/src/lib/languages";
 import { levelFromRms, Smoother } from "../../ui/src/lib/level";
 import { parseRoute } from "../../ui/src/lib/router";
@@ -39,6 +39,11 @@ describe("wordDiff", () => {
   });
 });
 
+// What each shell's web view reports: WebView2, WKWebView and WebKitGTK.
+const WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0";
+const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+const LINUX = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+
 describe("shortcut keys", () => {
   it("labels modifiers, letters, digits, function and named keys", () => {
     expect([VK.leftControl, VK.rightShift, VK.leftAlt].map(keyLabel)).toEqual(["Ctrl", "Shift", "Alt"]);
@@ -57,10 +62,26 @@ describe("shortcut keys", () => {
 
   it("records a chord as left-hand modifiers and one main key, refusing Esc and extra keys", () => {
     expect(chordFrom([VK.rightControl, VK.rightWin, 0x20])).toEqual({ keys: [VK.leftControl, VK.leftWin, 0x20], problem: null });
-    expect(chordFrom([VK.leftControl]).problem).toBe("Add one key that isn't Ctrl, Shift, Alt or Win.");
-    expect(chordFrom([VK.leftControl, 0x41, 0x42]).problem).toBe("Use only one key besides Ctrl, Shift, Alt and Win.");
+    expect(chordFrom([VK.leftControl], modifierLabels(WINDOWS)).problem).toBe("Add one key that isn't Ctrl, Shift, Alt or Win.");
+    expect(chordFrom([VK.leftControl, 0x41, 0x42], modifierLabels(WINDOWS)).problem).toBe("Use only one key besides Ctrl, Shift, Alt and Win.");
     expect(chordFrom([VK.leftControl, VK.escape]).problem).toBe("Esc is reserved for cancelling.");
     expect(chordFrom([VK.leftControl, VK.leftShift, VK.leftAlt, VK.leftWin, 0x41]).problem).toBe("Use at most four keys.");
+  });
+
+  it("names modifiers as each keyboard prints them", () => {
+    const names = (userAgent: string) => Object.values(modifierLabels(userAgent));
+    expect(names(WINDOWS)).toEqual(["Ctrl", "Shift", "Alt", "Win"]);
+    expect(names(MAC)).toEqual(["Control", "Shift", "Option", "Command"]);
+    expect(names(LINUX)).toEqual(["Ctrl", "Shift", "Alt", "Super"]);
+    expect(chordFrom([VK.leftControl], modifierLabels(MAC)).problem).toBe("Add one key that isn't Control, Shift, Option or Command.");
+    expect(chordFrom([VK.leftControl, 0x41, 0x42], modifierLabels(LINUX)).problem).toBe("Use only one key besides Ctrl, Shift, Alt and Super.");
+  });
+
+  it("cancels with Esc alone, except on Linux, where Esc goes with the dictation modifiers", () => {
+    const macDictation = [VK.leftControl, VK.leftShift, 0x20];
+    expect(cancelChord("windows", [VK.leftControl, VK.leftWin, 0x20])).toEqual([VK.escape]);
+    expect(cancelChord("macos", macDictation)).toEqual([VK.escape]);
+    expect(cancelChord("linux", [VK.leftControl, VK.leftWin, 0x20])).toEqual([VK.leftControl, VK.leftWin, VK.escape]);
   });
 
   it("maps keyboard event codes to Windows virtual keys", () => {

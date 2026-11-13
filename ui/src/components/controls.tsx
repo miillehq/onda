@@ -154,6 +154,9 @@ function WinGlyph() {
   );
 }
 
+/** A Mac prints ⌘ on the key that stands in for the Windows key. */
+const COMMAND_KEY = navigator.userAgent.includes("Macintosh");
+
 /** A chord drawn as physical keys. `size="hero"` is the large keycap used on Home and setup. */
 export function Keys({ keys, size = "sm", label }: { keys: readonly number[]; size?: "sm" | "md" | "hero"; label?: string }) {
   const ordered = orderedKeys(keys);
@@ -168,7 +171,7 @@ export function Keys({ keys, size = "sm", label }: { keys: readonly number[]; si
             </span>
           )}
           <kbd class={`key${key === 0x20 ? " key-space" : ""}`}>
-            {modifierKind(key) === "win" && <WinGlyph />}
+            {modifierKind(key) === "win" && (COMMAND_KEY ? <span aria-hidden="true">⌘</span> : <WinGlyph />)}
             {keyLabel(key)}
           </kbd>
         </Fragment>

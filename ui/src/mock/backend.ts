@@ -7,23 +7,25 @@
  *   ?theme=light|dark                      force a theme
  *   ?pill=listening|handsfree|writing|polishing|done|error|nottyped|skipped|cycle   pill window state
  *   ?pill=code&code=focusChanged[&mode=transform][&text=1][&suggestion=1]   any error card
- *   ?platform=linux                        Linux variants (clipboard handoff, desktop shortcut)
+ *   ?platform=linux|macos                  Linux or Mac variants (clipboard handoff, shortcuts, wording)
  *   ?provider=chatgpt|openaiCompatible|anthropic|local   AI polish provider
  */
 import type { Backend } from "../api";
 import type { AccountInfo, ApiRequest, ApiResponse, CloudModel, ModelInfo, ResourceUsage, RuntimeEvent, Snapshot } from "../generated/api";
 import type { AiProvider, AppError, DailyUsage, DictionaryEntry, HistoryEntry, OperationResult, OperationState, Profile, Settings, Snippet, Transform, UsageSummary } from "../generated/core";
-import { DEFAULT_SETTINGS } from "../generated/core";
+import { DEFAULT_SETTINGS, MACOS_DEFAULT_SETTINGS } from "../generated/core";
 import { DUPLICATE_TRIGGER, lookupKey, normalizeName, validateDictionaryEntry, validateSettings } from "./validate";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = params.get("mock") ?? "default";
 const pillState = params.get("pill");
-const platform = params.get("platform") === "linux" ? "linux" : "windows";
+const platform = params.get("platform") === "linux" ? "linux" : params.get("platform") === "macos" ? "macos" : "windows";
+/** What a fresh profile starts with on this platform. */
+const defaults = platform === "macos" ? MACOS_DEFAULT_SETTINGS : DEFAULT_SETTINGS;
 const provider = (params.get("provider") ?? "chatgpt") as AiProvider;
 
 const themeParam = params.get("theme") === "dark" ? "dark" : params.get("theme") === "light" ? "light" : null;
-const settings: Settings = scenario === "onboarding" ? { ...structuredClone(DEFAULT_SETTINGS), theme: themeParam ?? DEFAULT_SETTINGS.theme } : {
+const settings: Settings = scenario === "onboarding" ? { ...structuredClone(defaults), theme: themeParam ?? defaults.theme } : {
   executionPreference: "auto",
   qualityProfile: "fast",
   modelId: null,
@@ -34,7 +36,7 @@ const settings: Settings = scenario === "onboarding" ? { ...structuredClone(DEFA
   enhancementEnabled: scenario === "default",
   contextEnabled: false,
   learningEnabled: true,
-  pushToTalk: { keys: [0xa2, 0x5b, 0x20] },
+  pushToTalk: structuredClone(defaults.pushToTalk),
   transformShortcut: { keys: [0xa2, 0xa4, 0x50] },
   commandShortcut: { keys: [0xa2, 0xa4, 0x43] },
   toggleShortcut: { keys: [0xa2, 0xa4, 0x44] },
@@ -158,7 +160,7 @@ const snapshot: Snapshot = {
   updaterConfigured: false,
   platform,
   providerKeys: { openaiCompatible: provider === "openaiCompatible", anthropic: provider === "anthropic", local: false },
-  typingAccess: platform === "linux" ? "notAllowed" : "allowed",
+  typingAccess: platform === "linux" ? "notAllowed" : platform === "macos" ? "unavailable" : "allowed",
 };
 
 function today(): Date {

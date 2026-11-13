@@ -6,7 +6,7 @@ import { Callout, Card, Page, Row, Rows, Section } from "../../components/layout
 import type { AccountInfo, CloudModel } from "../../generated/api";
 import { toAppError } from "../../api";
 import type { AiProvider, Settings } from "../../generated/core";
-import { activeProfile, aiReady, chatgptReady, cloudModels, isWindows, listProviderModels, oauthStatus, refresh, removeProviderKey, saveProviderKey, saveSettings, settings, snapshot, thisDevice, toast, toastError } from "../../lib/store";
+import { activeProfile, aiReady, chatgptReady, cloudModels, isMac, isWindows, listProviderModels, oauthStatus, refresh, removeProviderKey, saveProviderKey, saveSettings, settings, snapshot, thisDevice, toast, toastError } from "../../lib/store";
 
 async function act(label: string, request: Parameters<typeof ask>[0]): Promise<void> {
   try {
@@ -225,7 +225,7 @@ function AddressField({ id, label, hint, value, placeholder, onSave }: { id: str
 function KeyField({ provider, saved, required }: { provider: AiProvider; saved: boolean; required: boolean }) {
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const store = isWindows.value ? "protected for your Windows account" : "in your desktop keyring";
+  const store = isWindows.value ? "protected for your Windows account" : isMac.value ? "in your Mac's keychain" : "in your desktop keyring";
   const save = async () => {
     setBusy(true);
     if (await saveProviderKey(provider, key)) {
