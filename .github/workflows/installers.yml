@@ -1,0 +1,100 @@
+# L7: build the release bundles and install, launch and uninstall them the way a user does.
+# Runs on master and on demand; pull requests stay within the 20-minute budget without it.
+name: installers
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
+
+jobs:
+  windows:
+    name: installers windows-x64
+    runs-on: windows-2022
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with:
+          toolchain: "1.95.0"
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          shared-key: windows-msvc-release
+          cache-on-failure: true
+      - name: Verify native toolchain
+        run: |
+          . ./scripts/toolchain.ps1
+          "LIBCLANG_PATH=$env:LIBCLANG_PATH" >> $env:GITHUB_ENV
+      - name: Install locked frontend
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+      - name: Build unsigned per-user NSIS installer
+        run: ./scripts/build.ps1
+      - name: Bundle reviewed MPL source
+        run: |
+          $metadata = (& cargo metadata --locked --format-version 1) | ConvertFrom-Json
+          $sourceRoot = Join-Path $PWD '.artifacts/mpl-source'
+          New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
+          foreach ($package in $metadata.packages | Where-Object license -EQ 'MPL-2.0') {
+            $sourceDirectory = Split-Path -Parent $package.manifest_path
+            Copy-Item -LiteralPath $sourceDirectory -Destination (Join-Path $sourceRoot "$($package.name)-$($package.version)") -Recurse
+          }
+          Compress-Archive -LiteralPath $sourceRoot -DestinationPath '.artifacts/onda-mpl-source.zip' -Force
+      - name: Silent installation and complete sidecar layout
+        run: |
+          $installer = Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'NSIS installer missing' }
+          $installDirectory = Join-Path $env:RUNNER_TEMP 'onda-install-smoke'
+          $installation = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDirectory") -WindowStyle Hidden -Wait -PassThru
+          if ($installation.ExitCode -ne 0) { throw 'Silent installation failed' }
+          foreach ($binary in @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe', 'onda-asr-avx2-worker.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $binary))) { throw "Installed binary missing: $binary" }
+          }
+          $runtimeManifestPath = Join-Path $installDirectory 'licenses/Microsoft-runtime-manifest.json'
+          if (-not (Test-Path -LiteralPath $runtimeManifestPath)) { throw 'Installed runtime provenance missing' }
+          $runtimeManifest = Get-Content -LiteralPath $runtimeManifestPath -Raw | ConvertFrom-Json
+          foreach ($runtimeFile in $runtimeManifest.files) {
+            $dll = Join-Path $installDirectory $runtimeFile.name
+            if (-not (Test-Path -LiteralPath $dll)) { throw "Installed runtime missing: $($runtimeFile.name)" }
+            if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runtimeFile.sha256) { throw 'Installed runtime hash mismatch' }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $installDirectory 'licenses/MPL-source.zip'))) { throw 'Installed MPL source access missing' }
+          $installedExecutables = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe', 'onda-asr-avx2-worker.exe') | ForEach-Object { Join-Path $installDirectory $_ }
+          $runtimeAudit = & './scripts/collect-msvc-runtime.ps1' -ExecutablePaths $installedExecutables
+          $uninstaller = Join-Path $installDirectory 'uninstall.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'Uninstaller missing' }
+          $uninstallation = Start-Process -FilePath $uninstaller -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
+          if ($uninstallation.ExitCode -ne 0) { throw 'Silent uninstallation failed' }
+      - name: Upload reviewable installer and notices
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: onda-windows-x64-cpu-unsigned
+          if-no-files-found: error
+          path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.sha256
+            THIRD_PARTY_NOTICES.txt
+            docs/dependency-inventory.json
+            .artifacts/onda-mpl-source.zip
+            .artifacts/MPL-source.zip
+            .artifacts/runtime/Microsoft-runtime-manifest.json
