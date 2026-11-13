@@ -442,6 +442,22 @@ pub fn run() {
             second_instance(app, arguments)
         }));
     }
+    // macOS: dictation shortcuts are system hotkeys, routed to the runtime by their id.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if let Some(service) = app.try_state::<Arc<Runtime>>() {
+                        service.hotkey(
+                            shortcut.id(),
+                            event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed,
+                        );
+                    }
+                })
+                .build(),
+        );
+    }
     // Real-shell tests (L6): WebdriverIO's plugins exist only in debug builds made with
     // `--features e2e` (`npm run build:e2e`), so no shipped binary has a WebDriver server.
     #[cfg(all(debug_assertions, feature = "e2e"))]

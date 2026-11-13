@@ -157,6 +157,9 @@ pub struct Runtime {
     shutdown: AtomicBool,
     updating: AtomicBool,
     helper_join: Mutex<Option<std::thread::JoinHandle<()>>>,
+    /// macOS: each registered system hotkey's id and the action it stands for.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    hotkeys: Mutex<HashMap<u32, (onda_input::ShortcutAction, Option<String>)>>,
     configuration_gate: tokio::sync::Mutex<()>,
     dictionary_gate: tokio::sync::Mutex<()>,
     pub(crate) pill: crate::pill::Pill,
@@ -228,6 +231,7 @@ impl Runtime {
             shutdown: AtomicBool::new(false),
             updating: AtomicBool::new(false),
             helper_join: Mutex::new(None),
+            hotkeys: Mutex::new(HashMap::new()),
             configuration_gate: tokio::sync::Mutex::new(()),
             dictionary_gate: tokio::sync::Mutex::new(()),
             pill,
@@ -467,7 +471,21 @@ impl Runtime {
 
     /// Windows' keyboard hook, or on Linux the shortcuts portal session; both run in the
     /// `onda-input` helper process and report the same events.
+    /// Start listening for the dictation shortcuts: the isolated helper process on Windows and
+    /// Linux, system hotkeys on macOS.
     pub(crate) fn start_helper(self: &Arc<Self>) -> AppResult<()> {
+        #[cfg(target_os = "macos")]
+        {
+            self.start_hotkeys()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.start_helper_process()
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn start_helper_process(self: &Arc<Self>) -> AppResult<()> {
         let service = self.clone();
         let helper = std::thread::Builder::new()
             .name("onda-input-supervisor".into())
@@ -524,46 +542,10 @@ impl Runtime {
                             action,
                             transform_id,
                         })) => {
-                            use onda_input::ShortcutAction as A;
-                            let action = match action {
-                                A::Dictation => Some(Action::Start {
-                                    command_mode: false,
-                                }),
-                                A::Command => Some(Action::Start { command_mode: true }),
-                                A::Cancel => {
-                                    service.cancel_immediate();
-                                    None
-                                }
-                                A::Toggle => Some(Action::Toggle),
-                                A::Transform => transform_id
-                                    .or_else(|| {
-                                        lock(&service.store)
-                                            .and_then(|store| store.settings())
-                                            .ok()
-                                            .map(|settings| settings.default_transform_id)
-                                    })
-                                    .map(|transform_id| Action::Transform { transform_id }),
-                            };
-                            if let Some(action) = action {
-                                if service
-                                    .actions
-                                    .try_send(ActionMessage {
-                                        action,
-                                        reply: None,
-                                    })
-                                    .is_err()
-                                {
-                                    service.cancel_immediate();
-                                }
-                            }
+                            service.shortcut_event(true, action, transform_id);
                         }
-                        Ok(Some(onda_input::HelperEvent::Released {
-                            action:
-                                onda_input::ShortcutAction::Dictation
-                                | onda_input::ShortcutAction::Command,
-                            ..
-                        })) => {
-                            service.queue_helper_action(Action::Stop);
+                        Ok(Some(onda_input::HelperEvent::Released { action, .. })) => {
+                            service.shortcut_event(false, action, None);
                         }
                         // Linux: no shortcuts portal, so a desktop shortcut runs `onda --dictate`;
                         // or the user dismissed the approval and can ask again in Shortcuts.
@@ -603,6 +585,157 @@ impl Runtime {
             })?;
         *lock(&self.helper_join)? = Some(helper);
         Ok(())
+    }
+
+    /// What a shortcut press or release does, whether it came from the helper process (Windows,
+    /// Linux) or a system hotkey (macOS). Releasing dictation or a command stops recording.
+    fn shortcut_event(
+        &self,
+        pressed: bool,
+        action: onda_input::ShortcutAction,
+        transform_id: Option<String>,
+    ) {
+        use onda_input::ShortcutAction as A;
+        if !pressed {
+            if matches!(action, A::Dictation | A::Command) {
+                self.queue_helper_action(Action::Stop);
+            }
+            return;
+        }
+        let action = match action {
+            A::Dictation => Some(Action::Start {
+                command_mode: false,
+            }),
+            A::Command => Some(Action::Start { command_mode: true }),
+            A::Cancel => {
+                self.cancel_immediate();
+                None
+            }
+            A::Toggle => Some(Action::Toggle),
+            A::Transform => transform_id
+                .or_else(|| {
+                    lock(&self.store)
+                        .and_then(|store| store.settings())
+                        .ok()
+                        .map(|settings| settings.default_transform_id)
+                })
+                .map(|transform_id| Action::Transform { transform_id }),
+        };
+        if let Some(action) = action {
+            if self
+                .actions
+                .try_send(ActionMessage {
+                    action,
+                    reply: None,
+                })
+                .is_err()
+            {
+                self.cancel_immediate();
+            }
+        }
+    }
+
+    /// macOS: a registered system hotkey was pressed or released.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn hotkey(&self, id: u32, pressed: bool) {
+        let binding = lock(&self.hotkeys)
+            .ok()
+            .and_then(|hotkeys| hotkeys.get(&id).cloned());
+        if let Some((action, transform_id)) = binding {
+            self.shortcut_event(pressed, action, transform_id);
+        }
+    }
+
+    /// macOS: system hotkeys need no Accessibility or Input Monitoring permission. They are
+    /// registered again whenever the shortcut configuration changes; Escape is registered only
+    /// while an operation is active, so it is never taken from other apps.
+    #[cfg(target_os = "macos")]
+    fn start_hotkeys(self: &Arc<Self>) -> AppResult<()> {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+        let service = self.clone();
+        let thread = std::thread::Builder::new()
+            .name("onda-hotkeys".into())
+            .spawn(move || {
+                let mut generation = u64::MAX;
+                let mut escape: Option<tauri_plugin_global_shortcut::Shortcut> = None;
+                while !service.shutdown.load(Ordering::Acquire) {
+                    let current = service.helper_generation.load(Ordering::Acquire);
+                    if current != generation {
+                        generation = current;
+                        escape = None;
+                        service.register_hotkeys();
+                    }
+                    let active = lock(&service.state)
+                        .map(|state| state.is_active())
+                        .unwrap_or(false);
+                    if active && escape.is_none() {
+                        escape = service.register_escape();
+                    } else if !active {
+                        if let Some(shortcut) = escape.take() {
+                            let _ = service.app.global_shortcut().unregister(shortcut);
+                            if let Ok(mut hotkeys) = lock(&service.hotkeys) {
+                                hotkeys.remove(&shortcut.id());
+                            }
+                        }
+                    }
+                    std::thread::sleep(HELPER_POLL_TIMEOUT);
+                }
+                let _ = service.app.global_shortcut().unregister_all();
+            })
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::Shortcut,
+                    "Shortcut supervisor could not start.",
+                    true,
+                )
+            })?;
+        *lock(&self.helper_join)? = Some(thread);
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    fn register_hotkeys(&self) {
+        use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+        let shortcuts = self.app.global_shortcut();
+        let _ = shortcuts.unregister_all();
+        let Ok(config) = lock(&self.helper_config).map(|config| config.clone()) else {
+            return;
+        };
+        let mut registered = HashMap::new();
+        let mut failed = false;
+        for binding in config
+            .bindings
+            .iter()
+            .filter(|binding| binding.action != onda_input::ShortcutAction::Cancel)
+        {
+            let shortcut =
+                onda_input::accelerator(binding).and_then(|text| text.parse::<Shortcut>().ok());
+            match shortcut {
+                Some(shortcut) if shortcuts.register(shortcut).is_ok() => {
+                    registered.insert(
+                        shortcut.id(),
+                        (binding.action, binding.transform_id.clone()),
+                    );
+                }
+                _ => failed = true,
+            }
+        }
+        if let Ok(mut hotkeys) = lock(&self.hotkeys) {
+            *hotkeys = registered;
+        }
+        // A chord macOS already uses (Spotlight, input sources) cannot be registered.
+        self.shortcut_status(if failed { "unavailable" } else { "ready" });
+    }
+
+    #[cfg(target_os = "macos")]
+    fn register_escape(&self) -> Option<tauri_plugin_global_shortcut::Shortcut> {
+        use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+        let shortcut: Shortcut = "Escape".parse().ok()?;
+        self.app.global_shortcut().register(shortcut).ok()?;
+        if let Ok(mut hotkeys) = lock(&self.hotkeys) {
+            hotkeys.insert(shortcut.id(), (onda_input::ShortcutAction::Cancel, None));
+        }
+        Some(shortcut)
     }
 
     fn shortcut_status(&self, status: &str) {
