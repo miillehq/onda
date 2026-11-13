@@ -729,6 +729,45 @@ mod tests {
         assert!(process_started(id) > 0);
         assert!(!process_name(id).is_empty());
         assert_eq!(process_started(u32::MAX), 0);
+
+        // The start time holds still while CPU time, page faults and memory move, as most other
+        // /proc stat fields do, and it lies between boot and now.
+        let started = process_started(id);
+        let cpu_ticks = || -> u64 {
+            let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+            let after_name = stat.rsplit_once(')').unwrap().1;
+            let fields: Vec<&str> = after_name.split_whitespace().collect();
+            fields[11].parse::<u64>().unwrap() + fields[12].parse::<u64>().unwrap()
+        };
+        let touched = std::hint::black_box(vec![1u8; 16 << 20]);
+        let spent = cpu_ticks();
+        let begun = std::time::Instant::now();
+        while cpu_ticks() == spent {
+            assert!(
+                begun.elapsed() < std::time::Duration::from_secs(60),
+                "CPU time never advanced"
+            );
+        }
+        assert_eq!(process_started(id), started, "the start time moved");
+        drop(touched);
+        let ticks_per_second = unsafe { libc::sysconf(libc::_SC_CLK_TCK) } as f64;
+        let uptime: f64 = std::fs::read_to_string("/proc/uptime")
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(
+            started as f64 <= uptime * ticks_per_second,
+            "a start of {started} ticks is after now"
+        );
+        let executable = std::env::current_exe().unwrap();
+        assert_eq!(
+            process_name(id),
+            executable.file_name().unwrap().to_string_lossy(),
+            "the name is the executable's file name"
+        );
     }
 
     #[test]

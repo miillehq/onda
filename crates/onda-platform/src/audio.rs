@@ -1121,6 +1121,47 @@ mod tests {
         assert!(diagnostics(&[0.0; 100], 16000, 1).mostly_silent);
         assert_eq!(diagnostics(&[-1.0, 0.0, 1.0], 16000, 1).clipped_samples, 2);
     }
+    /// The app decides "no speech" from these diagnostics after Stop, so they are checked on the
+    /// recording path (`RecordingBuffer::finish`), at a native rate that goes through resampling.
+    #[test]
+    fn a_finished_recording_reports_silence_speech_and_clipping() {
+        fn record(samples: impl IntoIterator<Item = f32>) -> AudioDiagnostics {
+            let mut recording = RecordingBuffer::new(48_000, 1, 2).unwrap();
+            for sample in samples {
+                recording.push(sample).unwrap();
+            }
+            recording.finish().unwrap().diagnostics
+        }
+        let tone = |amplitude: f32| {
+            (0..48_000).map(move |index| {
+                (2.0 * std::f32::consts::PI * 220.0 * index as f32 / 48_000.0).sin() * amplitude
+            })
+        };
+
+        let silence = record(std::iter::repeat_n(0.0, 48_000));
+        assert!(silence.mostly_silent, "silence must report no speech");
+        assert_eq!(silence.rms, 0.0);
+        assert_eq!(silence.clipped_samples, 0);
+        assert_eq!(silence.duration_ms, 1000);
+
+        let hiss = record(tone(0.0005));
+        assert!(hiss.mostly_silent, "a faint hiss is not speech");
+
+        let speech = record(tone(0.1));
+        assert!(
+            !speech.mostly_silent,
+            "a speech-level tone must count as speech"
+        );
+        assert!((speech.rms - 0.0707).abs() < 0.001, "rms {}", speech.rms);
+        assert_eq!(speech.clipped_samples, 0);
+
+        // Full scale either way counts as clipped; just under the threshold does not.
+        let clipped = record(tone(0.25).chain([1.0, -1.0, 0.9995, -0.9995, 0.998, -0.998]));
+        assert!(!clipped.mostly_silent);
+        assert_eq!(clipped.clipped_samples, 4);
+        assert_eq!(clipped.peak, 1.0);
+        assert_eq!(clipped.source_sample_rate, 48_000);
+    }
     #[test]
     fn incremental_resampling_matches_batch_without_native_rate_retention() {
         let input: Vec<f32> = (0..12_345)

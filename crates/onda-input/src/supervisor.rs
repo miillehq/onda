@@ -216,4 +216,41 @@ mod tests {
         .is_err());
         assert!(read_event(&mut std::io::Cursor::new(b"{\"type\":\"keyLog\"}\n")).is_err());
     }
+
+    /// A complete, valid event of `length` bytes including its newline.
+    fn reset_line(length: usize) -> Vec<u8> {
+        let frame = br#"{"type":"reset","reason":""}"#.len() + 1;
+        let mut line = format!(
+            r#"{{"type":"reset","reason":"{}"}}"#,
+            "x".repeat(length - frame)
+        );
+        line.push('\n');
+        assert_eq!(line.len(), length);
+        line.into_bytes()
+    }
+
+    #[test]
+    fn a_valid_event_longer_than_the_line_cap_is_refused_for_its_size() {
+        let read = |line: Vec<u8>, chunk: usize| {
+            read_event(&mut BufReader::with_capacity(
+                chunk,
+                std::io::Cursor::new(line),
+            ))
+        };
+        for chunk in [64, MAX_PROTOCOL_LINE_BYTES * 2] {
+            assert!(matches!(
+                read(reset_line(MAX_PROTOCOL_LINE_BYTES), chunk),
+                Ok(HelperEvent::Reset { reason }) if reason.len() > 16_000
+            ));
+            let refused = read(reset_line(MAX_PROTOCOL_LINE_BYTES + 1), chunk);
+            assert!(
+                matches!(&refused, Err(InputError::Protocol(message)) if message == "oversized helper message"),
+                "an over-limit event read in {chunk}-byte chunks was not refused for its size: {}",
+                match &refused {
+                    Ok(_) => "accepted".to_owned(),
+                    Err(error) => error.to_string(),
+                }
+            );
+        }
+    }
 }
