@@ -581,6 +581,28 @@ mod tests {
         assert_eq!(store.dictionary().unwrap().len(), 1);
         let archive = store.export_dictionary().unwrap();
         assert_eq!(store.import_dictionary(&archive).unwrap(), 0);
+        // Well-formed JSON whose first entry is new and valid and whose second fails validation:
+        // the import is refused and the valid entry is not written either.
+        let mixed = serde_json::to_string(&DictionaryArchive {
+            version: 1,
+            entries: vec![entry("new", "Kubernetes"), entry("bad", "!!!")],
+        })
+        .unwrap();
+        let error = store.import_dictionary(&mixed).unwrap_err();
+        assert!(
+            error
+                .message
+                .contains("Dictionary phrase must contain a word"),
+            "{}",
+            error.message
+        );
+        let phrases: Vec<String> = store
+            .dictionary()
+            .unwrap()
+            .into_iter()
+            .map(|saved| saved.phrase)
+            .collect();
+        assert_eq!(phrases, ["Café"], "a refused import wrote some entries");
     }
     #[test]
     fn daily_usage_aggregates_counts_per_day_without_content() {
@@ -621,6 +643,38 @@ mod tests {
         store.delete_history("b").unwrap();
         assert!(store.history_since(0).unwrap().is_empty());
         assert!(store.save_history("", 1, b"x").is_err());
+    }
+
+    #[test]
+    fn the_history_cap_keeps_the_newest_dictations() {
+        let mut store = Store::in_memory().unwrap();
+        let newest = MAX_HISTORY_ROWS;
+        for created_at in 0..=newest {
+            store
+                .save_history(&format!("h{created_at:04}"), created_at, b"sealed")
+                .unwrap();
+        }
+        let stored: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM history", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stored, MAX_HISTORY_ROWS);
+        let rows = store.history_since(0).unwrap();
+        assert_eq!(
+            rows.first().map(|row| row.0.clone()),
+            Some(format!("h{newest:04}")),
+            "the dictation just saved was dropped"
+        );
+        assert_eq!(rows.last().map(|row| row.0.as_str()), Some("h0001"));
+        let oldest_kept: bool = store
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM history WHERE id='h0000')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!oldest_kept, "the oldest dictation outlived the cap");
     }
 
     #[test]
@@ -696,9 +750,19 @@ mod tests {
     fn lifetime_totals_start_on_the_first_dictation_and_outlive_pruned_days() {
         let mut store = Store::in_memory().unwrap();
         assert_eq!(store.lifetime_usage().unwrap(), LifetimeUsage::default());
-        for offset in 0..(MAX_USAGE_DAYS + 5) {
-            let day = format!("2025-{:02}-{:02}", offset / 28 + 1, offset % 28 + 1);
-            store.record_usage(&day, 2, 1000, 1, false).unwrap();
+        // Consecutive real calendar days from 2025-01-01, oldest first.
+        let days: Vec<String> = (2025..=2026)
+            .flat_map(|year| {
+                (1..=12).flat_map(move |month| {
+                    (1..=31).map(move |date| format!("{year}-{month:02}-{date:02}"))
+                })
+            })
+            .filter(|day| crate::stats::day_number(day).is_some())
+            .take(MAX_USAGE_DAYS as usize + 5)
+            .collect();
+        assert_eq!(days.len(), MAX_USAGE_DAYS as usize + 5);
+        for day in &days {
+            store.record_usage(day, 2, 1000, 1, false).unwrap();
         }
         assert_eq!(
             store.daily_usage(1000).unwrap().len(),
@@ -707,6 +771,16 @@ mod tests {
         let lifetime = store.lifetime_usage().unwrap();
         assert_eq!(lifetime.since.as_deref(), Some("2025-01-01"));
         assert_eq!(lifetime.words, 2 * (MAX_USAGE_DAYS as u32 + 5));
+        // The prune drops the five oldest days and keeps every newer one, newest first.
+        let kept: Vec<String> = store
+            .daily_usage(1000)
+            .unwrap()
+            .into_iter()
+            .map(|usage| usage.day)
+            .collect();
+        assert_eq!(kept.first(), days.last(), "the day just written was pruned");
+        let expected: Vec<String> = days[5..].iter().rev().cloned().collect();
+        assert_eq!(kept, expected);
     }
 
     #[test]
@@ -728,5 +802,44 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         connection.execute_batch("PRAGMA user_version=99;").unwrap();
         assert!(Store::initialize(connection).is_err());
+
+        // A newer database that has every table this version knows plus one of its own: it is
+        // refused by name, and nothing in it is migrated, seeded or renumbered.
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("v99.db");
+        let connection = Connection::open(&path).unwrap();
+        for (_, migration) in MIGRATIONS {
+            connection.execute_batch(migration).unwrap();
+        }
+        connection
+            .execute_batch(
+                "CREATE TABLE future(value TEXT NOT NULL); INSERT INTO future VALUES('kept'); PRAGMA user_version=99;",
+            )
+            .unwrap();
+        drop(connection);
+        let refused = Store::open(&path).err();
+        let connection = Connection::open(&path).unwrap();
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        let transforms: i64 = connection
+            .query_row("SELECT COUNT(*) FROM transforms", [], |row| row.get(0))
+            .unwrap();
+        let future: String = connection
+            .query_row("SELECT value FROM future", [], |row| row.get(0))
+            .unwrap();
+        drop(connection);
+        assert_eq!(version, 99, "the newer schema version was rewritten");
+        assert_eq!(
+            transforms, 0,
+            "an older version wrote into a newer database"
+        );
+        assert_eq!(future, "kept");
+        let error = refused.expect("a newer database must be refused");
+        assert!(
+            error.message.contains("newer application version"),
+            "refused without naming the newer version: {}",
+            error.message
+        );
     }
 }

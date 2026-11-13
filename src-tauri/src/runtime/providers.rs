@@ -68,6 +68,19 @@ fn model_setting(settings: &Settings, provider: AiProvider) -> Option<&str> {
     }
 }
 
+/// The model saved for `provider`, or the error that asks the user to choose one.
+fn chosen_model(settings: &Settings, provider: AiProvider) -> AppResult<String> {
+    model_setting(settings, provider)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            AppError::new(
+                ErrorCode::InvalidInput,
+                "Choose a model in AI polish.",
+                true,
+            )
+        })
+}
+
 /// Validates the addresses a settings change would save, so a bad URL is refused at once.
 pub(super) fn validate_provider_settings(settings: &Settings) -> AppResult<()> {
     if settings.openai_base_url.is_some() {
@@ -180,15 +193,7 @@ impl Runtime {
         instructions: &str,
     ) -> AppResult<String> {
         let endpoint = endpoint(&active.settings, provider)?;
-        let model = model_setting(&active.settings, provider)
-            .ok_or_else(|| {
-                AppError::new(
-                    ErrorCode::InvalidInput,
-                    "Choose a model in AI polish.",
-                    true,
-                )
-            })?
-            .to_owned();
+        let model = chosen_model(&active.settings, provider)?;
         let key = self.load_key(provider).await?;
         if provider == AiProvider::Anthropic && key.is_none() {
             return Err(AppError::new(
@@ -268,6 +273,43 @@ mod tests {
         assert_eq!(route(AiProvider::Local), DataRoute::LocalModel);
         assert_eq!(key_slot(AiProvider::Chatgpt), None);
         assert_eq!(key_slot(AiProvider::Anthropic), Some(KeySlot::Anthropic));
+
+        let expected = [
+            (AiProvider::Chatgpt, DataRoute::ChatgptPlan, None),
+            (
+                AiProvider::OpenaiCompatible,
+                DataRoute::OpenaiCompatible,
+                Some(KeySlot::OpenaiCompatible),
+            ),
+            (
+                AiProvider::Anthropic,
+                DataRoute::Anthropic,
+                Some(KeySlot::Anthropic),
+            ),
+            (
+                AiProvider::Local,
+                DataRoute::LocalModel,
+                Some(KeySlot::Local),
+            ),
+        ];
+        for (index, (first, ..)) in expected.iter().enumerate() {
+            for (second, ..) in &expected[index + 1..] {
+                assert_ne!(
+                    route(*first),
+                    route(*second),
+                    "{first:?} and {second:?} share a route"
+                );
+                if let (Some(one), Some(other)) = (key_slot(*first), key_slot(*second)) {
+                    assert_ne!(one, other, "{first:?} and {second:?} share a key slot");
+                }
+            }
+        }
+        for (provider, expected_route, expected_slot) in &expected {
+            // Local dictation's route means nothing left the computer; no provider may claim it.
+            assert_ne!(route(*provider), DataRoute::Local, "{provider:?}");
+            assert_eq!(route(*provider), *expected_route, "{provider:?}");
+            assert_eq!(key_slot(*provider), *expected_slot, "{provider:?}");
+        }
     }
 
     #[test]
@@ -280,5 +322,39 @@ mod tests {
             endpoint(&settings, AiProvider::Anthropic).unwrap().host(),
             "api.anthropic.com"
         );
+
+        // With no model saved, polish asks for one instead of sending an empty model name.
+        for provider in [
+            AiProvider::OpenaiCompatible,
+            AiProvider::Anthropic,
+            AiProvider::Local,
+        ] {
+            let error = chosen_model(&settings, provider).unwrap_err();
+            assert_eq!(error.code, ErrorCode::InvalidInput, "{provider:?}");
+            assert_eq!(
+                error.message, "Choose a model in AI polish.",
+                "{provider:?}"
+            );
+        }
+        // Each provider reads its own model and never another provider's.
+        let settings = Settings {
+            openai_model: Some("openai-test-model".into()),
+            anthropic_model: Some("anthropic-test-model".into()),
+            local_model: Some("local-test-model".into()),
+            ..Settings::default()
+        };
+        for (provider, model) in [
+            (AiProvider::OpenaiCompatible, "openai-test-model"),
+            (AiProvider::Anthropic, "anthropic-test-model"),
+            (AiProvider::Local, "local-test-model"),
+        ] {
+            assert_eq!(
+                model_setting(&settings, provider),
+                Some(model),
+                "{provider:?}"
+            );
+            assert_eq!(chosen_model(&settings, provider).unwrap(), model);
+        }
+        assert_eq!(model_setting(&settings, AiProvider::Chatgpt), None);
     }
 }
