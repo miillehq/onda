@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Onda doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problems go through private reporting (see SECURITY.md), not here.
+        Never paste dictated text, recordings, API keys or tokens.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Onda did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to see it again
+      placeholder: |
+        1. Open Settings › Shortcuts
+        2. ...
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os-details
+    attributes:
+      label: Version details
+      description: The Onda version (Settings › Updates and help), and on Linux the distribution and desktop.
+      placeholder: Onda 0.2.0, Ubuntu 24.04 with GNOME
+  - type: input
+    id: target-app
+    attributes:
+      label: App you were dictating into
+      description: If it's about typing, the app and the kind of field.
+      placeholder: Notepad, a browser text box, a terminal...
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Optional. Settings › Updates and help › Copy diagnostics gives settings and timings, never your words.
+      render: text
