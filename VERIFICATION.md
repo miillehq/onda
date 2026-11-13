@@ -27,6 +27,8 @@ with an identical tree.
 | 2026-11-13 | probe | every new, strengthened or moved test above failed with its bug planted (checksum skipped; CPU-only dropped; nonce, state or a wrong redirect sent; the frame counter not reset; state and nonce checks removed; kill-on-close removed; the context margin removed) and passed once restored | windows-x64, local | planted one at a time in a worktree |
 | 2026-11-13 | L1 | probes P1 (paste waits while Onda still owns the unread clipboard), P3 (silence, speech and clipping from `RecordingBuffer::finish`) and I1 (an auto-repeat never starts a shortcut) now caught; strengthened: the paste chord's KEYUP flags and marker, the 16 KiB helper line cap, the local day key and `civil_from_days`. onda-platform 28 passed and 1 ignored, onda-input 13 and 1 passed | windows-x64, local | `cargo test --locked -p onda-platform -p onda-input` |
 | 2026-11-13 | probe | each of those failed with its bug planted (owner check inverted, KEYUP dropped, marker zeroed, silence threshold inverted, energy not summed, clipping without `abs`, repeat filter dropped, size check removed or off by one, year and month offsets, leap-day arithmetic) and passed once restored | windows-x64, local | planted one at a time in a worktree |
+| 2026-11-13 | L4, L5 | browser suite against the labelled mock: onboarding, dictionary add and cancel, theme switch, error display on Home and in the pill; tier 1 ARIA and tier 2 geometry baselines shared by both engines; 26 passed, 8 pixel checks skipped (no runner baselines yet); stable in 3 of 3 runs | windows-x64, local, chromium and webkit | `npm run test:ui` |
+| 2026-11-13 | L4, L5 probe | a renamed button fails the onboarding behaviour and its tier 1 check; a wider sidebar fails both tier 2 checks; a dictionary save that does nothing fails "adding a word"; removing the mock badge fails all 17 tests | windows-x64, local, chromium | planted one at a time, `npx playwright test --project=chromium`, restored |
 
 ## Unverified
 
@@ -35,8 +37,8 @@ with an identical tree.
 - Linux: nothing run since 2026-10-29 (VPS, `docs/testing.md`), including the Linux-only tests.
 - macOS: no code yet; nothing built.
 - Windows arm64 and Linux arm64: nothing built.
-- L4 and L5: no suites exist. L6: the WebKitGTK smoke has not passed in CI yet; the WebView2 smoke
-  (`scripts/smoke.ps1`) has not run since 0.1.x.
+- L5 tier 3: no pixel baselines until the snapshots workflow runs on the runners. L6: the WebView2
+  smoke (`scripts/smoke.ps1`) has not run since 0.1.x.
 - L7: the NSIS install test has not passed in CI yet; Linux packages have never been installed by
   a script.
 - Real-model golden tests: not run since 2026-10-29.

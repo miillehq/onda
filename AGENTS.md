@@ -18,6 +18,8 @@ design in `DESIGN.md`.
 - contracts (L2): `npm run contracts:check`; regenerate with `npm run contracts`
 - real-shell journeys (L6): `npm run build:e2e`, then `npm run test:e2e`. The suite launches the debug
   app on a throwaway profile under `artifacts/e2e/`, so it runs beside an installed Onda.
+- browser UI and visual (L4, L5): `npm run test:ui` (Playwright starts `npm run dev`; run
+  `npx playwright install chromium webkit` once). Pixel baselines: the snapshots workflow only.
 - quality fixtures: `npm run quality`
 - real-model tests: `docs/testing.md` (`cargo test -p onda-asr --test golden -- --ignored` with a
   downloaded model)

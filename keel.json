@@ -12,7 +12,7 @@
     "unit": "cargo test --locked --workspace && npm run test:unit",
     "contracts": "npm run contracts:check && npm run test:unit",
     "integration": "cargo test --locked --workspace",
-    "ui": null,
+    "ui": "npm run test:ui",
     "e2e": "npm run test:e2e",
     "build": "npm run build:e2e",
     "package": "npm run release",

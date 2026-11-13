@@ -1,0 +1,9 @@
+- main:
+  - progressbar "Setup progress"
+  - heading "Welcome to Onda" [level=1]
+  - paragraph: Speak, and your words appear wherever your cursor is. Setup takes about a minute.
+  - list:
+    - listitem: Private by default. Speech recognition runs on this PC. Audio is never uploaded.
+    - listitem: "Works everywhere. Email, chat, documents, code: wherever you can type."
+    - listitem: Gets to know you. Teach it names and jargon, and save phrases you use often.
+  - button "Get started"

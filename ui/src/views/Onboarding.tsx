@@ -344,14 +344,14 @@ export function Onboarding() {
   const rerun = !!settings.value?.onboardingCompleted;
   return (
     <div class="setup">
-      <aside class="setup-art" aria-hidden="true">
+      <aside class="setup-art" aria-hidden="true" data-geo="setup-art">
         <Lockup height={26} />
         <div class="setup-illustration">
           <Art step={step} />
         </div>
         <p class="setup-line">Your voice, typed where your cursor is.</p>
       </aside>
-      <main class="setup-main">
+      <main class="setup-main" data-geo="setup-main">
         <div class="setup-progress" role="progressbar" aria-label="Setup progress" aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuenow={index + 1}>
           {STEPS.map((item, at) => (
             <i key={item} class={at <= index ? "on" : undefined} />
@@ -363,7 +363,7 @@ export function Onboarding() {
         {step === "try" && <TryStep onSuccess={() => undefined} />}
         {step === "polish" && <PolishStep />}
         {step === "done" && <DoneStep launch={launch} onLaunch={setLaunch} />}
-        <footer class="setup-foot">
+        <footer class="setup-foot" data-geo="setup-foot">
           {index > 0 ? (
             <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => setIndex(index - 1)}>
               Back

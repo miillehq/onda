@@ -105,7 +105,7 @@ export function App() {
   return (
     <div class="shell">
       <Sidebar />
-      <main class="main" aria-label="Content">
+      <main class="main" aria-label="Content" data-geo="content">
         <div class="main-scroll" ref={scroller}>
           <View />
         </div>

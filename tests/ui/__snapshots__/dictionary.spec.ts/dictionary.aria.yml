@@ -1,0 +1,50 @@
+- main "Content":
+  - heading "Dictionary" [level=1]
+  - paragraph: Teach Onda the names, jargon and spellings you use. It applies them every time you dictate.
+  - button "Import"
+  - button "Export"
+  - button "Add word"
+  - paragraph: Words help Onda recognise and spell unusual terms. Star the ones that matter most. For a name spelled unlike it sounds, press the microphone next to it and say it.
+  - radiogroup "Entry type":
+    - radio "Words · 5" [checked]
+    - radio "Replacements · 2"
+  - searchbox "Search dictionary"
+  - list "Words":
+    - listitem:
+      - text: Kubernetes
+      - button "Unstar" [pressed]
+      - button "Say it to teach Onda how it sounds"
+      - button "Edit"
+      - button "Remove"
+      - switch "Use “Kubernetes”" [checked]
+    - listitem:
+      - text: miille
+      - button "Star (prioritise)"
+      - button "Say it to teach Onda how it sounds"
+      - button "Edit"
+      - button "Remove"
+      - switch "Use “miille”" [checked]
+    - listitem:
+      - text: Onda
+      - button "Star (prioritise)"
+      - button "Say it to teach Onda how it sounds"
+      - button "Edit"
+      - button "Remove"
+      - switch "Use “Onda”" [checked]
+    - listitem:
+      - text: PostgreSQL Imported
+      - button "Star (prioritise)"
+      - button "Say it to teach Onda how it sounds"
+      - button "Edit"
+      - button "Remove"
+      - switch "Use “PostgreSQL”" [checked]
+    - listitem:
+      - text: Tauri
+      - button "Star (prioritise)"
+      - button "Say it to teach Onda how it sounds"
+      - button "Edit"
+      - button "Remove"
+      - switch "Use “Tauri”"
+  - heading "Learn from my corrections" [level=3]
+  - paragraph: When you fix a word right after dictating, Onda suggests adding it. Nothing is added without your OK.
+  - switch "Learn from my corrections" [checked]

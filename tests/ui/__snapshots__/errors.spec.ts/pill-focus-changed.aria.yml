@@ -1,0 +1,6 @@
+- alert:
+  - paragraph: Focus moved
+  - paragraph: Onda only types where you started dictating. Your words are on the clipboard, so press Ctrl+V to paste them.
+  - button "Copy"
+  - button "Open History"
+  - button "Dismiss"
