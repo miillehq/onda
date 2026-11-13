@@ -210,6 +210,61 @@ mod tests {
         );
     }
     #[test]
+    fn a_completed_operation_ignores_late_results() {
+        // A late failure or route change must not rewrite the finished result.
+        let mut state = StateMachine::default();
+        let done = state.begin(OperationMode::Dictation).unwrap();
+        for phase in [
+            Phase::FinalizingAudio,
+            Phase::Transcribing,
+            Phase::Inserting,
+            Phase::Completed,
+        ] {
+            state.transition(&done, phase).unwrap();
+        }
+        assert!(
+            !state.matches(&done),
+            "a completed operation still matches its id"
+        );
+        assert_eq!(
+            state.transition(&done, Phase::Error).unwrap_err().code,
+            ErrorCode::Cancelled
+        );
+        state.fail(&done, AppError::new(ErrorCode::Cloud, "late failure", true));
+        state.mark_cloud(&done, DataRoute::Anthropic);
+        state.mark_fallback(&done);
+        state.mark_hands_free(&done);
+        let snapshot = state.snapshot();
+        assert_eq!(snapshot.phase, Phase::Completed);
+        assert!(snapshot.error.is_none());
+        assert_eq!(snapshot.route, DataRoute::Local);
+        assert!(!snapshot.fallback_used && !snapshot.hands_free);
+    }
+    #[test]
+    fn a_cancelled_operation_refuses_a_late_completion() {
+        // No newer operation has started, so only the phase shows the operation is over.
+        let mut state = StateMachine::default();
+        let cancelled = state.begin(OperationMode::Transform).unwrap();
+        state.cancel();
+        assert!(
+            !state.matches(&cancelled),
+            "a cancelled operation still matches its id"
+        );
+        for late in [Phase::Inserting, Phase::Completed, Phase::Error] {
+            assert_eq!(
+                state.transition(&cancelled, late.clone()).unwrap_err().code,
+                ErrorCode::Cancelled,
+                "{late:?}"
+            );
+        }
+        state.fail(
+            &cancelled,
+            AppError::new(ErrorCode::Inference, "late failure", true),
+        );
+        assert_eq!(state.snapshot().phase, Phase::Cancelled);
+        assert!(state.snapshot().error.is_none());
+    }
+    #[test]
     fn requires_audio_finalization_and_processing_before_paste() {
         let mut state = StateMachine::default();
         let id = state.begin(OperationMode::Dictation).unwrap();

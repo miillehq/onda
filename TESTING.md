@@ -17,7 +17,7 @@ Every check runs at the cheapest level that can catch the bug it guards.
 | L4 | a user can do the journey, against the labelled mock | Playwright, chromium and webkit (`tests/ui/`) | `npm run test:ui` | every PR, 3 OSes | onboarding, dictionary, settings, error display |
 | L5 | structure, layout and pixels have not drifted | ARIA snapshot, geometry snapshot, per-OS pixels | with L4 | with L4 | tiers 1 and 2; tier 3 once the snapshots workflow runs |
 | L6 | the debug app launches and the UI reaches the real backend | WebdriverIO embedded provider (`tests/e2e/`); `ui/src/smoke.ts` | `npm run build:e2e`, then `npm run test:e2e` | every PR | settings and dictionary across a restart |
-| L7 | the bundle installs, launches and uninstalls | NSIS, deb, AppImage and dmg scripts | planned: installers workflow | `master`, release | Windows NSIS step |
+| L7 | the bundle installs, launches and uninstalls | NSIS steps in `installers.yml`; `scripts/installer-test.sh` for deb, AppImage and dmg | `installers` workflow | `master`, release | NSIS; deb and AppImage |
 | L8 | other distributions, assistive tech | containers, manual | release checklist | release | manual matrix |
 
 Rules for the mock: it implements the same `Backend` interface from the same generated types,

@@ -493,6 +493,40 @@ mod tests {
                 .sum::<usize>()
                 <= MAX_PROMPT_CHARS
         );
+
+        // Long terms of varied length (some non-ASCII), so the character budget binds well
+        // before the term cap: the terms chosen fit within it, and no skipped term would still
+        // fit in what is left.
+        let long: Vec<String> = (0..200)
+            .map(|index| {
+                let filler = if index % 3 == 0 { "é" } else { "x" };
+                format!("Long{index:03}{}", filler.repeat((index * 7) % 30))
+            })
+            .collect();
+        let entries: Vec<_> = long
+            .iter()
+            .enumerate()
+            .map(|(index, term)| vocabulary_entry(index, term, false))
+            .collect();
+        let index = DictionaryIndex::build(&entries, &[]).unwrap();
+        let terms = index.prompt_terms("");
+        let cost = |term: &String| term.chars().count() + 2;
+        let used: usize = terms.iter().map(cost).sum();
+        assert!(
+            terms.len() < MAX_PROMPT_TERMS,
+            "the fixture must hit the character budget first"
+        );
+        assert!(used <= MAX_PROMPT_CHARS, "{used} characters used");
+        let cheapest_skipped = long
+            .iter()
+            .filter(|term| !terms.contains(term))
+            .map(cost)
+            .min()
+            .unwrap();
+        assert!(
+            MAX_PROMPT_CHARS - used < cheapest_skipped,
+            "{used} of {MAX_PROMPT_CHARS} characters used, but a term costing {cheapest_skipped} was skipped"
+        );
     }
 
     #[test]

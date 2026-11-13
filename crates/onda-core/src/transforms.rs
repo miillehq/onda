@@ -82,5 +82,44 @@ mod tests {
             .collect();
         assert_eq!(left, original);
         assert_eq!(right, updated);
+
+        // Only the changed middle is marked, and multi-byte characters are never split.
+        let parts = |segments: Vec<DiffSegment>| -> Vec<(DiffKind, String)> {
+            segments
+                .into_iter()
+                .map(|segment| (segment.kind, segment.text))
+                .collect()
+        };
+        let piece = |kind: DiffKind, text: &str| (kind, text.to_owned());
+        assert_eq!(
+            parts(segments),
+            [
+                piece(DiffKind::Equal, "🌊 café "),
+                piece(DiffKind::Removed, "old"),
+                piece(DiffKind::Added, "new"),
+                piece(DiffKind::Equal, " end"),
+            ]
+        );
+        // "é" and "è" share their first UTF-8 byte; the whole character is the change.
+        assert_eq!(
+            parts(diff("café 🌊", "cafè 🌊")),
+            [
+                piece(DiffKind::Equal, "caf"),
+                piece(DiffKind::Removed, "é"),
+                piece(DiffKind::Added, "è"),
+                piece(DiffKind::Equal, " 🌊"),
+            ]
+        );
+        assert_eq!(
+            parts(diff("🌊 same", "🌊 same")),
+            [piece(DiffKind::Equal, "🌊 same")]
+        );
+        assert_eq!(
+            parts(diff("keep this", "keep this too")),
+            [
+                piece(DiffKind::Equal, "keep this"),
+                piece(DiffKind::Added, " too"),
+            ]
+        );
     }
 }

@@ -29,6 +29,8 @@ with an identical tree.
 | 2026-11-13 | probe | each of those failed with its bug planted (owner check inverted, KEYUP dropped, marker zeroed, silence threshold inverted, energy not summed, clipping without `abs`, repeat filter dropped, size check removed or off by one, year and month offsets, leap-day arithmetic) and passed once restored | windows-x64, local | planted one at a time in a worktree |
 | 2026-11-13 | L4, L5 | browser suite against the labelled mock: onboarding, dictionary add and cancel, theme switch, error display on Home and in the pill; tier 1 ARIA and tier 2 geometry baselines shared by both engines; 26 passed, 8 pixel checks skipped (no runner baselines yet); stable in 3 of 3 runs | windows-x64, local, chromium and webkit | `npm run test:ui` |
 | 2026-11-13 | L4, L5 probe | a renamed button fails the onboarding behaviour and its tier 1 check; a wider sidebar fails both tier 2 checks; a dictionary save that does nothing fails "adding a word"; removing the mock badge fails all 17 tests | windows-x64, local, chromium | planted one at a time, `npx playwright test --project=chromium`, restored |
+| 2026-11-13 | L1, L3 | probes K3 (a strict cleanup may not shrink a long dictation below half), K4 (the 400-day prune keeps the newest days), K5 (the history cap keeps the newest 2,000 dictations) and K6 (a finished or cancelled operation ignores late results) now caught; strengthened: the prompt budget, atomic import, the newer-schema refusal, picture centre crop and size limits, the rewrite diff's exact segments, provider routes, key slots and models. onda-core 57 passed, onda-app 20 passed | windows-x64, local | `cargo test --locked -p onda-core -p onda-app` |
+| 2026-11-13 | probe | 39 planted bugs, one at a time, each failing only its intended test (for example the prune and history cap turned ascending, `matches()` without `is_active()`, the crop origin at 0, shared key slots, a missing model sent as an empty string) and passing once restored | windows-x64, local | planted in a worktree, restored and checked by SHA-256 |
 
 ## Unverified
 
@@ -39,10 +41,9 @@ with an identical tree.
 - Windows arm64 and Linux arm64: nothing built.
 - L5 tier 3: no pixel baselines until the snapshots workflow runs on the runners. L6: the WebView2
   smoke (`scripts/smoke.ps1`) has not run since 0.1.x.
-- L7: the NSIS install test has not passed in CI yet; Linux packages have never been installed by
-  a script.
+- L7: the NSIS install test has not passed in CI yet; the Linux deb and AppImage test
+  (`scripts/installer-test.sh`) is written but runs first in the installers workflow on `master`.
 - Real-model golden tests: not run since 2026-10-29.
 - Dictation into real applications, physical microphones and real provider accounts on any OS:
   manual matrix, not run for 0.2.0.
-- The 11 missed probes above are unguarded until PLAN.md slice 4.
 - Linux only, written on Windows and first run by Linux CI: the strengthened `/proc` identity test, the Linux day key, and the keyring seal framing test (checked only in an extracted copy with an in-memory keyring).

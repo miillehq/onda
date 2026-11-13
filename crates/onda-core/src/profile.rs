@@ -135,6 +135,63 @@ mod tests {
             );
             assert!(output.len() <= MAX_STORED_PICTURE_BYTES);
         }
+
+        // The centre square is kept. Landscape and portrait pictures carry a different colour
+        // in each outer margin (red before, black after) and a green/blue split in the centre
+        // square, so a crop anchored to either edge brings a margin colour into the result.
+        let (red, green, blue, black) = ([255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 0, 0]);
+        let banded = |format: ImageFormat, width: u32, height: u32| {
+            let (long, short) = (width.max(height), width.min(height));
+            let margin = (long - short) / 2;
+            let picture = ImageBuffer::from_fn(width, height, |x, y| {
+                let along = if width >= height { x } else { y };
+                image::Rgb(if along < margin {
+                    red
+                } else if along >= long - margin {
+                    black
+                } else if along < long / 2 {
+                    green
+                } else {
+                    blue
+                })
+            });
+            let mut bytes = Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgb8(picture)
+                .write_to(&mut bytes, format)
+                .unwrap();
+            bytes.into_inner()
+        };
+        let near = |actual: &[u8], expected: [u8; 3]| {
+            actual
+                .iter()
+                .zip(expected)
+                .all(|(actual, expected)| actual.abs_diff(expected) <= 48)
+        };
+        let (early, late) = (PICTURE_SIZE / 8, PICTURE_SIZE - PICTURE_SIZE / 8);
+        for format in [ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::WebP] {
+            for (width, height) in [(640, 480), (480, 640)] {
+                let output = normalize_picture(&banded(format, width, height)).unwrap();
+                let decoded = image::load_from_memory_with_format(&output, ImageFormat::Png)
+                    .unwrap()
+                    .into_rgb8();
+                let sample = |along: u32| {
+                    let middle = PICTURE_SIZE / 2;
+                    let (x, y) = if width >= height {
+                        (along, middle)
+                    } else {
+                        (middle, along)
+                    };
+                    decoded.get_pixel(x, y).0
+                };
+                for (along, expected) in [(early, green), (late, blue)] {
+                    let actual = sample(along);
+                    assert!(
+                        near(&actual, expected),
+                        "{format:?} {width}x{height}: pixel {along} along the long side is {actual:?}, expected {expected:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -165,6 +222,26 @@ mod tests {
         truncated.truncate(40);
         assert!(normalize_picture(&truncated).is_err());
         assert!(normalize_picture(b"<svg xmlns='http://www.w3.org/2000/svg'/>").is_err());
+
+        // Each refusal names its reason. A real, readable PNG padded past the limit is refused
+        // for its size before decoding, and an empty file is not reported as unreadable.
+        assert_eq!(
+            normalize_picture(&[]).unwrap_err().message,
+            "The picture file is empty."
+        );
+        let mut padded = encoded(ImageFormat::Png, 32, 32);
+        assert!(normalize_picture(&padded).is_ok());
+        padded.resize(MAX_PICTURE_INPUT_BYTES + 1, 0);
+        assert_eq!(
+            normalize_picture(&padded).err().map(|error| error.message),
+            Some("Choose a picture smaller than 10 MB.".to_owned()),
+            "a picture file over 10 MB must be refused before decoding"
+        );
+        padded.truncate(MAX_PICTURE_INPUT_BYTES);
+        assert!(
+            normalize_picture(&padded).is_ok(),
+            "exactly 10 MB is allowed"
+        );
     }
 
     #[test]

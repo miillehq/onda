@@ -472,6 +472,37 @@ mod tests {
         assert!(validate_enhancement("Set it to -6", "Set it to 6", &[], true).is_err());
     }
     #[test]
+    fn strict_cleanup_rejects_shrinking_a_long_dictation_below_half() {
+        let original = "so um I was thinking that maybe we could move the review to the afternoon.";
+        let length = original.chars().count();
+        assert!(length >= 20, "the rule applies from 20 characters");
+        assert_eq!(length % 2, 0, "an even length makes half exact");
+        let shrunk = "Move the review.";
+        assert!(shrunk.chars().count() * 2 < length);
+        let error = validate_enhancement(original, shrunk, &[], true)
+            .expect_err("a cleanup that keeps under half of a long dictation must be rejected");
+        assert_eq!(error.code, ErrorCode::InvalidEnhancement);
+        assert!(
+            error
+                .message
+                .contains("rewrote far more than a cleanup should"),
+            "{}",
+            error.message
+        );
+        // Exactly half is still a cleanup; one character less is not.
+        let half: String = original.chars().take(length / 2).collect();
+        let under_half: String = original.chars().take(length / 2 - 1).collect();
+        assert!(validate_enhancement(original, &half, &[], true).is_ok());
+        assert!(
+            validate_enhancement(original, &under_half, &[], true).is_err(),
+            "{} of {length} characters kept",
+            under_half.chars().count()
+        );
+        // Short dictations and non-strict rewrites (such as "Make concise") may shrink freely.
+        assert!(validate_enhancement("okay so yes please", "Yes.", &[], true).is_ok());
+        assert!(validate_enhancement(original, shrunk, &[], false).is_ok());
+    }
+    #[test]
     fn rejects_expansion_refusal_and_dictionary_loss() {
         assert!(validate_enhancement("hello", &"new fact ".repeat(20), &[], true).is_err());
         assert!(validate_enhancement("test", "I cannot assist with this.", &[], true).is_err());

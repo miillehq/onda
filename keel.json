@@ -16,7 +16,7 @@
     "e2e": "npm run test:e2e",
     "build": "npm run build:e2e",
     "package": "npm run release",
-    "installers": null
+    "installers": "scripts/installer-test.sh"
   },
   "paths": {
     "ui": "ui/",
