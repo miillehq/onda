@@ -1963,6 +1963,7 @@
   display: grid;
   column-gap: var(--cell-gap);
   height: 18px;
+  line-height: 18px;
   color: var(--fg-3);
   font-size: var(--text-xs);
 }

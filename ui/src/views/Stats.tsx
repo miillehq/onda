@@ -49,11 +49,13 @@ function ActivityGrid() {
         }}
       >
         <div class="activity-months" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}>
-          {grid.months.map((month) => {
-            // A label in the last weeks would add columns past the year; it ends at the grid's edge.
-            const span = Math.min(4, WEEKS - month.column);
+          {grid.months.map((month, index) => {
+            // A label ends where the next month starts, or at the grid's edge; overlapping spans
+            // would push every later label onto a second row, over the grid.
+            const next = grid.months[index + 1]?.column ?? WEEKS;
+            const span = Math.min(4, next - month.column);
             return (
-              <span key={month.column} style={{ gridColumn: `${month.column + 1} / span ${span}`, ...(span < 4 ? { justifySelf: "end" } : {}) }}>
+              <span key={month.column} style={{ gridRow: 1, gridColumn: `${month.column + 1} / span ${span}`, ...(next === WEEKS && span < 4 ? { justifySelf: "end" } : {}) }}>
                 {month.label}
               </span>
             );
