@@ -31,7 +31,9 @@ onda-asr = { path = "../crates/onda-asr" }
 onda-cloud = { path = "../crates/onda-cloud" }
 tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2.4"
-tauri-plugin-updater = "2.10"
+# Without the default `zip` feature: Onda ships v2 updater artifacts (installers on Windows and
+# Linux, .app.tar.gz on macOS, whose tar and flate2 stay enabled), so nothing is ever unzipped.
+tauri-plugin-updater = { version = "2.10", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-dialog = "2.4"
 base64 = "0.22.1"
 zeroize = "1.8"
