@@ -41,7 +41,7 @@ See [release instructions](docs/release.md) for signed updates, Authenticode and
 - Target/window/process/control validation, password/UIPI refusal, delayed-render clipboard transactions and sequence-guarded restoration.
 - Migrations, content-free logs and performance metrics, redacted diagnostics, restrictive IPC capabilities and signed-update hooks.
 
-No audio uploads, analytics, screenshot capture, continuous app scraping or hidden billable fallback are implemented. Dictations are kept in History for 3 days by default (0–30 days, or only until Onda quits), encrypted with the user's Windows account; see `docs/decisions/005-dictation-history.md`.
+No audio uploads, analytics, screenshot capture, continuous app scraping or hidden billable fallback are implemented. Dictations are kept in History for 3 days by default (0–30 days, or only until Onda quits), encrypted with the user's Windows account; see `docs/adr/005-dictation-history.md`.
 
 ## Validate
 
@@ -59,4 +59,4 @@ Real desktop clipboard tests are explicitly opt-in because they take foreground 
 
 ## Continue development
 
-Read [architecture](docs/architecture.md), [frontend handoff](docs/frontend-handoff.md), [product behavior](docs/product-behavior.md), [security](docs/security.md), [OpenAI sign-in](docs/openai-sign-in.md), [AI providers](docs/ai-providers.md), [local models](docs/local-models.md) and [Linux](docs/linux.md). [Benchmarks](docs/benchmarks.md) describe measured hardware and cold/warm conditions. [References](docs/references.md) records pinned source inspections and engineering decisions.
+Read [architecture](ARCHITECTURE.md), [frontend handoff](docs/frontend-handoff.md), [product behavior](docs/product-behavior.md), [security](docs/security.md), [OpenAI sign-in](docs/openai-sign-in.md), [AI providers](docs/ai-providers.md), [local models](docs/local-models.md) and [Linux](docs/linux.md). [Benchmarks](docs/benchmarks.md) describe measured hardware and cold/warm conditions. [References](docs/references.md) records pinned source inspections and engineering decisions.

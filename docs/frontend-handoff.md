@@ -1,6 +1,6 @@
 # Frontend handoff
 
-Read architecture.md and product-behavior.md first, then this file, security.md, windows-integration.md and openai-sign-in.md, and [DESIGN.md](../DESIGN.md) for the visual system. The Onda interface in `ui/` is Preact with signals: `ui/src/lib/store.ts` holds native state and actions, `ui/src/views/` the pages, `ui/src/pill/` the dictation pill. No dictation, OAuth, replacement, persistence, validation or insertion policy belongs in the frontend.
+Read [ARCHITECTURE.md](../ARCHITECTURE.md) and product-behavior.md first, then this file, security.md, windows-integration.md and openai-sign-in.md, and [DESIGN.md](../DESIGN.md) for the visual system. The Onda interface in `ui/` is Preact with signals: `ui/src/lib/store.ts` holds native state and actions, `ui/src/views/` the pages, `ui/src/pill/` the dictation pill. No dictation, OAuth, replacement, persistence, validation or insertion policy belongs in the frontend.
 
 ## Windows and their responsibilities
 
