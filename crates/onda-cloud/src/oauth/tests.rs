@@ -1,5 +1,5 @@
 //! Hermetic loopback tests: no real accounts, credentials, or OpenAI requests.
-// The account fixtures drive DPAPI-backed tests that only run on Windows.
+// Most account fixtures drive DPAPI-backed tests that only run on Windows.
 #![cfg_attr(not(windows), allow(dead_code, unused_imports))]
 
 use super::*;
@@ -36,7 +36,45 @@ fn unspecified_optional_refresh_hint_shape_does_not_reject_valid_credentials() {
     }
 }
 
+/// What the test browser sent to /authorize, for the /token checks a real server makes.
+struct AuthorizationRequest {
+    code_challenge: String,
+    redirect_uri: String,
+}
+
+/// The authorization server's checks before it exchanges a code (RFC 6749 4.1.3, RFC 7636
+/// 4.6): the code it issued, the same redirect URI, and a verifier whose S256 hash is the
+/// challenge sent to /authorize. Returns the parameter it rejects, as the server's error does.
+async fn rejected_code_exchange(state: &FixtureState, body: &str) -> Option<&'static str> {
+    let form: HashMap<String, String> = url::form_urlencoded::parse(body.as_bytes())
+        .into_owned()
+        .collect();
+    if form.get("grant_type").map(String::as_str) != Some("authorization_code") {
+        return None;
+    }
+    let authorization = state.authorization.lock().await;
+    let Some(authorization) = authorization.as_ref() else {
+        return Some("code");
+    };
+    if form.get("code").map(String::as_str) != Some(TEST_CODE) {
+        return Some("code");
+    }
+    if form.get("redirect_uri") != Some(&authorization.redirect_uri) {
+        return Some("redirect_uri");
+    }
+    let challenge = form
+        .get("code_verifier")
+        .map(|verifier| URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes())));
+    if challenge.as_ref() != Some(&authorization.code_challenge) {
+        return Some("code_verifier");
+    }
+    None
+}
+
+const TEST_CODE: &str = "test-code";
+
 struct FixtureState {
+    authorization: Mutex<Option<AuthorizationRequest>>,
     nonce: Mutex<String>,
     subject: Mutex<String>,
     grant_scope: Mutex<String>,
@@ -63,6 +101,7 @@ impl Fixture {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let state = Arc::new(FixtureState {
+            authorization: Mutex::new(None),
             nonce: Mutex::new(String::new()),
             subject: Mutex::new("verified-subject".into()),
             grant_scope: Mutex::new(SCOPES.into()),
@@ -128,9 +167,15 @@ impl Fixture {
                     .lock()
                     .await
                     .push((path.to_owned(), body.to_owned()));
+                let rejected = if path == "/token" {
+                    rejected_code_exchange(&handler_state, body).await
+                } else {
+                    None
+                };
                 let (status, content_type, response) = match path {
                     "/discovery" => (200, "application/json", json!({"issuer":ISSUER,"authorization_endpoint":format!("{handler_base}/authorize"),"token_endpoint":format!("{handler_base}/token"),"jwks_uri":format!("{handler_base}/jwks"),"revocation_endpoint":format!("{handler_base}/revoke")}).to_string()),
                     "/jwks" => (200, "application/json", JWKS.to_owned()),
+                    "/token" if rejected.is_some() => (400, "application/json", json!({"error":{"code":"invalid_grant","param":rejected}}).to_string()),
                     "/token" => {
                         let form: HashMap<String, String> = url::form_urlencoded::parse(body.as_bytes()).into_owned().collect();
                         assert_eq!(form.get("client_id").unwrap(), "oaiapp_test");
@@ -209,11 +254,27 @@ impl Fixture {
         .unwrap()
     }
 
+    /// Plays the browser's part at /authorize: the server learns the challenge, the redirect URI
+    /// and the nonce it will put in the identity token.
+    async fn authorize(&self, pending: &PendingSignIn) {
+        let parameters: HashMap<_, _> = pending
+            .authorization_url
+            .query_pairs()
+            .into_owned()
+            .collect();
+        assert_eq!(parameters["code_challenge_method"], "S256");
+        *self.state.authorization.lock().await = Some(AuthorizationRequest {
+            code_challenge: parameters["code_challenge"].clone(),
+            redirect_uri: parameters["redirect_uri"].clone(),
+        });
+        *self.state.nonce.lock().await = parameters["nonce"].clone();
+    }
+
     async fn sign_in(&self, service: &ChatGptService, selected: Option<String>) -> AccountProfile {
         let pending = service.begin_sign_in(selected).await.unwrap();
-        *self.state.nonce.lock().await = pending.nonce.clone();
+        self.authorize(&pending).await;
         let callback = format!(
-            "{}?code=test-code&state={}&client_id=oaiapp_test",
+            "{}?code={TEST_CODE}&state={}&client_id=oaiapp_test",
             pending.redirect_uri, pending.state
         );
         let request =
@@ -352,13 +413,30 @@ async fn serializes_refresh_across_independent_service_instances_and_detects_cra
         .is_some());
 }
 
+/// A new-account sign-in as `begin_sign_in(None)` makes it, without discovery or account
+/// storage, so the callback checks run on every OS.
+async fn pending_new_account_sign_in() -> PendingSignIn {
+    let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+        .await
+        .unwrap();
+    let port = listener.local_addr().unwrap().port();
+    PendingSignIn {
+        listener,
+        authorization_url: Url::parse("http://127.0.0.1/authorize").unwrap(),
+        redirect_uri: format!("http://127.0.0.1:{port}{CALLBACK_PATH}"),
+        state: random_secret(32).unwrap(),
+        nonce: random_secret(32).unwrap(),
+        verifier: Zeroizing::new(random_secret(64).unwrap()),
+        selected_profile: None,
+        expected_client_id: None,
+        binding: Uuid::new_v4(),
+        created_at: Instant::now(),
+    }
+}
+
 #[tokio::test]
-#[cfg(windows)]
 async fn callback_rejects_csrf_client_swaps_duplicates_host_and_missing_registration() {
-    let fixture = Fixture::start().await;
-    let directory = tempfile::tempdir().unwrap();
-    let service = fixture.service(directory.path().to_owned());
-    let pending = service.begin_sign_in(None).await.unwrap();
+    let pending = pending_new_account_sign_in().await;
     let authority = pending
         .redirect_uri
         .strip_prefix("http://")
@@ -405,8 +483,9 @@ async fn callback_rejects_csrf_client_swaps_duplicates_host_and_missing_registra
     ));
 }
 
+// Needs no protected storage, only a service, which macOS cannot create yet.
 #[tokio::test]
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 async fn jwt_rejects_wrong_signature_issuer_audience_nonce_and_expiration() {
     let fixture = Fixture::start().await;
     let directory = tempfile::tempdir().unwrap();
@@ -479,8 +558,9 @@ async fn identity_only_grant_is_saved_but_never_used_for_inference() {
     ));
 }
 
+// Needs no protected storage, only a service, which macOS cannot create yet.
 #[tokio::test]
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 async fn pre_cancelled_signin_does_not_request_discovery_or_open_the_browser() {
     let fixture = Fixture::start().await;
     let directory = tempfile::tempdir().unwrap();
@@ -533,9 +613,9 @@ async fn selected_identity_cannot_be_replaced_by_another_account() {
         .begin_sign_in(Some(original.id.clone()))
         .await
         .unwrap();
-    *fixture.state.nonce.lock().await = pending.nonce.clone();
+    fixture.authorize(&pending).await;
     let callback = format!(
-        "{}?code=test-code&state={}",
+        "{}?code={TEST_CODE}&state={}",
         pending.redirect_uri, pending.state
     );
     let request = tokio::spawn(async move { Client::new().get(callback).send().await.unwrap() });

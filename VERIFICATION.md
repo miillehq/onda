@@ -23,6 +23,8 @@ with an identical tree.
 | 2026-11-13 | L6 probe | a changed Rust message fails `00-contract.spec.ts` ("History can be kept for 30 days at most." vs the example) | windows-x64, local | planted in `crates/onda-core/src/contracts.rs`, rebuilt, run red, restored |
 | 2026-11-13 | L1 | the interface logic in `ui/src/lib` (word diff, shortcut keys, activity grid, formatting, microphone level, error routes): 20 tests | windows-x64, local | `npm run test:unit` |
 | 2026-11-13 | L1 probe | one planted bug per module turns its tests red: diff ties, Esc accepted, Sunday-first weeks, the MB threshold, an error action to a missing route, swapped attack and release | windows-x64, local | each planted in `ui/src/lib/`, `npx vitest run tests/unit/lib.test.ts`, restored |
+| 2026-11-13 | L1, L3 | probes A1 (model checksum before inference), A3 (CPU-only never probes a GPU), C1 (PKCE verifier, code and redirect checked by the token mock), C2 (the 256 KiB cap is per event) now caught; the OAuth callback, JWT and pre-cancel tests run beyond Windows; the Job Object kill test runs unignored; `audio_context` is tested in the library. onda-cloud 42 passed and 1 ignored, onda-asr 18 passed | windows-x64, local | `cargo test --locked -p onda-cloud -p onda-asr` |
+| 2026-11-13 | probe | every new, strengthened or moved test above failed with its bug planted (checksum skipped; CPU-only dropped; nonce, state or a wrong redirect sent; the frame counter not reset; state and nonce checks removed; kill-on-close removed; the context margin removed) and passed once restored | windows-x64, local | planted one at a time in a worktree |
 
 ## Unverified
 

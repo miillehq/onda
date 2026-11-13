@@ -215,6 +215,13 @@ mod tests {
         let hardware = HardwareInfo::detect();
         assert!(hardware.total_memory_bytes > 0);
         assert!(hardware.available_memory_bytes <= hardware.total_memory_bytes);
+        // /proc/meminfo counts kB; any machine that runs the tests has more than 512 MiB.
+        assert!(
+            hardware.total_memory_bytes > 512 * 1024 * 1024,
+            "installed memory must be reported in bytes, got {}",
+            hardware.total_memory_bytes
+        );
+        assert!(hardware.available_memory_bytes > 0);
     }
 
     #[test]
@@ -242,6 +249,23 @@ mod tests {
         }];
         assert!(!hardware.should_probe_vulkan(ExecutionPreference::Auto));
         assert!(!hardware.should_probe_vulkan(ExecutionPreference::CpuOnly));
+        assert!(hardware.should_probe_vulkan(ExecutionPreference::GpuPreferred));
+        // A discrete GPU that Auto would accelerate: CPU-only must still never probe it.
+        hardware.gpus = vec![GpuInfo {
+            name: "discrete".into(),
+            vendor_id: 0x10de,
+            dedicated_memory_bytes: 4 << 30,
+            shared_memory_bytes: 8 << 30,
+            software_adapter: false,
+        }];
+        assert!(
+            hardware.should_probe_vulkan(ExecutionPreference::Auto),
+            "Auto probes a discrete GPU with at least 512 MiB"
+        );
+        assert!(
+            !hardware.should_probe_vulkan(ExecutionPreference::CpuOnly),
+            "CPU-only probed the GPU"
+        );
         assert!(hardware.should_probe_vulkan(ExecutionPreference::GpuPreferred));
     }
 }

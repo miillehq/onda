@@ -1,8 +1,9 @@
 //! Disposable inference process. No network access, shell arguments, or audio files.
 use onda_asr::{
     protocol::{
-        AcceleratorProbe, WorkerAudio, WorkerResponse, WorkerSetup, MAX_HEADER_BYTES,
-        MAX_INITIAL_PROMPT_BYTES, MAX_OUTPUT_BYTES, MAX_SAMPLES, PROTOCOL_VERSION,
+        audio_context, AcceleratorProbe, WorkerAudio, WorkerResponse, WorkerSetup,
+        MAX_HEADER_BYTES, MAX_INITIAL_PROMPT_BYTES, MAX_OUTPUT_BYTES, MAX_SAMPLES,
+        PROTOCOL_VERSION,
     },
     ExecutionBackend,
 };
@@ -19,11 +20,6 @@ use whisper_rs::{
 const MAX_THREADS: usize = 16;
 const GREEDY_BEST_OF: i32 = 1;
 const SILENCE_RMS_THRESHOLD: f64 = 0.0001;
-/// Whisper's encoder always covers 30 s (1500 frames of 20 ms). A short dictation only needs
-/// its own length; the margin keeps word endings and avoids the repetition tiny contexts cause.
-const FULL_AUDIO_CONTEXT_FRAMES: usize = 1500;
-const SAMPLES_PER_AUDIO_FRAME: usize = 320;
-const AUDIO_CONTEXT_MARGIN_FRAMES: usize = 128;
 const NATIVE_GPU_MISSING_MESSAGE: &[u8] = b"whisper_backend_init_gpu: no GPU found";
 const NATIVE_INITIALIZATION_FAILURE_MESSAGE: &[u8] =
     b"whisper_backend_init_gpu: failed to initialize";
@@ -205,16 +201,6 @@ fn transcribe(
     Ok((text.trim().to_owned(), inference_ms))
 }
 
-/// Encoder frames for this clip, or 0 (whisper's full window) once it would not save work.
-fn audio_context(sample_count: usize) -> i32 {
-    let frames = sample_count.div_ceil(SAMPLES_PER_AUDIO_FRAME) + AUDIO_CONTEXT_MARGIN_FRAMES;
-    if frames >= FULL_AUDIO_CONTEXT_FRAMES {
-        0
-    } else {
-        frames as i32
-    }
-}
-
 fn vulkan_device_count() -> usize {
     #[cfg(feature = "vulkan")]
     {
@@ -305,19 +291,4 @@ fn contains_bytes(message: &[u8], marker: &[u8]) -> bool {
     message
         .windows(marker.len())
         .any(|candidate| candidate == marker)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn short_clips_encode_only_their_own_length() {
-        // 3 s is 150 encoder frames plus the margin.
-        assert_eq!(audio_context(3 * 16_000), 278);
-        assert_eq!(audio_context(1), 129);
-        // Near and beyond the 30 s window, the full context is cheaper to keep.
-        assert_eq!(audio_context(28 * 16_000), 0);
-        assert_eq!(audio_context(60 * 16_000), 0);
-    }
 }
