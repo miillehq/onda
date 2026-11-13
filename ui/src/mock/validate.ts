@@ -4,7 +4,7 @@
  * Messages must match Rust's exactly; the shared examples in contracts/examples.ts run against
  * both this mock (tests/unit) and the real app (tests/e2e), so a drift fails one of them.
  */
-import type { AppError, Settings, Shortcut } from "../generated/core";
+import type { AppError, DictionaryEntry, Settings, Shortcut } from "../generated/core";
 import { LIMITS } from "../generated/core";
 
 function invalid(message: string): AppError {
@@ -67,6 +67,35 @@ export function normalizeName(raw: string | null): { name: string | null } | { e
   if (graphemes > LIMITS.maxNameCharacters) return { error: invalid(`Use a name of at most ${LIMITS.maxNameCharacters} characters.`) };
   return { name };
 }
+
+/** Rust's `validate_dictionary_entry` (crates/onda-core/src/persistence.rs). */
+export function validateDictionaryEntry(entry: DictionaryEntry): AppError | null {
+  const characters = (text: string) => [...text].length;
+  if (
+    entry.id.length === 0 ||
+    utf8Length(entry.id) > 64 ||
+    entry.phrase.trim().length === 0 ||
+    characters(entry.phrase) > 160 ||
+    !/[\p{L}\p{N}]/u.test(entry.phrase) ||
+    entry.phrase.includes("\0")
+  ) {
+    return invalid("Dictionary phrase must contain a word and at most 160 characters.");
+  }
+  const replacement = entry.replacement;
+  const valid =
+    entry.kind === "vocabulary"
+      ? replacement === null
+      : replacement !== null && replacement.trim().length > 0 && characters(replacement) <= 160 && !replacement.includes("\0");
+  return valid ? null : invalid("Vocabulary has no replacement; a correction needs an output phrase.");
+}
+
+/** Rust's `lookup_key` (crates/onda-core/src/dictionary.rs): one entry per trigger, whatever its case or spacing. */
+export function lookupKey(text: string): string {
+  return text.normalize("NFKC").toLowerCase().split(/\s+/u).filter(Boolean).join(" ");
+}
+
+/** The refusal SQLite's unique trigger index gives Rust for a second entry with the same key. */
+export const DUPLICATE_TRIGGER: AppError = invalid("This trigger already exists. Edit the existing entry.");
 
 function utf8Length(value: string): number {
   return new TextEncoder().encode(value).length;

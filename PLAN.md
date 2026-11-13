@@ -53,8 +53,8 @@ Rulings:
   cost if wrong: a deleted baseline skips rather than fails; tiers 1 and 2 still run.
 - Slice 8: Ruling: the browser suite on macOS is advisory with the rest of Tier 2 — cost if wrong:
   a webkit regression on macOS waits for a release check.
-- Slice 8, follow-up for the next contract PR: the mock saves a duplicate dictionary entry that
-  Rust refuses; add a contract example and the refusal to the mock.
+- Slice 8, follow-up done in its own contract PR: the mock refuses a duplicate dictionary entry as
+  Rust does, held by four new contract examples.
 - Slice 10: replacements first (this PR), retirements later, each named:
   `languages.rs` `the_catalog_language_table_matches_whisper_order_and_excludes_cantonese` is
   replaced by `engine.rs` `languages_the_models_lack_never_reach_the_worker` (now also zh-HK, cmn
