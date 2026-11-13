@@ -1,68 +1,191 @@
-# Onda
+<div align="center">
 
-Onda by miille: voice dictation that types wherever your cursor is, on Windows and Linux, with macOS on the way. Speech recognition runs locally. Optional text cleanup and selection rewrites use the AI provider you choose: a connected ChatGPT plan, an OpenAI-compatible server, Anthropic, or a model on this computer. On Linux the desktop approves its shortcuts and typing once ([linux](docs/linux.md)). On a Mac, Onda builds and passes its tests in CI and pastes into other apps once you turn it on under Privacy & Security › Accessibility; until then it copies what you say for ⌘V. Mac typing has not yet been tried on a real Mac ([platform support](docs/adr/007-platform-support.md)). Apache-2.0.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/onda-logo-dark.svg">
+  <img src="docs/images/onda-logo-light.svg" alt="Onda" width="220">
+</picture>
 
-The repository contains the native application, the Onda interface (main window and a non-activating dictation pill), CPU, optional Vulkan and (on macOS) Metal speech workers, a shortcut helper, installer scripts, CI, and tests from units to installers. Design decisions live in [DESIGN.md](DESIGN.md). This is an engineering candidate: consult [testing](docs/testing.md) for the measured results and the interactive release matrix that has not yet been certified.
+# Onda: voice dictation that types wherever your cursor is
 
-## Run and build
+**Hold a key, speak, let go. Your words are typed into any app.**<br>
+Private speech-to-text for Windows, macOS and Linux. Whisper runs on your own computer, so dictation works offline;<br>
+AI cleanup is optional and uses the provider you choose.
 
-Windows 11 x64 is the primary platform. Windows 10 22H2 x64 (build 19045) is the minimum project support target; that baseline needs verification on a clean machine. The ordinary build needs neither a GPU, API key nor administrator rights. A model download and Microsoft WebView2 are required. Default profile is Fast, with automatic language detection. Choose English explicitly to use the smaller English-only path.
+[![Latest release](https://img.shields.io/github/v/release/miillehq/onda?include_prereleases&label=release&color=0F0F10)](https://github.com/miillehq/onda/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/miillehq/onda/ci.yml?branch=master&label=CI)](https://github.com/miillehq/onda/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/github/downloads/miillehq/onda/total?color=0F0F10)](https://github.com/miillehq/onda/releases)
+[![License: Apache-2.0](https://img.shields.io/github/license/miillehq/onda?color=0F0F10)](LICENSE)
+![Windows · macOS · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-x64%20%26%20ARM64-0F0F10)
 
-Install Rust 1.95.0, Node 24, Visual Studio 2022 C++ Build Tools, CMake and LLVM. Dot-source `./scripts/toolchain.ps1` to find CMake and LLVM, or set `LIBCLANG_PATH` to the directory containing `libclang.dll`; these are developer dependencies, not runtime requirements. Then:
+[**Download**](#download) · [How it works](#how-it-works) · [Features](#features) · [Privacy](#privacy) · [FAQ](#faq) · [Contributing](CONTRIBUTING.md)
 
-```powershell
-npm ci
-npm run desktop
-```
+<br>
 
-The script builds the helper executables before starting Tauri. First-run setup checks the microphone, downloads a speech model (or keeps one you already have) and lets you try dictation in a practice field. Then focus an editable field in any app, hold **Ctrl + Win + Space**, speak, and release. Closing the main window keeps Onda in the tray; use the tray's Quit action to exit. The first launch moves data from the provisional `org.eagle.dictation` folder to `com.miille.onda`.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.png">
+  <img src="docs/images/hero-light.png" alt="The Onda window beside an email draft. Onda's dictation pill sits below the draft while the dictated sentence appears at the cursor." width="100%">
+</picture>
 
-On Linux, build and run as [docs/linux.md](docs/linux.md) describes. On macOS, [CONTRIBUTING.md](CONTRIBUTING.md#build-the-whole-app) has the steps; there the dictation shortcut is **Control + Shift + Space**, because Control + Command + Space opens Emoji & Symbols.
+</div>
 
-For interface work without the native shell, `npm run dev` serves the UI against a clearly labelled development mock (`ui/src/mock/backend.ts`, never bundled); add `?mock=empty|onboarding|error`, `?theme=dark`, a route such as `#settings/speech`, or open `/pill.html?pill=listening|handsfree|writing|polishing|done|error`. In debug builds, `ONDA_DEV_PROFILE=<absolute folder>` runs an isolated profile beside an installed copy (no global shortcuts, registry changes or single-instance lock).
+## Download
 
-```powershell
-npm run release                       # unsigned per-user NSIS installer
-./scripts/build.ps1 -WithVulkan        # optional separate GPU worker; needs Vulkan SDK
-```
+Get the installer for your system from the [**latest release**](https://github.com/miillehq/onda/releases/latest). Onda is free and open source.
 
-See [release instructions](docs/release.md) for signed updates, Authenticode and complete installation prerequisites. Large models are downloaded to the user's local data directory and never committed or bundled into Git.
+| System | Installer | Notes |
+| --- | --- | --- |
+| **Windows** 10 and 11 | `x64-setup.exe`, or `arm64-setup.exe` for Windows on ARM | Installs for your account; no administrator rights needed. |
+| **macOS** 12 or later (experimental) | `aarch64.dmg` for Apple Silicon, `x64.dmg` for Intel Macs | Drag Onda to Applications. |
+| **Linux** | `.deb` for Ubuntu and Debian, `.AppImage` for other distributions; x64 and ARM64 | Needs glibc 2.39 or newer: Ubuntu 24.04 or later, Debian 13, Fedora 42, Arch. |
 
-## Capabilities
+> [!NOTE]
+> 0.3.0 is a pre-release and its installers are not code-signed yet. On Windows, SmartScreen warns the first time: choose **More info › Run anyway**. On a Mac, open Onda once, then allow it under **System Settings › Privacy & Security › Open Anyway**. Each release lists SHA-256 checksums to check your download against.
 
-- Push-to-talk, optional toggle recording, cancellation, microphone selection/level test, bounded capture and band-limited resampling.
-- CPU Whisper ASR on baseline x64 hardware, an optional Vulkan worker for NVIDIA/AMD/Intel drivers, process isolation and CPU fallback.
-- Checked resumable model downloads, model profiles, explicit selection, uninstall, and verified location migration.
-- Separate vocabulary and replacement rules, Unicode boundaries, indexed relevant-term retrieval, snippets, import/export and immediate updates.
-- Optional scoped correction proposals: three focused-field samples over twelve seconds, only for text this app inserted, and only with learning enabled.
-- Official browser OAuth/PKCE, protected credentials (DPAPI on Windows, the Secret Service on Linux, the Keychain on macOS), account/workspace registrations, serialized refresh, account model discovery, bounded streaming, and local dictation fallback.
-- OpenAI-compatible, Anthropic and loopback-only local model providers with protected API keys, no cross-provider fallback, and per-machine model guidance.
-- Local profile and statistics (words, pace, streaks, a year of activity) from content-free counts, with an Onda-branded PNG to share.
-- On Windows and Linux, a report of Onda's whole process tree, including the WebView2 processes Task Manager lists separately.
-- Selected-text transforms, custom instructions/shortcuts, spoken editing commands, original/result/diff/copy, retry insertion and guarded undo.
-- Target/window/process/control validation, password/UIPI refusal, delayed-render clipboard transactions and sequence-guarded restoration.
-- Migrations, content-free logs and performance metrics, redacted diagnostics, restrictive IPC capabilities and signed-update hooks.
+The first time Onda starts, it checks your microphone, downloads a speech model (about 75 MB for the default) and lets you try a dictation.
 
-No audio uploads, analytics, screenshot capture, continuous app scraping or hidden billable fallback are implemented. Dictations are kept in History for 3 days by default (0–30 days, or only until Onda quits), encrypted at rest with a key the system protects (the user's Windows account, the Linux keyring or the macOS Keychain); see `docs/adr/005-dictation-history.md`.
+## How it works
 
-## Check a change
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-dark.png">
+  <img src="docs/images/how-light.png" alt="Four steps: hold Ctrl + Win + Space (Control + Shift + Space on a Mac); speak while the pill listens; Onda writes it out on your computer with Whisper, with AI polish only if you turn it on; let go and the words are typed where your cursor is." width="100%">
+</picture>
 
-Each command is one level of the [testing strategy](TESTING.md); CI runs them all on every pull request.
+1. **Hold your shortcut** in any app: <kbd>Ctrl</kbd> + <kbd>Win</kbd> + <kbd>Space</kbd> on Windows and Linux, <kbd>Control</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> on a Mac. Or tap it and talk hands-free.
+2. **Speak.** A small pill shows that Onda is listening. <kbd>Esc</kbd> cancels and keeps nothing.
+3. **Let go.** Onda turns your speech into text on your computer, applies your dictionary and snippets, and types it where your cursor is. What you had copied is put back on the clipboard.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/pills-dark.png">
+  <img src="docs/images/pills-light.png" alt="The dictation pill's states: listening, hands-free with a timer, writing it out, polishing, and done." width="100%">
+</picture>
+
+## Features
+
+- **Types into any app.** Email, chat, documents, browsers, code editors, terminals: wherever there is a text cursor. Onda checks that the field you started in is still the one in front, and never types into password fields.
+- **Offline speech recognition.** [Whisper](https://github.com/ggml-org/whisper.cpp) models run on your computer in a separate worker process. Pick Fast, Balanced or Quality; a faster build is used automatically on processors that support it.
+- **39 languages, or automatic detection.** Choose English for the smaller English-only models.
+- **Your words, spelled your way.** A personal dictionary for names and jargon, snippets that expand a spoken phrase into longer text, and suggestions when you correct a word right after dictating.
+- **Rewrite selected text.** Select text and say what to change, or apply a saved rewrite such as "make it shorter", "fix the grammar" or "turn this into bullets". Rewrites use your AI provider.
+- **Optional AI polish.** Clean up filler words and punctuation with ChatGPT (sign in with your plan), any OpenAI-compatible server, Anthropic, or a model running on your own computer. If the provider fails, you keep your original words.
+- **App styles.** Onda adapts per app: a casual tone in chat, a different paste key in a terminal.
+- **History and stats.** Recent dictations to copy or paste again, kept encrypted for 3 days by default. Words dictated, speaking pace and streaks, counted without storing what you said.
+- **Stays out of the way.** Onda lives in the tray or menu bar; dictation, hands-free, cancel and rewrites each have their own shortcut. Light, dark and high-contrast themes follow your system.
+
+<table>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/screen-history-dark.png">
+        <img src="docs/images/screen-history-light.png" alt="Onda's History page listing recent dictations with copy and paste-again actions.">
+      </picture>
+      <p align="center"><b>History</b>: copy or paste a recent dictation again.</p>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/screen-dictionary-dark.png">
+        <img src="docs/images/screen-dictionary-light.png" alt="Onda's Dictionary page with custom words such as Kubernetes and PostgreSQL.">
+      </picture>
+      <p align="center"><b>Dictionary</b>: names and jargon, spelled right.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/screen-speech-dark.png">
+        <img src="docs/images/screen-speech-light.png" alt="Onda's Speech and language settings with the Fast, Balanced and Quality speech models.">
+      </picture>
+      <p align="center"><b>Speech</b>: choose speed or accuracy, and your language.</p>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/screen-stats-dark.png">
+        <img src="docs/images/screen-stats-light.png" alt="Onda's Stats page with words dictated, speaking pace, streak and a year of activity.">
+      </picture>
+      <p align="center"><b>Stats</b>: your pace and streaks; only numbers are kept.</p>
+    </td>
+  </tr>
+</table>
+
+## Privacy
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/privacy-dark.png">
+  <img src="docs/images/privacy-light.png" alt="Your voice, speech recognition, your words and the app you type into all stay on your computer. Only if you turn on AI polish does text go to the AI provider you chose, never audio." width="100%">
+</picture>
+
+- **Your voice never leaves your computer.** Audio is recorded only while you dictate, transcribed locally, and never written to disk.
+- **AI is opt-in.** Only when you turn on AI polish or rewrites does the text (never the audio) go to the one provider you picked. Onda never falls back to another provider.
+- **No analytics, no telemetry.** Logs hold timings and error codes, never your words.
+- **History is encrypted on disk** with a key in your system's secure store (Windows account, macOS Keychain or the Linux keyring), kept 3 days by default, and can be cleared or turned off.
+
+The full data-flow and threat model is in [docs/security.md](docs/security.md).
+
+## Platform support
+
+| | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| Status | Supported | Supported (X11 and Wayland) | Experimental |
+| Processors | x64, ARM64 | x64, ARM64 | Apple Silicon, Intel |
+| Types into apps | Yes | Yes, after the desktop allows it once | After you allow Onda under Privacy & Security › Accessibility; otherwise copied for <kbd>⌘</kbd><kbd>V</kbd> |
+
+macOS typing into other apps is new in 0.3.0 and has not yet been tried on a real Mac; every build is tested on GitHub's Mac runners. What has been proven on which platform, and how, is recorded in [VERIFICATION.md](VERIFICATION.md).
+
+## FAQ
+
+<details>
+<summary><b>Does Onda work offline?</b></summary>
+
+Yes. Speech recognition runs on your computer. You need the internet only to download a speech model the first time, and for AI polish if you turn it on.
+</details>
+
+<details>
+<summary><b>Is Onda free?</b></summary>
+
+Yes, and open source under the Apache 2.0 license. AI polish uses your own account with the provider you choose, or a model running on your computer at no cost.
+</details>
+
+<details>
+<summary><b>Which languages can I dictate in?</b></summary>
+
+Settings offers 39 languages, including English, Spanish, French, German, Portuguese, Italian, Dutch, Polish, Japanese, Korean, Chinese (Mandarin), Hindi and Arabic. Automatic detection handles the rest of what Whisper's multilingual models know.
+</details>
+
+<details>
+<summary><b>What computer do I need?</b></summary>
+
+No graphics card or API key is needed. The default Fast model uses about 400 MB of memory; Quality needs about 1.2 GB and works best with 6 GB of RAM or more. Processors with AVX2 (most from 2013 on) get a faster speech engine automatically.
+</details>
+
+<details>
+<summary><b>Why does Windows or macOS warn me when I install it?</b></summary>
+
+The 0.3.0 installers are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper don't recognise the publisher. Check the download against the release's SHA-256 checksums, then choose **Run anyway** on Windows or **Open Anyway** in macOS's Privacy & Security settings.
+</details>
+
+<details>
+<summary><b>On a Mac, why does my dictation land on the clipboard?</b></summary>
+
+macOS lets an app type into other apps only after you turn it on under **System Settings › Privacy & Security › Accessibility**. Onda's **Settings › Shortcuts › Typing into apps** has an Allow button that takes you there. Because the app is unsigned, macOS may ask again after an update: switch Onda off and on in that list.
+</details>
+
+## Build from source
+
+You need Rust 1.95, Node 24, CMake and LLVM (for whisper.cpp), and on Windows the Visual Studio 2022 C++ build tools.
 
 ```bash
-cargo fmt --all --check                                          # L0
-cargo clippy --locked --workspace --all-targets -- -D warnings   # L0
-npx tsc --noEmit                                                 # L0
-cargo test --locked --workspace                                  # L1, L3
-npm run test:unit                                                # L1, L2
-npm run contracts:check                                          # L2
-npm run test:ui                                                  # L4, L5 (once: npx playwright install chromium webkit)
-npm run build:e2e && npm run test:e2e                            # L6, the real app on a throwaway profile
-npm run quality                                                  # text-cleanup quality fixtures
+npm ci
+./scripts/prepare.ps1      # Windows; scripts/prepare.sh on Linux and macOS
+npm run desktop            # Windows; npm run tauri dev on Linux and macOS
 ```
 
-Real-model speech tests need a downloaded model ([testing](docs/testing.md)). Real desktop clipboard tests are explicitly opt-in because they take foreground focus. Real ChatGPT authorization needs an eligible account's consent, and is not claimed from mocked tests. What has been proven, where and by which run is in [VERIFICATION.md](VERIFICATION.md).
+To work on the interface alone, `npm ci && npm run dev` serves it at http://127.0.0.1:1420 against a labelled development mock, with no Rust or speech toolchain. [CONTRIBUTING.md](CONTRIBUTING.md) has the full setup per platform, the test commands and how changes are reviewed.
 
 ## Contributing
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md): the interface-only setup, the full build on each platform, the checks and the project's rules. [docs/README.md](docs/README.md) says which document to read for what, and [AGENTS.md](AGENTS.md) holds the exact commands. Report security problems privately, as [SECURITY.md](SECURITY.md) explains.
+Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); [ARCHITECTURE.md](ARCHITECTURE.md) explains how the pieces fit, and [docs/README.md](docs/README.md) lists the rest of the documentation. Please report security issues privately, as [SECURITY.md](SECURITY.md) describes, not in public issues.
+
+## License
+
+Onda is licensed under the [Apache License 2.0](LICENSE). Bundled components keep their own licenses: see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and [docs/third-party-licenses.md](docs/third-party-licenses.md).
+
+<div align="center"><sub>Onda by miille</sub></div>
