@@ -2,6 +2,13 @@ param([switch]$Release, [switch]$WithVulkan)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'toolchain.ps1')
 $repositoryDirectory = Split-Path -Parent $PSScriptRoot
+
+function Restore-ProcessEnvironment([System.Collections.IDictionary]$Saved) {
+    foreach ($name in @([Environment]::GetEnvironmentVariables('Process').Keys)) {
+        if (-not $Saved.Contains($name)) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+    }
+    foreach ($entry in $Saved.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process') }
+}
 Push-Location -LiteralPath $repositoryDirectory
 try {
     $buildMode = if ($Release) { 'release' } else { 'debug' }
@@ -12,9 +19,12 @@ try {
     cargo build --locked -p onda-input --bin onda-input @releaseArguments
     if ($LASTEXITCODE -ne 0) { throw 'Shortcut helper build failed.' }
     $avx2TargetDirectory = Join-Path $repositoryDirectory 'target/avx2'
-    $previousArmEnvironment = @{}
+    # The ARM64 developer environment changes many variables, and all of them go back afterwards:
+    # a VCINSTALLDIR left behind makes rustc link with the first link.exe on PATH, which on the
+    # runners is Git's coreutils `link`, and the next Rust build in this shell fails.
+    $previousArmEnvironment = $null
     if (-not $x86) {
-        foreach ($name in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'CMAKE_GENERATOR', 'CMAKE_GENERATOR_INSTANCE', 'CMAKE_GENERATOR_PLATFORM', 'CMAKE_GENERATOR_TOOLSET', 'CMAKE_C_COMPILER', 'CMAKE_CXX_COMPILER', 'CMAKE_ASM_COMPILER', 'CMAKE_C_COMPILER_TARGET', 'CMAKE_CXX_COMPILER_TARGET', 'CXXFLAGS_aarch64_pc_windows_msvc')) { $previousArmEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+        $previousArmEnvironment = [Environment]::GetEnvironmentVariables('Process')
         . (Join-Path $PSScriptRoot 'arm64-toolchain.ps1')
         # A whisper.cpp CMake cache made with another compiler cannot be re-configured for clang-cl:
         # CMake resets it mid-run and fails. Such a build directory (build output only) starts afresh.
@@ -42,7 +52,7 @@ try {
             Copy-Item -LiteralPath (Join-Path $repositoryDirectory "target/$buildMode/onda-asr-worker.exe") -Destination (Join-Path $avx2TargetDirectory "$buildMode/onda-asr-worker.exe") -Force
         }
     } finally {
-        foreach ($entry in $previousArmEnvironment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process') }
+        if ($previousArmEnvironment) { Restore-ProcessEnvironment $previousArmEnvironment }
     }
     $binaryDirectory = Join-Path $repositoryDirectory 'src-tauri/binaries'
     [System.IO.Directory]::CreateDirectory($binaryDirectory) | Out-Null
