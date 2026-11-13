@@ -46,18 +46,32 @@ with an identical tree.
 | 2026-11-13 | policy | cargo-deny (licences, advisories, sources) and `npm audit --omit=dev --audit-level=high` pass | linux-x64 CI | run 43356494799, job "dependency policy" |
 | 2026-11-13 | L7 | Linux deb: installs, ships the shortcut helper and both speech workers, the installed app is still running after 6 s, removed; the AppImage is still running after 6 s | linux-x64 CI | [installers run 43358207762](https://github.com/miillehq/onda/actions/runs/43358207762), `d9bb7bc` |
 | 2026-11-13 | L7 | Windows NSIS: silent per-user install with all four binaries, the hashed MSVC runtime and the MPL source, then silent uninstall; the installed app is not launched | windows-x64 CI | installers runs 43357218055 (`d1efc93`) and 43358207762 (`d9bb7bc`) |
+| 2026-11-13 | L8 | the deb and AppImage resolve every library the app and its workers need in Fedora, Debian and Arch containers | linux-x64 CI, advisory | [installers run 43360272401](https://github.com/miillehq/onda/actions/runs/43360272401), `981daee` on `master` |
+| 2026-11-13 | L6 | the WebView2 native smoke: the debug app on an isolated profile passes the 41 checks of `ui/src/smoke.ts` through real IPC; now a Tier 1 step | windows-x64 CI; windows-x64, local | ci runs 43361404472 (`dbfdf33`) and 43364551772 (`92c203b`), PR #17; `scripts/smoke.ps1 -SkipBuild` |
+| 2026-11-13 | L6 probe | a changed Rust message for an empty rewrite fails the smoke: "Desktop IPC smoke failed after: private default snapshot, main window renders after setup" | windows-x64, local | planted in `crates/onda-core/src/text.rs`, rebuilt, run red, restored, 41 checks green |
+| 2026-11-13 | L7 | Windows NSIS, the installed app: both speech workers answer `--probe` with the current protocol; launched with `--background` it starts its shortcut helper and logs "application started" after 10.1 s on a fresh profile; idle at 0% CPU over 5 s (shell 9.6 MiB private, helper 0.9 MiB); the helper exits with the shell; uninstalling keeps the user's data | windows-x64 CI | [installers run 43364546053](https://github.com/miillehq/onda/actions/runs/43364546053), `92c203b`, PR #17 |
+| 2026-11-13 | L7 probe | a release build that never starts the shortcut helper fails that test ("Installed shell did not launch its owned shortcut helper."), while the older layout step passes the same build | windows-x64 CI | installers run 43363041882, branch `probe/installed-helper-2`, `ee2ab7a` |
+| 2026-11-13 | L7 finding | `scripts/installer-smoke.ps1` had drifted from the app before its first CI run: it expected worker protocol 1 (the workers speak 2; run 43361377002) and looked for the startup entry once, about 6 s after launch (run 43363038947). It now reads the version from `protocol.rs`, waits up to 30 s and records the startup time | windows-x64 CI | PR #17 |
+| 2026-11-13 | L4, L5 | History: entries grouped by day with the failed dictation marked, case-insensitive search and its empty state, the original before polish, Clear all with its confirmation; tier 1 and tier 2 baselines | windows-x64, linux-x64, macos-arm64 CI; windows-x64, local | ci run 43362256798 (`912fced`, PR #18); `npx playwright test` |
+| 2026-11-13 | L4 probe | six planted bugs each fail their History test: case-sensitive search, no "Yesterday", the failed dictation unmarked, the original never opening, Cancel clearing, Clear history doing nothing | windows-x64, local, chromium | planted one at a time in `ui/src/views/History.tsx`, restored |
+| 2026-11-13 | L5 | tier 3 pixel baselines for five screens in chromium and webkit, captured on the runners; all 48 browser tests pass with none skipped on each OS | windows-x64, linux-x64, macos-arm64 CI | snapshots runs 43362291062 and 43364686147; [ci run 43365494135](https://github.com/miillehq/onda/actions/runs/43365494135), `d50acf9`, PR #19 |
+| 2026-11-13 | L5 probe | against the runner's Windows baselines, which this machine matches: a serif fallback for the UI font fails all five screens, the pill card without its background fails the pill, a 24 px wider sidebar fails the three pages with a sidebar; a lighter hairline grey, a label moved 4 px and a smaller corner radius pass (tolerance ruling in PLAN.md) | windows-x64, local, chromium | planted one at a time, `npx playwright test -g "tier 3" --project=chromium`, restored |
+| 2026-11-13 | L5 fix | two capture bugs, fixed in PR #19: the Linux pill baselines were blank (captured mid fade-in, diagnosed on the runner in run 43363554626), and the snapshots workflow restored the other OSes' stale baselines (run 43363961850 changed nothing); run 43364686147 then replaced exactly the two blank images | linux-x64 CI | PR #19 |
+| 2026-11-13 | L0 to L3, L6 | macOS and ARM (Tier 2): crates, frontend, speech and shortcut workers, the app shell and the real-shell suite (3 spec files, 26 tests) pass on macos-arm64 and macos-x64 (WKWebView), windows-arm64 (WebView2) and linux-arm64 (WebKitGTK). Rust tests 159 passed and 6 ignored on macOS, 181 and 6 on Windows arm64, 174 and 7 on Linux arm64; on macOS the LaunchAgent test passes and the Keychain round trip is ignored | macos-arm64, macos-x64, windows-arm64, linux-arm64 CI | ci runs 43364156804 (`06d4a2e`; on macos-x64 every test passed and only the screenshot upload hit a runner DNS error) and 43367309751 (`fe9dad6`), PR #11 |
+| 2026-11-13 | L7 | macOS dmg (Apple Silicon, unsigned, 10.6 MiB): mounted, Onda.app copied to `~/Applications`, still running after 6 s, removed. The same run with the macOS and ARM changes: the Windows installed-app test passes (startup 7.9 s), as do the Linux deb and AppImage and the three containers | macos-arm64, windows-x64, linux-x64 CI | [installers run 43367304794](https://github.com/miillehq/onda/actions/runs/43367304794), `fe9dad6`, branch `macos/builds` |
 
 ## Unverified
 
-- Windows NSIS (L7): the install test checks the layout but does not launch the installed app.
-- L5 tier 3: no pixel baselines until the snapshots workflow runs on the runners. The history view
-  has no browser test.
-- L6 on Windows: the WebView2 smoke (`scripts/smoke.ps1`, the checks in `ui/src/smoke.ts`) has not
-  run since 0.1.x; on Linux the same checks run on every PR.
-- L8: the Fedora, Debian and Arch container checks had not finished their first run on `master`
-  when this was written.
-- macOS and ARM: the ports are in PR #11, not on `master`. On `master` only the crates without the
-  app shell are tested on macOS and Windows arm64.
+- macOS: dictation into other apps on a real Mac. There is no focused-field identity, typing,
+  selection rewrite or password refusal yet (the platform calls report "unsupported"); dictation
+  goes to the pasteboard with a ⌘V hint. The Keychain round trip is an
+  ignored test. The Metal worker has not transcribed (no golden run on macOS). Signing and
+  notarization are documented in `docs/release.md` but need an Apple Developer account. Open
+  decision: the default chord Ctrl+Cmd+Space collides with macOS's Emoji & Symbols viewer.
+- ARM: no ARM packages are built; the installers workflow builds x64 and Apple Silicon only.
+- Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 10 s is not
+  investigated.
+- L5 tier 3 catches rendering breakage, not small changes (PLAN.md ruling).
 - Linux: the keyring seal round trip and Secret Service key storage are ignored tests; they need a
   desktop session. The golden tests run in CI on Windows only; on Linux not since 2026-10-29.
   The Vulkan golden needs a GPU and stays ignored.
