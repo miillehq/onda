@@ -14,7 +14,7 @@ import type { Backend } from "../api";
 import type { AccountInfo, ApiRequest, ApiResponse, CloudModel, ModelInfo, ResourceUsage, RuntimeEvent, Snapshot } from "../generated/api";
 import type { AiProvider, AppError, DailyUsage, DictionaryEntry, HistoryEntry, OperationResult, OperationState, Profile, Settings, Snippet, Transform, UsageSummary } from "../generated/core";
 import { DEFAULT_SETTINGS } from "../generated/core";
-import { normalizeName, validateSettings } from "./validate";
+import { DUPLICATE_TRIGGER, lookupKey, normalizeName, validateDictionaryEntry, validateSettings } from "./validate";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = params.get("mock") ?? "default";
@@ -396,9 +396,14 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     }
     case "getDictionary":
       return { type: "dictionary", payload: dictionary };
-    case "saveDictionaryEntry":
-      dictionary = [...dictionary.filter((entry) => entry.id !== request.args.entry.id), request.args.entry];
+    case "saveDictionaryEntry": {
+      const saved = request.args.entry;
+      const refusal = validateDictionaryEntry(saved);
+      if (refusal) throw refusal;
+      if (dictionary.some((entry) => entry.id !== saved.id && lookupKey(entry.phrase) === lookupKey(saved.phrase))) throw DUPLICATE_TRIGGER;
+      dictionary = [...dictionary.filter((entry) => entry.id !== saved.id), saved];
       return { type: "dictionary", payload: dictionary };
+    }
     case "deleteDictionaryEntry":
       dictionary = dictionary.filter((entry) => entry.id !== request.args.id);
       return { type: "unit" };
