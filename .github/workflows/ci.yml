@@ -184,6 +184,7 @@ jobs:
           cargo test --locked --workspace
       - name: Native smoke in WebKitGTK
         run: |
+          cargo build --locked -p onda-app --bin onda
           npm run dev > "$RUNNER_TEMP/vite.log" 2>&1 &
           for _ in $(seq 1 60); do curl -sf http://127.0.0.1:1420/ > /dev/null && break; sleep 1; done
           mkdir -p "$RUNNER_TEMP/smoke"
