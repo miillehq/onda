@@ -17,5 +17,5 @@ test.describe("the pill's error card for a lost focus", () => {
   });
 
   test("tier 1: its structure", async ({ page }) => tier1(page.getByRole("alert"), "pill-focus-changed"));
-  test("tier 3: its pixels", async ({ page }) => tier3(page, "pill-focus-changed"));
+  test("tier 3: its pixels", async ({ page }) => tier3(page, "pill-focus-changed", page.getByRole("alert")));
 });

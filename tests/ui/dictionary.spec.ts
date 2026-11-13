@@ -24,4 +24,4 @@ test("Escape closes the editor without saving", async ({ page }) => {
 
 test("tier 1: the dictionary's structure", async ({ page }) => tier1(page.getByRole("main", { name: "Content" }), "dictionary"));
 test("tier 2: the dictionary's layout", async ({ page }) => tier2(page, "dictionary"));
-test("tier 3: the dictionary's pixels", async ({ page }) => tier3(page, "dictionary"));
+test("tier 3: the dictionary's pixels", async ({ page }) => tier3(page, "dictionary", words(page)));
