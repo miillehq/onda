@@ -560,14 +560,30 @@ mod tests {
         let address = listener.local_addr().expect("server address");
         let server = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await.expect("mock connection");
+            // Read the whole request head first: closing a socket with unread data resets the
+            // connection, and a reset can discard response bytes the client has not read yet.
+            let mut request = Vec::new();
             let mut buffer = [0u8; 4096];
-            let count = stream.read(&mut buffer).await.expect("mock request");
-            let request = String::from_utf8_lossy(&buffer[..count]).into_owned();
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).await.expect("mock request");
+                if count == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..count]);
+            }
             stream
                 .write_all(response.as_bytes())
                 .await
                 .expect("mock response");
-            request
+            // Close gracefully, so the client reads everything sent before it sees the end, and
+            // wait (bounded) for the client to close its side too.
+            let _ = stream.shutdown().await;
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                stream.read_to_end(&mut Vec::new()),
+            )
+            .await;
+            String::from_utf8_lossy(&request).into_owned()
         });
         (format!("http://{address}/model"), server)
     }
