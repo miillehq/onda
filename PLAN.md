@@ -15,16 +15,16 @@ test has been seen red with its probe.
 | 5 | Strengthen and move | the 16 strengthen and 4 move verdicts of the audit, each seen red (left-edge crop, dropped KEYUP flag, missing 16 KiB cap, ...) | L1, L3 | done (PRs #7, #8, #10) |
 | 6 | Contract suite and labelled mock | `contracts/` examples; Vitest harness (`npm run test:unit`); the mock and the real dispatcher answer the examples the same; mock badge; the three drifts (settings defaults, name graphemes, missing validation) caught red, then fixed | L1, L2 | done (PRs #5, #14) |
 | 7 | UI logic unit tests | Vitest over `ui/src/lib` (diff, format, keys, router, activity, levels) | L1 | done (PR #6) |
-| 8 | Browser UI and visual | Playwright against the mock on three OSes, chromium and webkit: onboarding, settings, dictionary, history, polish errors, pill states; tiers 1 to 3; snapshots workflow | L4, L5 | partly (PR #9): history is untested; tier 3 waits for the snapshots workflow |
-| 9 | Installers | install, launch and uninstall NSIS (Windows), deb and AppImage (Linux) on `master` | L7 | partly (PRs #3, #12): the NSIS test does not launch the app |
+| 8 | Browser UI and visual | Playwright against the mock on three OSes, chromium and webkit: onboarding, settings, dictionary, history, polish errors, pill states; tiers 1 to 3; snapshots workflow | L4, L5 | done (PRs #9, #18, #19) |
+| 9 | Installers | install, launch and uninstall NSIS (Windows), deb and AppImage (Linux) on `master` | L7 | done (PRs #3, #12, #17) |
 | 10 | Retire replaced tests | `languages.rs` constant test (replaced by the engine language test), `public_account_dto_contains_no_credentials` (replaced by a key-set test), `ui/src/smoke.ts` checks covered by L6 | L1, L6 | done for both Rust tests (PRs #13, #15); `smoke.ts` stays by ruling |
-| 11 | macOS builds | the workspace compiles and `cargo test` passes on `macos-latest` with macOS modules that report "unsupported"; the CPU worker builds; the app launches under the L6 suite | L0 to L3, L6 | in PR #11 |
-| 12 | macOS storage and desktop | Keychain for API keys, accounts and the history key; launch at login; menu-bar icon; microphone usage text | L1, L3 on macOS | in PR #11 |
-| 13 | macOS input | event-tap shortcut helper; Accessibility focused-field identity, password refusal and Cmd+V paste; matcher tests shared with Windows and Linux | L1, L3; real typing unverified | in PR #11 |
-| 14 | macOS speech | Metal worker beside the CPU worker; golden real-model test on `macos-latest` | L3 | in PR #11 |
-| 15 | macOS packaging | dmg built and installer-tested on `macos-latest`; signing and notarization hooks that stay off without an Apple account | L7 | in PR #11 |
-| 16 | ARM | sidecars per target triple, no AVX2 worker on ARM, L1 to L6 green on `windows-11-arm` and `ubuntu-24.04-arm`, packages built | L1 to L7 | in PR #11 |
-| 17 | Distributions | deb and AppImage install checks in Fedora, Debian and Arch containers, advisory | L8 | on `master`; first run pending |
+| 11 | macOS builds | the workspace compiles and `cargo test` passes on `macos-latest` with macOS modules that report "unsupported"; the CPU worker builds; the app launches under the L6 suite | L0 to L3, L6 | done (PR #11) |
+| 12 | macOS storage and desktop | Keychain for API keys, accounts and the history key; launch at login; menu-bar icon; microphone usage text | L1, L3 on macOS | done (PR #11); the Keychain round trip is an ignored test |
+| 13 | macOS input | event-tap shortcut helper; Accessibility focused-field identity, password refusal and Cmd+V paste; matcher tests shared with Windows and Linux | L1, L3; real typing unverified | partly (PR #11): system hotkeys, no event tap or Accessibility; no focused-field identity, typing, selection rewrites or password refusal; dictation goes to the pasteboard with a ⌘V hint |
+| 14 | macOS speech | Metal worker beside the CPU worker; golden real-model test on `macos-latest` | L3 | partly (PR #11): the Metal worker builds; no golden run on macOS |
+| 15 | macOS packaging | dmg built and installer-tested on `macos-latest`; signing and notarization hooks that stay off without an Apple account | L7 | partly (PR #11): dmg built and installer-tested; signing documented, not wired (needs an Apple account) |
+| 16 | ARM | sidecars per target triple, no AVX2 worker on ARM, L1 to L6 green on `windows-11-arm` and `ubuntu-24.04-arm`, packages built | L1 to L7 | partly (PR #11): L1 to L6 green on both ARM runners; no ARM packages |
+| 17 | Distributions | deb and AppImage install checks in Fedora, Debian and Arch containers, advisory | L8 | done (PR #15): first run green on `master` |
 
 Rulings:
 
