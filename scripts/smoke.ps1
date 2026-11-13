@@ -34,12 +34,29 @@ try {
     try {
         $env:ONDA_SMOKE_REPLAY = if ($WithDictationFixture) { '1' } else { $null }
         $nodeExecutable = (Get-Command node -ErrorAction Stop).Source
-        $viteProcess = Start-Process -FilePath $nodeExecutable -ArgumentList @('node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '1420', '--strictPort') -WorkingDirectory $repositoryDirectory -WindowStyle Hidden -PassThru
-        $serverDeadline = [DateTime]::UtcNow.AddSeconds(5)
-        do { try { $null = Invoke-WebRequest -Uri 'http://127.0.0.1:1420' -UseBasicParsing -TimeoutSec 1; break } catch { Start-Sleep -Milliseconds 100 } } while ([DateTime]::UtcNow -lt $serverDeadline)
+        $viteOutput = Join-Path $smokeDirectory 'vite.log'
+        $viteProcess = Start-Process -FilePath $nodeExecutable -ArgumentList @('node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '1420', '--strictPort') -WorkingDirectory $repositoryDirectory -WindowStyle Hidden -RedirectStandardOutput $viteOutput -RedirectStandardError (Join-Path $smokeDirectory 'vite-errors.log') -PassThru
+        $serverClock = [System.Diagnostics.Stopwatch]::StartNew()
+        $serverAnswered = $false
+        do { try { $null = Invoke-WebRequest -Uri 'http://127.0.0.1:1420' -UseBasicParsing -TimeoutSec 1; $serverAnswered = $true; break } catch { Start-Sleep -Milliseconds 100 } } while ($serverClock.Elapsed.TotalSeconds -lt 5)
+        $serverSeconds = [math]::Round($serverClock.Elapsed.TotalSeconds, 1)
         $process = Start-Process -FilePath (Join-Path $repositoryDirectory 'target/debug/onda.exe') -WorkingDirectory $repositoryDirectory -WindowStyle Hidden -PassThru
         $smokeTimeout = if($WithDictationFixture){180000}else{30000}
-        if (-not $process.WaitForExit($smokeTimeout)) { $process.Kill(); throw 'Hidden desktop IPC smoke timed out.' }
+        if (-not $process.WaitForExit($smokeTimeout)) {
+            $process.Kill()
+            # Say where the time went: the dev server, Vite's own output and the app's log messages.
+            $diagnosis = @("The dev server answered: $serverAnswered (checked for $serverSeconds s).")
+            $logDirectory = Join-Path $smokeDirectory 'logs'
+            if (Test-Path -LiteralPath $logDirectory) {
+                $diagnosis += @(Get-ChildItem -LiteralPath $logDirectory -File | ForEach-Object { Get-Content -LiteralPath $_.FullName } | ForEach-Object {
+                    try { $entry = $_ | ConvertFrom-Json; "app: $($entry.timestamp) $($entry.level) $($entry.fields.subsystem) $($entry.fields.message)" } catch { }
+                } | Select-Object -Last 30)
+            }
+            foreach ($file in @($viteOutput, (Join-Path $smokeDirectory 'vite-errors.log'))) {
+                if (Test-Path -LiteralPath $file) { $diagnosis += @(Get-Content -LiteralPath $file -Tail 20 | ForEach-Object { "vite: $_" }) }
+            }
+            throw ("Hidden desktop IPC smoke timed out.`n" + ($diagnosis -join "`n"))
+        }
         $reportPath = Join-Path $smokeDirectory 'report.json'
         if (-not (Test-Path -LiteralPath $reportPath)) { throw 'The native desktop did not produce a smoke report.' }
         $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
