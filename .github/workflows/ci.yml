@@ -69,10 +69,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Workspace clippy failed' }
           cargo clippy --locked -p onda-asr --features native-asr --all-targets -- -D warnings
           if ($LASTEXITCODE -ne 0) { throw 'Native worker clippy failed' }
-      - name: L2 generated contracts
+      - name: L2 generated contracts and the mock against the contract examples
         run: |
           npm run contracts:check
           if ($LASTEXITCODE -ne 0) { throw 'Generated contract drift' }
+          npm run test:unit
+          if ($LASTEXITCODE -ne 0) { throw 'Unit or contract tests failed' }
       - name: L1 and L3 workspace tests
         run: |
           cargo test --locked --workspace
@@ -149,8 +151,10 @@ jobs:
           cargo fmt --all --check
           npm run build
           cargo clippy --locked --workspace --all-targets -- -D warnings
-      - name: L2 generated contracts
-        run: npm run contracts:check
+      - name: L2 generated contracts and the mock against the contract examples
+        run: |
+          npm run contracts:check
+          npm run test:unit
       - name: L1 and L3 workspace tests
         run: cargo test --locked --workspace
       - name: Quality fixtures

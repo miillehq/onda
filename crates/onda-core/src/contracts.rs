@@ -7,7 +7,7 @@ pub const DEFAULT_MAX_RECORDING_SECONDS: u32 = 180;
 pub const MAX_RECORDING_SECONDS: u32 = 600;
 pub const DEFAULT_HISTORY_DAYS: u32 = 3;
 pub const MAX_HISTORY_DAYS: u32 = 30;
-const MAX_PROVIDER_SETTING_BYTES: usize = 2048;
+pub const MAX_PROVIDER_SETTING_BYTES: usize = 2048;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

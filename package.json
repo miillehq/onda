@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "build:e2e-ui": "tsc --noEmit && vite build --mode e2e",
     "build:e2e": "tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json",
+    "test:unit": "vitest run",
     "test:e2e": "wdio run wdio.conf.ts",
     "contracts": "cargo run -p onda-core --bin onda-contracts && cargo run -p onda-app --example onda-api-contracts",
     "contracts:check": "cargo run -p onda-core --bin onda-contracts -- --check && cargo run -p onda-app --example onda-api-contracts -- --check",
@@ -36,7 +37,9 @@
     "@wdio/spec-reporter": "9.32.0",
     "@wdio/tauri-plugin": "1.5.1",
     "@wdio/tauri-service": "1.5.1",
+    "happy-dom": "21.0.4",
     "typescript": "7.0.2",
-    "vite": "8.3.5"
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
   }
 }

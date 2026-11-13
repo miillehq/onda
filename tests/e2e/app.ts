@@ -58,3 +58,14 @@ export async function screenshot(name: string): Promise<void> {
   mkdirSync(directory, { recursive: true });
   await browser.saveScreenshot(join(directory, `${name}-${platform}-${process.arch}.png`));
 }
+
+/** The answer to a request, or the AppError it was refused with, as the contract examples record it. */
+export async function outcome(request: ApiRequest): Promise<unknown> {
+  return browser.tauri.execute(async ({ core }, payload) => {
+    try {
+      return { response: await core.invoke("application_call", { request: payload }) };
+    } catch (error) {
+      return { error };
+    }
+  }, request);
+}

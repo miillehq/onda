@@ -17,6 +17,10 @@ with an identical tree.
 | 2026-11-13 | L0 to L3 | after moving `target/` to the D: build drive and a cold rebuild: fmt, both clippy runs, 166 passed and 7 ignored, contracts, TypeScript and Vite build, quality | windows-x64, local | `scripts/prepare.ps1` then the commands above on `60eb6d6` |
 | 2026-11-13 | L6 | real app: a dictionary word and the dark theme survive a restart (2 spec files, 5 tests); stable in 8 of 8 runs, about 7 s each | windows-x64, local | `npm run build:e2e`; `npm run test:e2e` |
 | 2026-11-13 | L6 probe | the restart spec fails when settings saves are dropped (`ON CONFLICT DO NOTHING`): "Expected: dark, Received: system" in `02-restart.spec.ts` | windows-x64, local | planted in `crates/onda-core/src/persistence.rs`, rebuilt, run red, restored, run green |
+| 2026-11-13 | L2 | the development mock answers all 15 contract examples (fresh-install defaults, 9 settings refusals, 5 profile-name cases) | windows-x64, local | `npm run test:unit` |
+| 2026-11-13 | L2 probe | each audit drift turns the mock red: code-point name counting fails "the name limit counts graphemes"; demo settings on a fresh install fail "a fresh profile starts from Rust's default settings"; skipping validation fails all 9 refusals | windows-x64, local | the old behaviour restored one at a time in `ui/src/mock/`, `npx vitest run` |
+| 2026-11-13 | L6 | the real app answers the same 15 examples on a fresh profile and shows no mock badge; all 3 spec files pass | windows-x64, local | `npm run build:e2e`; `npm run test:e2e` |
+| 2026-11-13 | L6 probe | a changed Rust message fails `00-contract.spec.ts` ("History can be kept for 30 days at most." vs the example) | windows-x64, local | planted in `crates/onda-core/src/contracts.rs`, rebuilt, run red, restored |
 
 ## Unverified
 

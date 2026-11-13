@@ -23,7 +23,7 @@ const profile = join(artifacts, "profile");
 export const config = {
   runner: "local",
   // Order matters: each spec is a fresh launch of the app on the shared profile.
-  specs: ["./tests/e2e/01-change.spec.ts", "./tests/e2e/02-restart.spec.ts"],
+  specs: ["./tests/e2e/00-contract.spec.ts", "./tests/e2e/01-change.spec.ts", "./tests/e2e/02-restart.spec.ts"],
   maxInstances: 1,
   capabilities: [
     {

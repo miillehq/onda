@@ -11,8 +11,8 @@ Every check runs at the cheapest level that can catch the bug it guards.
 | Level | Proves | Tool | Command | Runs | Today |
 |---|---|---|---|---|---|
 | L0 | well-formed code | rustfmt, clippy, tsc | `keel.json` `lint` | every push | yes |
-| L1 | a function or module does what it says | `cargo test`, Vitest | `cargo test --locked --workspace` | every push | Rust only |
-| L2 | the mock and the real backend agree | ts-rs drift check, contract suite over `contracts/` | `npm run contracts:check` | every push | types only |
+| L1 | a function or module does what it says | `cargo test`, Vitest | `cargo test --locked --workspace`; `npm run test:unit` | every push | Rust; Vitest harness |
+| L2 | the mock and the real backend agree | ts-rs drift check; `contracts/examples.ts` run against the mock (Vitest) and the real app (L6) | `npm run contracts:check`; `npm run test:unit` | every push | types, defaults, validation, profile names |
 | L3 | modules work against real I/O: SQLite files, temp dirs, localhost servers, child processes, DPAPI or keyring | `cargo test`; golden real-model tests | `cargo test --locked --workspace` | every push | yes |
 | L4 | a user can do the journey, against the labelled mock | Playwright, chromium and webkit | planned: `npm run test:ui` | every PR, 3 OSes | no |
 | L5 | structure, layout and pixels have not drifted | ARIA snapshot, geometry snapshot, per-OS pixels | with L4 | with L4 | no |

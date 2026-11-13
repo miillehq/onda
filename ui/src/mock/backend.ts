@@ -13,6 +13,8 @@
 import type { Backend } from "../api";
 import type { AccountInfo, ApiRequest, ApiResponse, CloudModel, ModelInfo, ResourceUsage, RuntimeEvent, Snapshot } from "../generated/api";
 import type { AiProvider, AppError, DailyUsage, DictionaryEntry, HistoryEntry, OperationResult, OperationState, Profile, Settings, Snippet, Transform, UsageSummary } from "../generated/core";
+import { DEFAULT_SETTINGS } from "../generated/core";
+import { normalizeName, validateSettings } from "./validate";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = params.get("mock") ?? "default";
@@ -20,7 +22,8 @@ const pillState = params.get("pill");
 const platform = params.get("platform") === "linux" ? "linux" : "windows";
 const provider = (params.get("provider") ?? "chatgpt") as AiProvider;
 
-const settings: Settings = {
+const themeParam = params.get("theme") === "dark" ? "dark" : params.get("theme") === "light" ? "light" : null;
+const settings: Settings = scenario === "onboarding" ? { ...structuredClone(DEFAULT_SETTINGS), theme: themeParam ?? DEFAULT_SETTINGS.theme } : {
   executionPreference: "auto",
   qualityProfile: "fast",
   modelId: null,
@@ -383,11 +386,14 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       return { type: "snapshot", payload: structuredClone(snapshot) };
     case "getSettings":
       return { type: "settings", payload: structuredClone(settings) };
-    case "updateSettings":
+    case "updateSettings": {
+      const refusal = validateSettings(request.args.settings);
+      if (refusal) throw refusal;
       Object.assign(settings, request.args.settings);
       snapshot.settings = settings;
       snapshot.selectedModelId = settings.qualityProfile === "custom" && settings.modelId ? settings.modelId : ({ fast: ["whisper-tiny-en", "whisper-tiny"], balanced: ["whisper-base-en-q5", "whisper-base-q5"], bestQuality: ["whisper-small-en-q5", "whisper-small-q5"], custom: ["whisper-tiny-en", "whisper-tiny"] } as const)[settings.qualityProfile][settings.language === "en" ? 0 : 1];
       return { type: "settings", payload: structuredClone(settings) };
+    }
     case "getDictionary":
       return { type: "dictionary", payload: dictionary };
     case "saveDictionaryEntry":
@@ -468,9 +474,9 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     case "getProfile":
       return { type: "profile", payload: profile };
     case "setProfileName": {
-      const name = request.args.name?.trim().replace(/\s+/g, " ") ?? "";
-      if ([...name].length > 40) throw { code: "invalidInput", message: "Use a name of at most 40 characters.", retryable: false } satisfies AppError;
-      profile = { ...profile, name: name || null };
+      const result = normalizeName(request.args.name);
+      if ("error" in result) throw result.error;
+      profile = { ...profile, name: result.name };
       return { type: "profile", payload: profile };
     }
     case "chooseProfilePicture":
@@ -536,8 +542,38 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       history = [];
       snapshot.result = null;
       return { type: "unit" };
-    default:
+    // Commands the mock acknowledges without changing its sample data.
+    case "acceptLearning":
+    case "cancelChatgptSignIn":
+    case "cancelModelDownload":
+    case "cancelOperation":
+    case "completeDebugSmoke":
+    case "copyHistoryEntry":
+    case "copyHistorySuggestion":
+    case "copyResult":
+    case "copySuggestion":
+    case "deleteTransform":
+    case "dismissPill":
+    case "enableChatgptPlanUsage":
+    case "installUpdate":
+    case "openMainWindow":
+    case "removeChatgptProfile":
+    case "replayDebugFixture":
+    case "retryResult":
+    case "selectChatgptProfile":
+    case "setChatgptModel":
+    case "startChatgptSignIn":
+    case "stopDictation":
+    case "transformSelection":
+    case "undoLastTransform":
+    case "uninstallModel":
       return { type: "unit" };
+    default: {
+      // Every command must be handled above: a new command fails to compile here until the mock
+      // answers it, instead of silently succeeding.
+      const unhandled: never = request;
+      throw { code: "internal", message: `The development mock does not handle ${(unhandled as ApiRequest).command}.`, retryable: false } satisfies AppError;
+    }
   }
 }
 

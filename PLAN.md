@@ -43,6 +43,11 @@ Rulings:
   debug builds, through a config overlay, and a release build with the feature fails to compile
   — the shipped app keeps its two-command IPC surface — cost if wrong: none for users; tests
   need the e2e build.
+- Slice 6: Ruling: the mock mirrors `Settings::validate` and `normalize_name` by hand rather than
+  calling Rust (no WebAssembly build) — the shared examples hold every message to Rust's on both
+  sides — cost if wrong: a rule without an example can drift until one is added.
+- Slice 6: Ruling: only the fresh-install scenario must equal Rust's defaults; the other mock
+  scenarios stand for a returning user and keep demo data — cost if wrong: none, they are labelled.
 - Slice 10: Ruling: `ui/src/smoke.ts` stays until every check in it maps to an L6 test by name —
   the smoke is the only real-shell coverage today — cost if wrong: two suites run for a while.
 - Slice 11: Ruling: macOS lands first as compile-only stubs, then features — a build that fails
