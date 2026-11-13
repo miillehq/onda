@@ -90,7 +90,7 @@ jobs:
         run: |
           $installer = Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*setup.exe' | Select-Object -First 1
           $report = ./scripts/installer-smoke.ps1 -InstallerPath $installer.FullName
-          $report | Select-Object status, cpuWorker, avx2Worker, startupLogObserved, helperExitedOnParentClose, applicationDataPreserved, uninstallerExitCode | ConvertTo-Json -Depth 4
+          $report | Select-Object status, cpuWorker, avx2Worker, startupSeconds, startupLogObserved, shell, helper, helperExitedOnParentClose, applicationDataPreserved, uninstallerExitCode | ConvertTo-Json -Depth 4
       - name: Upload the installed-app report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
