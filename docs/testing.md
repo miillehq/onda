@@ -14,7 +14,7 @@ AppImage) and macOS on Apple Silicon and Intel (dmg). Run each row on every pack
 | Scenario | Packages | What to check |
 | --- | --- | --- |
 | Install, first launch, uninstall | all | Windows: SmartScreen warns, the per-user install needs no administrator, uninstall keeps `%LOCALAPPDATA%\com.miille.onda`. Linux: the deb installs and removes, the AppImage starts. macOS: the first launch is refused until Open Anyway in System Settings › Privacy & Security. Onboarding downloads a model and the practice field works. |
-| Upgrade over 0.2.0 | all | Settings, dictionary, snippets, History, accounts and models survive; a downgrade is refused. |
+| Upgrade | where an earlier build (0.2.0 or older) exists | Settings, dictionary, snippets, History, accounts and models survive; a downgrade is refused. |
 | Oldest supported systems | Windows x64 | Windows 10 22H2 with no WebView2: the bootstrapper installs it and Onda starts. |
 | Shortcuts | all | Hold to talk, hands-free, cancel, rewrite and voice edit start and stop once per physical press. Windows: the keyboard helper. Linux: the global shortcuts portal on GNOME and KDE, and `onda --dictate` where there is none. macOS: Control+Shift+Space, and a clear message for a chord macOS already uses. |
 | Typing into apps | all | Windows: Notepad, a browser, VS Code or another Electron app, a WPF or WinUI app, Windows Terminal. Linux, with typing allowed: a GTK app, a Qt app, LibreOffice, a browser, a terminal. macOS, with Accessibility on: TextEdit, Notes, Safari, a Chromium or Electron app, Terminal; without it, dictation is copied for ⌘V. After an update of the unsigned app, check whether the Accessibility switch must be turned off and on again. |

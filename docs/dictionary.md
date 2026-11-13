@@ -42,10 +42,10 @@ A `+`, `-` or `−` directly after a letter or digit joins a name to its number 
 
 Learning is opt-in and proposes a correction for explicit confirmation. It does not silently modify the dictionary. `learning.rs` requires an otherwise identical bounded observation with exactly one changed alphabetic token, a 3–60-character old and new term, a capitalized proposed spelling, sufficient lexical similarity, and no change to protected tokens. Common prose, case-only edits, whole-sentence rewrites, changed URLs/emails/code, and distant name substitutions are rejected. The common-prose filter is conservative English guidance; it is not an exhaustive language lexicon.
 
-The Windows runtime additionally owns focus/password/scope checks and observation timing. Its proposal remains ephemeral until the user accepts it. Only accepted replacements become durable dictionary entries.
+The application runtime additionally owns focus/password/scope checks and observation timing. Its proposal remains ephemeral until the user accepts it. Only accepted replacements become durable dictionary entries.
 
 ## Tests and measured performance
 
 `cargo test -p onda-core` exercises Unicode compatibility expansion, combining marks, Hangul, boundaries, longest-match behavior, no cascading, protected spans, alias retrieval beyond common posting limits, canonical deduplication/star status, common-word filtering, prompt injection quoting, numeric/URL preservation, and conservative learning. Existing SQLite restart/import/migration and state-machine tests run in the same suite.
 
-`cargo run -p onda-core --bin onda-quality` runs the committed deterministic quality corpus and a 10,000-term retrieval workload. On this Windows development machine (Intel Core i5-14400F, 10 cores/16 logical processors), a **debug** run on 2026-10-03 reported **796.8 ms index construction** and **0.0475 ms mean exact candidate retrieval** over 1,000 iterations. The timing excludes compilation, uses synthetic dictionary entries, and is not a speech-recognition accuracy, cloud latency, or production-hardware claim. Re-run the harness for release measurements and representative device/corpus distributions.
+`npm run quality` (`cargo run --release -p onda-core --bin onda-quality`) runs the committed deterministic quality corpus and a 10,000-term retrieval workload with synthetic entries; measured results are in [benchmarks.md](benchmarks.md).

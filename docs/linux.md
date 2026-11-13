@@ -1,15 +1,16 @@
 # Onda on Linux
 
-Onda builds and runs on Linux (x86-64, X11 or Wayland). On Wayland, apps may not watch the
-keyboard or type into other apps on their own, so Onda asks the desktop through its portals,
-and reads the focused field through the accessibility bus (AT-SPI). This page says what each
-feature uses, what the user approves, and how it was checked.
+Onda runs on Linux with X11 or Wayland. x86-64 is a supported platform; ARM64 builds and passes
+its tests in CI but is not yet supported ([ADR 007](adr/007-platform-support.md)). On Wayland,
+apps may not watch the keyboard or type into other apps on their own, so Onda asks the desktop
+through its portals, and reads the focused field through the accessibility bus (AT-SPI). This
+page says what each feature uses, what the user approves, and what has not been checked.
 
 ## What works, and how
 
 | Area | Linux behaviour |
 | --- | --- |
-| Speech recognition | Same local Whisper workers (generic, AVX2 and Vulkan), built with GCC by `scripts/prepare.sh`. |
+| Speech recognition | The same local Whisper CPU workers (baseline and, on x86-64, AVX2), built with GCC by `scripts/prepare.sh`. A Vulkan worker can be built (`--with-vulkan`), but the engine does not try it on Linux yet, because Linux does not enumerate GPU adapters ([asr.md](asr.md)). |
 | Microphone | `cpal` on ALSA (PipeWire and PulseAudio provide ALSA devices). Device choice and level test as on Windows. |
 | Shortcuts | The `onda-input` helper opens a global shortcuts portal session and binds every Onda shortcut. The desktop asks the user once and may let them pick other keys; it then reports each press and release, so hold-to-talk, hands-free, rewrite and voice edit work as on Windows. Cancel is Esc together with the dictation modifiers (Ctrl+Super+Esc by default), because a bound Esc alone would be taken from every app. GNOME reports a held shortcut's keyboard repeats as more presses; Onda ignores a press that comes within 0.7 s of the last one with no release between. A quick release keeps recording until the next press, and so does a release the desktop never reports (GNOME may not, if a modifier is let go before the key). Only hold-to-talk and voice edit are held; rewrite, hands-free and cancel act once per press, so a lost release never blocks the others. |
 | Without the shortcuts portal | Bind a desktop shortcut to `onda --dictate`: the first press starts hands-free recording, the second finishes it. The tray menu has the same item. Settings › Shortcuts shows where to add it. |
@@ -40,7 +41,8 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
 npm ci
 scripts/prepare.sh            # debug speech workers and the shortcut helper into src-tauri/binaries
 npm run tauri dev             # or: cargo build -p onda-app && npm run dev
-scripts/build.sh --with-vulkan --bundles deb   # release build and a .deb (AppImage also supported)
+scripts/build.sh --bundles deb,appimage        # release build, a .deb and an AppImage
+scripts/installer-test.sh                      # install, launch and remove them (L7)
 ```
 
 `.cargo/config.toml` forces MSVC compiler flags for whisper.cpp's release build; `prepare.sh`
@@ -55,36 +57,16 @@ dbus-run-session -- sh -c 'printf test | gnome-keyring-daemon --replace --unlock
   sleep 2; cargo test -p onda-platform keyring -- --ignored; cargo test -p onda-cloud secret_service -- --ignored'
 ```
 
-## How it was checked (November 2026)
+## What is checked, and what is not
 
-In WSL (Ubuntu 24.04, WSLg) on Windows 11, with a private D-Bus session, an unlocked test
-keyring and a radio playing into a VB-Audio virtual cable, which WSLg passes to Linux as the
-default microphone:
+CI runs the Rust tests, the browser suite, the real-shell journeys and the WebKitGTK native smoke
+on Ubuntu 24.04 under Xvfb, and installs, launches and removes the deb and the AppImage
+([VERIFICATION.md](../VERIFICATION.md)). Runners have no desktop session, so the following are
+not checked automatically and are in the manual matrix ([testing.md](testing.md)): GNOME's and
+KDE's global shortcuts and remote desktop portals (Ubuntu 24.04's GNOME 46 has no shortcuts
+portal), typing into real apps, the AppIndicator tray on a real panel, browsers and Electron apps
+with accessibility on, Sign in with ChatGPT end to end, and the keyring round trips above.
 
-- `cargo fmt --check`, `npm run contracts:check`, `cargo clippy --workspace --all-targets -D
-  warnings` and `cargo test --workspace` pass on Linux; so do the two keyring tests above.
-- `scripts/build.sh --with-vulkan --bundles deb` produced a 22 MB `.deb` with the app, the
-  shortcut helper and the three speech workers; it was installed with `dpkg -i` and used for all
-  checks below.
-- Dictation (`onda --dictate`, Balanced, base.en on the CPU, about 0.3 s per 8 s of speech) was
-  typed into a GTK 4 editor through AT-SPI's EditableText, spaced after the earlier text; later
-  dictations appended. History saved them encrypted; Stats counted words, days, streak and pace.
-- A capitalised one-word correction made within seconds of a dictation produced the "Add to your
-  dictionary?" proposal on Home. Proposals reach the main window only while it is open.
-- Under mutter 46 (GNOME's window manager, X11 on Xvfb) the pill showed bottom-centre with its
-  transparent edges, never took focus, and the editor received the text while the pill was up.
-  WSLg's own window system does give the override-redirect pill keyboard focus, so in WSLg the
-  dictation falls back to the clipboard while the pill shows; that is specific to WSLg.
-- Without the portals (WSLg has neither), Home and Settings › Shortcuts show the `onda --dictate`
-  setup, Rewrites says its shortcuts need the portal, and Typing into apps says the desktop cannot
-  let apps type.
-
-Found and fixed during these runs: a loud, clipped microphone could ring past full scale after
-resampling, and the speech workers then refused the recording (Windows too); the pill could take
-focus; the newest month label could push the activity grid wider than the year (Windows too);
-process names were cut to 15 characters.
-
-Not checked: GNOME's global shortcuts and remote desktop portals (no GNOME session in WSL, and
-Ubuntu 24.04's GNOME 46 has no shortcuts portal), the AppIndicator tray on a real panel,
-browsers and Electron apps with accessibility on, Sign in with ChatGPT end to end, the Vulkan
-worker on a real GPU, and KDE Plasma.
+Known limits: correction proposals reach the main window only while it is open. Under WSLg the
+override-redirect pill takes keyboard focus, so dictation there falls back to the clipboard while
+the pill shows; WSLg also has neither portal.

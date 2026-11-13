@@ -38,7 +38,7 @@ body:
     attributes:
       label: Version details
       description: The Onda version (Settings › Updates and help), and on Linux the distribution and desktop.
-      placeholder: Onda 0.2.0, Ubuntu 24.04 with GNOME
+      placeholder: Onda 0.3.0, Ubuntu 24.04 with GNOME
   - type: input
     id: target-app
     attributes:
