@@ -18,7 +18,7 @@ pub fn local_date() -> String {
         unsafe { GetLocalTime(&mut time) };
         format!("{:04}-{:02}-{:02}", time.wYear, time.wMonth, time.wDay)
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         // SAFETY: localtime_r only writes the provided struct; a null time is not passed.
         let mut local: libc::tm = unsafe { std::mem::zeroed() };
@@ -33,7 +33,7 @@ pub fn local_date() -> String {
             local.tm_mday
         )
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         utc_date()
     }
@@ -191,7 +191,11 @@ pub fn set_launch_at_login(name: &str, command: Option<&str>) -> Result<(), Plat
     {
         autostart::write_or_delete(name, command)
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    {
+        launch_agent::write_or_delete(name, command)
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         let _ = command;
         Err(PlatformError::UnsupportedPlatform)
@@ -207,7 +211,11 @@ pub fn launch_at_login_registered(name: &str) -> bool {
     {
         autostart::path(name).is_some_and(|path| path.is_file())
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    {
+        launch_agent::path(name).is_some_and(|path| path.is_file())
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         let _ = name;
         false
@@ -263,6 +271,102 @@ mod autostart {
     }
 }
 
+/// macOS: a per-user LaunchAgent in `~/Library/LaunchAgents` starts Onda at sign-in.
+#[cfg(target_os = "macos")]
+mod launch_agent {
+    use crate::PlatformError;
+    use std::path::PathBuf;
+
+    pub fn label(name: &str) -> String {
+        format!("com.miille.{}", name.to_lowercase())
+    }
+
+    pub fn path(name: &str) -> Option<PathBuf> {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())?;
+        Some(
+            home.join("Library/LaunchAgents")
+                .join(format!("{}.plist", label(name))),
+        )
+    }
+
+    /// Splits `"program path" argument ...` (the form the app passes on every OS) into arguments.
+    pub fn arguments(command: &str) -> Option<Vec<String>> {
+        let command = command.trim();
+        let (program, rest) = match command.strip_prefix('"') {
+            Some(quoted) => {
+                let end = quoted.find('"')?;
+                (quoted[..end].to_string(), &quoted[end + 1..])
+            }
+            None => {
+                let end = command.find(char::is_whitespace).unwrap_or(command.len());
+                (command[..end].to_string(), &command[end..])
+            }
+        };
+        if program.is_empty() {
+            return None;
+        }
+        Some(
+            std::iter::once(program)
+                .chain(rest.split_whitespace().map(str::to_string))
+                .collect(),
+        )
+    }
+
+    fn escape(text: &str) -> String {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    }
+
+    pub fn plist(name: &str, arguments: &[String]) -> String {
+        let arguments: String = arguments
+            .iter()
+            .map(|argument| format!("    <string>{}</string>\n", escape(argument)))
+            .collect();
+        format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+             <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+             <plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>{}</string>\n  \
+             <key>ProgramArguments</key>\n  <array>\n{arguments}  </array>\n  \
+             <key>RunAtLoad</key>\n  <true/>\n  <key>ProcessType</key>\n  <string>Interactive</string>\n\
+             </dict>\n</plist>\n",
+            escape(&label(name))
+        )
+    }
+
+    pub fn write_or_delete(name: &str, command: Option<&str>) -> Result<(), PlatformError> {
+        let path = path(name).ok_or(PlatformError::InvalidParameter("home folder".into()))?;
+        let Some(command) = command else {
+            return match std::fs::remove_file(&path) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                    Err(PlatformError::InvalidParameter("launch agent".into()))
+                }
+                _ => Ok(()),
+            };
+        };
+        if command.contains(['\n', '\r']) {
+            return Err(PlatformError::InvalidParameter("startup command".into()));
+        }
+        let arguments =
+            arguments(command).ok_or(PlatformError::InvalidParameter("startup command".into()))?;
+        let directory = path.parent().ok_or(PlatformError::InvalidParameter(
+            "launch agent folder".into(),
+        ))?;
+        std::fs::create_dir_all(directory)
+            .map_err(|_| PlatformError::InvalidParameter("launch agent folder".into()))?;
+        let temporary = directory.join(format!(".{}.tmp", std::process::id()));
+        std::fs::write(&temporary, plist(name, &arguments))
+            .and_then(|()| std::fs::rename(&temporary, &path))
+            .map_err(|_| {
+                let _ = std::fs::remove_file(&temporary);
+                PlatformError::InvalidParameter("launch agent".into())
+            })
+    }
+}
+
 /// Windows "app mode" preference. Defaults to light when the value is unavailable.
 pub fn apps_use_light_theme() -> bool {
     #[cfg(windows)]
@@ -270,10 +374,24 @@ pub fn apps_use_light_theme() -> bool {
         registry::read_dword(registry::PERSONALIZE_KEY, "AppsUseLightTheme")
             .is_none_or(|value| value != 0)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        !macos_dark_mode()
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         true
     }
+}
+
+/// macOS reports Dark Mode as `AppleInterfaceStyle = Dark` in the global domain; Light Mode has no
+/// value at all.
+#[cfg(target_os = "macos")]
+fn macos_dark_mode() -> bool {
+    std::process::Command::new("/usr/bin/defaults")
+        .args(["read", "-g", "AppleInterfaceStyle"])
+        .output()
+        .is_ok_and(|output| output.status.success() && output.stdout.starts_with(b"Dark"))
 }
 
 /// Taskbar and tray colour mode, which may differ from the app mode.
@@ -283,7 +401,11 @@ pub fn system_uses_light_theme() -> bool {
         registry::read_dword(registry::PERSONALIZE_KEY, "SystemUsesLightTheme")
             .is_some_and(|value| value != 0)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        !macos_dark_mode()
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         false
     }
@@ -461,6 +583,43 @@ mod tests {
         match previous {
             Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
             None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn launch_agent_is_written_and_removed_under_home() {
+        let directory = tempfile::tempdir().unwrap();
+        // Tests in this module run on one thread per test; the variable is restored below.
+        let previous = std::env::var_os("HOME");
+        std::env::set_var("HOME", directory.path());
+        set_launch_at_login(
+            "Onda",
+            Some("\"/Applications/Onda & Co.app/Contents/MacOS/onda\" --background"),
+        )
+        .unwrap();
+        let plist = std::fs::read_to_string(
+            directory
+                .path()
+                .join("Library/LaunchAgents/com.miille.onda.plist"),
+        )
+        .unwrap();
+        assert!(
+            plist.contains("<string>com.miille.onda</string>"),
+            "{plist}"
+        );
+        assert!(
+            plist.contains("<string>/Applications/Onda &amp; Co.app/Contents/MacOS/onda</string>\n    <string>--background</string>"),
+            "the program path is one escaped argument and the flag another: {plist}"
+        );
+        assert!(plist.contains("<key>RunAtLoad</key>\n  <true/>"), "{plist}");
+        assert!(launch_at_login_registered("Onda"));
+        assert!(set_launch_at_login("Onda", Some("x\n<string>evil</string>")).is_err());
+        set_launch_at_login("Onda", None).unwrap();
+        assert!(!launch_at_login_registered("Onda"));
+        match previous {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
         }
     }
 
