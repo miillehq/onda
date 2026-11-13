@@ -1,0 +1,27 @@
+{
+  "keel": 1,
+  "name": "onda",
+  "profile": "tauri-web",
+  "platforms": {
+    "tier1": ["windows-x64", "linux-x64"],
+    "tier2": ["macos-arm64", "windows-arm64", "linux-arm64", "macos-x64"],
+    "tier3": ["fedora", "debian", "arch"]
+  },
+  "commands": {
+    "lint": "cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings && npx tsc --noEmit",
+    "unit": "cargo test --locked --workspace",
+    "contracts": "npm run contracts:check",
+    "integration": "cargo test --locked --workspace",
+    "ui": null,
+    "e2e": null,
+    "build": "npm run build",
+    "package": "npm run release",
+    "installers": null
+  },
+  "paths": {
+    "ui": "ui/",
+    "native": "src-tauri/",
+    "contracts": "ui/src/generated/",
+    "e2e": null
+  }
+}

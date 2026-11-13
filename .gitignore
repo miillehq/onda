@@ -25,3 +25,12 @@
 !.env.example
 *.sig
 /.artifacts/
+
+# Personal tool settings; shared Claude Code skills under .claude/skills are committed
+/.claude/settings.local.json
+/.claude/launch.json
+# Private notes and brainstorming; never published
+/.private/
+# Test output
+test-results/
+playwright-report/
