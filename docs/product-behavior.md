@@ -4,7 +4,7 @@ Onda operates from the tray. Closing the main diagnostics window hides it; quitt
 
 ## Default dictation
 
-1. Focus a supported editable control and hold Ctrl + Win + Space.
+1. Focus a supported editable control and hold Ctrl + Win + Space (Control + Shift + Space on a Mac, where Control + Command + Space opens Emoji & Symbols).
 2. Onda snapshots the exact target, starts the selected/default microphone and records locally. Maximum duration is 180 seconds by default, configurable up to 600.
 3. Release the shortcut. Recording is finalized and local ASR runs using the chosen profile and language.
 4. Conservative local whitespace/filler normalization, exact vocabulary/replacements and snippets produce usable text. Meaningful repetition stays intact; protected URL/email/number/code spans are preserved.

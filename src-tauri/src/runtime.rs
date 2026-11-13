@@ -2519,7 +2519,8 @@ mod tests {
 
     #[test]
     fn shortcut_bindings_reject_modifier_alias_conflicts_and_multi_primary_keys() {
-        let settings = Settings::default();
+        // Ctrl+Win+Space dictates, on a Mac too, so the right-hand aliases below conflict.
+        let settings = Settings::defaults_for(false);
         let mut transforms = onda_core::transforms::builtin_transforms();
         assert!(shortcut_config(&settings, &transforms).is_ok());
         transforms[0].shortcut = Some(Shortcut {

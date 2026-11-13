@@ -72,5 +72,10 @@ Rulings:
 - Slice 13: Ruling: macOS typing into other apps is recorded as unverified until checked on a real
   Mac — runners cannot grant Accessibility or Input Monitoring — cost if wrong: a bug only users
   find.
+- Slice 13: Ruling (the owner asked for a pick, 2026-11-13): a fresh profile on macOS dictates
+  with Control+Shift+Space, because the Windows chord on a Mac is Control+Command+Space, which
+  opens Emoji & Symbols; Option+Space is Raycast's, Alfred's and ChatGPT's default and
+  Control+Option+Space switches input sources — cost if wrong: one default to change before
+  macOS users have profiles to migrate.
 - Slice 16: Ruling: ARM follows macOS — the sidecar naming work overlaps — cost if wrong: ARM
   users wait longer.

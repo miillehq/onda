@@ -128,8 +128,31 @@ pub struct Settings {
     pub local_model: Option<String>,
 }
 
+/// What a fresh profile holds to dictate. Settings store Windows virtual keys on every platform:
+/// Ctrl+Win+Space on Windows, Ctrl+Super+Space on Linux. A Mac reads the Windows key as Command,
+/// and Control+Command+Space opens the Emoji & Symbols viewer, so macOS starts with
+/// Control+Shift+Space. macOS and the usual launchers leave it free: Option+Space belongs to
+/// Raycast, Alfred and ChatGPT, and Control+Option+Space switches input sources.
+pub fn default_push_to_talk(macos: bool) -> Shortcut {
+    Shortcut {
+        keys: if macos {
+            vec![0xA2, 0xA0, 0x20]
+        } else {
+            vec![0xA2, 0x5B, 0x20]
+        },
+    }
+}
+
 impl Default for Settings {
+    /// What a fresh profile starts with on the platform Onda was built for.
     fn default() -> Self {
+        Self::defaults_for(cfg!(target_os = "macos"))
+    }
+}
+
+impl Settings {
+    /// What a fresh profile starts with on macOS (`macos`), or on Windows and Linux.
+    pub fn defaults_for(macos: bool) -> Self {
         Self {
             execution_preference: ExecutionPreference::Auto,
             quality_profile: QualityProfile::Fast,
@@ -141,9 +164,7 @@ impl Default for Settings {
             enhancement_enabled: false,
             context_enabled: false,
             learning_enabled: false,
-            push_to_talk: Shortcut {
-                keys: vec![0xA2, 0x5B, 0x20],
-            },
+            push_to_talk: default_push_to_talk(macos),
             transform_shortcut: Shortcut {
                 keys: vec![0xA2, 0xA4, 0x50],
             },
@@ -494,4 +515,34 @@ pub enum AppEvent {
     Metric(SpanMetric),
     Error(AppError),
     CloudDelta { operation_id: String, delta: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mac_dictates_with_a_chord_macos_leaves_free() {
+        // Ctrl+Win+Space on a Mac is Control+Command+Space, which opens Emoji & Symbols.
+        let elsewhere = Settings::defaults_for(false);
+        assert_eq!(elsewhere.push_to_talk.keys, [0xA2, 0x5B, 0x20]);
+        let mac = Settings::defaults_for(true);
+        assert_eq!(
+            mac.push_to_talk.keys,
+            [0xA2, 0xA0, 0x20],
+            "Control+Shift+Space"
+        );
+        mac.validate().unwrap();
+        // Only the dictation chord differs.
+        let mac_with_the_other_chord = Settings {
+            push_to_talk: elsewhere.push_to_talk.clone(),
+            ..mac
+        };
+        assert_eq!(mac_with_the_other_chord, elsewhere);
+        // A fresh profile starts with the defaults of the platform it runs on.
+        assert_eq!(
+            Settings::default(),
+            Settings::defaults_for(cfg!(target_os = "macos"))
+        );
+    }
 }

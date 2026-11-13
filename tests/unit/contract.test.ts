@@ -5,7 +5,7 @@
 // tests/e2e/00-contract.spec.ts runs the same list against the real app, so the mock cannot
 // drift from the backend without a red on one side.
 import { describe, expect, it } from "vitest";
-import { allExamples, type Example } from "../../contracts/examples";
+import { examplesFor, type Example } from "../../contracts/examples";
 import { createMockBackend } from "../../ui/src/mock/backend";
 
 const backend = createMockBackend();
@@ -19,7 +19,8 @@ async function outcome(example: Example): Promise<unknown> {
 }
 
 describe("the development mock on a fresh install", () => {
-  for (const example of allExamples) {
+  // The mock answers as Onda on Windows, whichever OS runs this test.
+  for (const example of examplesFor(false)) {
     it(example.name, async () => {
       expect(await outcome(example)).toMatchObject(example.expect);
     });
