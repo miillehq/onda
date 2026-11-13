@@ -53,6 +53,11 @@ Rulings:
   cost if wrong: a deleted baseline skips rather than fails; tiers 1 and 2 still run.
 - Slice 8: Ruling: the browser suite on macOS is advisory with the rest of Tier 2 — cost if wrong:
   a webkit regression on macOS waits for a release check.
+- Slice 8: Ruling: tier 3 keeps Playwright's tolerances (0.2 per-pixel colour threshold, 0.2% of
+  pixels): seen red for a lost UI font, a card without its background and a 24 px wider sidebar,
+  not for a lighter hairline grey, a label moved 4 px or a smaller corner radius — text and
+  structure belong to tier 1, positions to tier 2 — cost if wrong: a small visual change reaches
+  users unseen.
 - Slice 8, follow-up done in its own contract PR: the mock refuses a duplicate dictionary entry as
   Rust does, held by four new contract examples.
 - Slice 10: replacements first (this PR), retirements later, each named:
