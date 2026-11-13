@@ -19,6 +19,10 @@ $repositoryDirectory = Split-Path -Parent $PSScriptRoot
 $configuration = Get-Content -LiteralPath (Join-Path $repositoryDirectory 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
 $productName = [string]$configuration.productName
 $applicationId = [string]$configuration.identifier
+# The installed workers must answer with the protocol this checkout speaks; read it, never copy it.
+$protocolSource = Get-Content -LiteralPath (Join-Path $repositoryDirectory 'crates/onda-asr/src/protocol.rs') -Raw
+if ($protocolSource -notmatch 'pub const PROTOCOL_VERSION: u32 = (\d+);') { throw 'Worker protocol version not found in protocol.rs.' }
+$workerProtocolVersion = [int]$Matches[1]
 $artifactRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryDirectory '.artifacts/installed-smoke'))
 $testId = [guid]::NewGuid().ToString('N')
 $installDirectory = Join-Path $artifactRoot $testId
@@ -57,6 +61,29 @@ function Get-DataHashes {
         $hashes[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     return $hashes
+}
+
+function Get-LogEntries {
+    # The installed app's JSON log entries since a time: timestamp, level, subsystem and message only.
+    # Windows may defer LastWriteTime until the live writer closes; trust each entry's UTC time.
+    param([System.DateTime]$SinceUtc)
+    $directory = Join-Path $applicationDataDirectory 'logs'
+    if (-not (Test-Path -LiteralPath $directory -PathType Container)) { return @() }
+    return @(Get-ChildItem -LiteralPath $directory -File | ForEach-Object { Get-Content -LiteralPath $_.FullName } | ForEach-Object {
+        try {
+            $entry = $_ | ConvertFrom-Json
+            $timestampUtc = if ($entry.timestamp -is [System.DateTime]) { $entry.timestamp.ToUniversalTime() } else { [System.DateTimeOffset]::Parse([string]$entry.timestamp).UtcDateTime }
+            if ($timestampUtc -ge $SinceUtc) {
+                $fields = $entry.fields
+                [pscustomobject]@{
+                    timestampUtc = $timestampUtc
+                    level = [string]$entry.level
+                    subsystem = if ($fields.PSObject.Properties['subsystem']) { [string]$fields.subsystem } else { '' }
+                    message = if ($fields.PSObject.Properties['message']) { [string]$fields.message } else { '' }
+                }
+            }
+        } catch { }
+    })
 }
 
 function Start-OwnedProcess {
@@ -126,7 +153,7 @@ function Test-InstalledWorker {
     $json = $output.Result
     if ($json.Length -gt 8192) { throw 'Installed worker probe output exceeded its bound.' }
     $probe = $json | ConvertFrom-Json
-    if ($probe.version -ne 1) { throw 'Installed worker probe protocol mismatch.' }
+    if ($probe.version -ne $workerProtocolVersion) { throw "Installed worker probe protocol mismatch: $($probe.version), expected $workerProtocolVersion." }
     return [ordered]@{ binary = $Name; available = $true; vulkanDevices = $probe.vulkan_devices; exitCode = $process.ExitCode }
 }
 
@@ -231,6 +258,21 @@ try {
     Remember-OwnedDescendants -Parent $shell
     $helper = Wait-OwnedHelper -Parent $shell
     Remember-OwnedDescendants -Parent $shell
+    # Startup ends with the "application started" log entry, after the pill's WebView2 exists. A
+    # first start on a fresh profile creates the WebView2 data folder; the time it took is recorded.
+    $startupDeadline = $launchUtc.AddSeconds(30)
+    $startupEntry = $null
+    while (-not $startupEntry) {
+        if ($shell.HasExited) { throw 'Installed shell exited before it finished starting.' }
+        $startupEntry = @(Get-LogEntries -SinceUtc $launchUtc | Where-Object message -EQ 'application started') | Select-Object -First 1
+        if (-not $startupEntry) {
+            if ([System.DateTime]::UtcNow -ge $startupDeadline) { throw 'Installed application startup marker was not observed.' }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    $report.startupSeconds = ($startupEntry.timestampUtc - $launchUtc).TotalSeconds
+    $report.startupLogObserved = $true
+    Remember-OwnedDescendants -Parent $shell
     Start-Sleep -Milliseconds 1000
     $shell.Refresh(); $helper.Refresh()
     $shellCpuBefore = $shell.TotalProcessorTime.TotalSeconds
@@ -243,16 +285,6 @@ try {
     $report.observationSeconds = $elapsed
     $report.shell = [ordered]@{ pid = $shell.Id; privateMiB = $shell.PrivateMemorySize64 / 1MB; workingSetMiB = $shell.WorkingSet64 / 1MB; cpuCorePercent = 100 * ($shell.TotalProcessorTime.TotalSeconds - $shellCpuBefore) / $elapsed }
     $report.helper = [ordered]@{ pid = $helper.Id; privateMiB = $helper.PrivateMemorySize64 / 1MB; workingSetMiB = $helper.WorkingSet64 / 1MB; cpuCorePercent = 100 * ($helper.TotalProcessorTime.TotalSeconds - $helperCpuBefore) / $elapsed }
-    # Windows may defer LastWriteTime until the live writer closes; trust the log entry's UTC time.
-    $startupLogs = @(Get-ChildItem -LiteralPath (Join-Path $applicationDataDirectory 'logs') -File | ForEach-Object { Get-Content -LiteralPath $_.FullName } | ForEach-Object {
-        try {
-            $entry = $_ | ConvertFrom-Json
-            $timestampUtc = if ($entry.timestamp -is [System.DateTime]) { $entry.timestamp.ToUniversalTime() } else { [System.DateTimeOffset]::Parse([string]$entry.timestamp).UtcDateTime }
-            if ($entry.fields.message -eq 'application started' -and $timestampUtc -ge $launchUtc) { $entry }
-        } catch { }
-    })
-    if ($startupLogs.Count -eq 0) { throw 'Installed application startup marker was not observed.' }
-    $report.startupLogObserved = $true
     $report.helperExitedOnParentClose = Stop-OwnedShellAndChildren -Parent $shell -ShortcutHelper $helper
     if (-not $report.helperExitedOnParentClose) { throw 'Owned helper did not exit after the shell closed its inherited pipes.' }
     $beforeUninstallHashes = Get-DataHashes -Directory $applicationDataDirectory
@@ -271,6 +303,12 @@ try {
 } catch {
     $report.status = 'failed'
     $report.failure = $_.Exception.Message
+    # What the installed app logged since launch (levels, subsystems and messages; never text or
+    # audio, which Onda does not log) and which processes it started, to diagnose the failure.
+    if ($report.Contains('launchUtc')) {
+        try { $report.logSinceLaunch = @(Get-LogEntries -SinceUtc $launchUtc | ForEach-Object { "$($_.timestampUtc.ToString('o')) $($_.level) $($_.subsystem): $($_.message)" }) } catch { $report.logInspectionFailure = $_.Exception.Message }
+        try { $report.processesStarted = @($ownedProcesses | ForEach-Object { try { $_.ProcessName } catch { 'exited' } }) } catch { }
+    }
     throw
 } finally {
     if ($shell) { try { Remember-OwnedDescendants -Parent $shell } catch { $report.descendantInspectionFailure = $_.Exception.Message } }

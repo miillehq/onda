@@ -1,7 +1,8 @@
 # Every pull request and every push to master, in tiers (docs/adr/007-platform-support.md):
 #   tier1 windows-x64, tier1 linux-x64   required: L0 lint, L1/L3 cargo test, L2 contracts,
 #                                         quality fixtures; real-model ASR on Windows;
-#                                         WebKitGTK smoke on Linux; real-shell journeys (L6).
+#                                         native smoke in WebView2 and WebKitGTK and the
+#                                         real-shell journeys (L6).
 #   ui <platform>                        L4/L5: Playwright on chromium and webkit against the
 #                                         labelled mock; required on Windows and Linux.
 #   policy                               required: cargo-deny and npm audit, once.
@@ -100,6 +101,11 @@ jobs:
           $env:ONDA_ASR_WORKER_DIR = Join-Path $PWD 'target/debug'
           cargo test --locked -p onda-asr --test golden -- --ignored --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'Real ASR golden tests failed' }
+      - name: L6 native smoke in WebView2
+        run: |
+          cargo build --locked -p onda-app --bin onda
+          if ($LASTEXITCODE -ne 0) { throw 'Debug desktop build failed' }
+          ./scripts/smoke.ps1 -SkipBuild
       - name: L6 real-shell journeys
         run: |
           npx tsc -p tests/e2e/tsconfig.json --noEmit
