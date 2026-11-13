@@ -34,6 +34,15 @@ Rulings:
 - Slice 3: Ruling: the first L6 journey uses settings and the dictionary, not dictation — hosted
   runners have no microphone or foreground rights — cost if wrong: dictation's real-shell path
   waits for the debug WAV replay fixture to be wired into L6.
+- Slice 3: Ruling: `npm audit` gates shipped dependencies only (`--omit=dev`) and reports the
+  rest — WebdriverIO 9, which `@wdio/tauri-service` 1.5.1 requires, carries high advisories in
+  test tooling (`basic-ftp`, `extract-zip`, `serialize-javascript`) that never ships and is never
+  fed FTP proxies, untrusted archives or serialized input — cost if wrong: a compromised test
+  tool on a CI runner with a read-only token.
+- Slice 3: Ruling: the WebdriverIO plugins and their capability exist only in `--features e2e`
+  debug builds, through a config overlay, and a release build with the feature fails to compile
+  — the shipped app keeps its two-command IPC surface — cost if wrong: none for users; tests
+  need the e2e build.
 - Slice 10: Ruling: `ui/src/smoke.ts` stays until every check in it maps to an L6 test by name —
   the smoke is the only real-shell coverage today — cost if wrong: two suites run for a while.
 - Slice 11: Ruling: macOS lands first as compile-only stubs, then features — a build that fails

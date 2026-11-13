@@ -47,6 +47,13 @@ tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4"] }
 ts-rs = { version = "12", features = ["serde-compat", "no-serde-warnings"] }
 hound = "3.5"
+# Real-shell tests (L6): WebdriverIO's plugins, compiled only with `--features e2e` and
+# registered only in debug builds (see lib.rs). Release binaries never contain a WebDriver server.
+tauri-plugin-wdio = { version = "1", optional = true }
+tauri-plugin-wdio-webdriver = { version = "1", optional = true }
+
+[features]
+e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"

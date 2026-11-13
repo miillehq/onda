@@ -13,8 +13,8 @@
     "contracts": "npm run contracts:check",
     "integration": "cargo test --locked --workspace",
     "ui": null,
-    "e2e": null,
-    "build": "npm run build",
+    "e2e": "npm run test:e2e",
+    "build": "npm run build:e2e",
     "package": "npm run release",
     "installers": null
   },
@@ -22,6 +22,6 @@
     "ui": "ui/",
     "native": "src-tauri/",
     "contracts": "ui/src/generated/",
-    "e2e": null
+    "e2e": "tests/e2e/"
   }
 }

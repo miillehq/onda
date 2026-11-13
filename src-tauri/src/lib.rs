@@ -1,4 +1,7 @@
 //! Thin desktop host for Windows and Linux. Application policy lives in Rust services.
+
+#[cfg(all(feature = "e2e", not(debug_assertions)))]
+compile_error!("The e2e feature adds a WebDriver server and is for debug builds only.");
 pub mod api;
 mod errors;
 mod pill;
@@ -438,6 +441,14 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
             second_instance(app, arguments)
         }));
+    }
+    // Real-shell tests (L6): WebdriverIO's plugins exist only in debug builds made with
+    // `--features e2e` (`npm run build:e2e`), so no shipped binary has a WebDriver server.
+    #[cfg(all(debug_assertions, feature = "e2e"))]
+    {
+        builder = builder
+            .plugin(tauri_plugin_wdio::init())
+            .plugin(tauri_plugin_wdio_webdriver::init());
     }
     let application = builder
         .plugin(tauri_plugin_updater::Builder::new().build())

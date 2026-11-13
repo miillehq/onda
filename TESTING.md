@@ -16,7 +16,7 @@ Every check runs at the cheapest level that can catch the bug it guards.
 | L3 | modules work against real I/O: SQLite files, temp dirs, localhost servers, child processes, DPAPI or keyring | `cargo test`; golden real-model tests | `cargo test --locked --workspace` | every push | yes |
 | L4 | a user can do the journey, against the labelled mock | Playwright, chromium and webkit | planned: `npm run test:ui` | every PR, 3 OSes | no |
 | L5 | structure, layout and pixels have not drifted | ARIA snapshot, geometry snapshot, per-OS pixels | with L4 | with L4 | no |
-| L6 | the debug app launches and the UI reaches the real backend | WebdriverIO embedded provider; today `ui/src/smoke.ts` | planned: `npm run test:e2e` | every PR | Linux smoke only |
+| L6 | the debug app launches and the UI reaches the real backend | WebdriverIO embedded provider (`tests/e2e/`); `ui/src/smoke.ts` | `npm run build:e2e`, then `npm run test:e2e` | every PR | settings and dictionary across a restart |
 | L7 | the bundle installs, launches and uninstalls | NSIS, deb, AppImage and dmg scripts | planned: installers workflow | `master`, release | Windows NSIS step |
 | L8 | other distributions, assistive tech | containers, manual | release checklist | release | manual matrix |
 
