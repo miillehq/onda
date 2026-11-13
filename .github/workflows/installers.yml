@@ -151,3 +151,49 @@ jobs:
           path: |
             target/release/bundle/deb/*.deb
             target/release/bundle/appimage/*.AppImage
+
+  distributions:
+    name: distributions ${{ matrix.distribution }}
+    needs: [linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Tier 3 (ADR 007): advisory checks that the Linux packages' libraries resolve elsewhere.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { distribution: debian, image: "debian:trixie" }
+          - { distribution: fedora, image: "fedora:42" }
+          - { distribution: arch, image: "archlinux:latest" }
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: onda-linux-x64-unsigned
+          path: packages
+      - name: Every library the app and its workers need resolves (L8)
+        env:
+          IMAGE: ${{ matrix.image }}
+          DISTRIBUTION: ${{ matrix.distribution }}
+        run: |
+          docker run --rm -v "$PWD/packages:/packages:ro" -e DISTRIBUTION "$IMAGE" bash -euo pipefail -c '
+            case "$DISTRIBUTION" in
+              debian) apt-get update -qq && apt-get install -y -qq /packages/deb/*.deb >/dev/null && root=/usr/bin ;;
+              fedora) dnf install -y -q webkit2gtk4.1 gtk3 libayatana-appindicator-gtk3 alsa-lib dbus-libs >/dev/null || true ;;
+              arch) pacman -Sy --noconfirm --quiet webkit2gtk-4.1 gtk3 libayatana-appindicator alsa-lib >/dev/null || true ;;
+            esac
+            if [ -z "${root:-}" ]; then
+              cd /tmp && cp /packages/appimage/*.AppImage onda.AppImage && chmod +x onda.AppImage
+              ./onda.AppImage --appimage-extract >/dev/null
+              root=/tmp/squashfs-root/usr/bin
+              # The AppImage carries most of its libraries; look there first, as its launcher does.
+              export LD_LIBRARY_PATH=/tmp/squashfs-root/usr/lib:/tmp/squashfs-root/usr/lib64
+            fi
+            missing=0
+            for binary in onda onda-input onda-asr-worker onda-asr-avx2-worker; do
+              [ -x "$root/$binary" ] || { echo "missing binary: $binary"; missing=1; continue; }
+              if ldd "$root/$binary" | grep "not found"; then missing=1; fi
+            done
+            [ "$missing" -eq 0 ] && echo "all libraries resolve on $DISTRIBUTION"
+            exit "$missing"
+          '
