@@ -1,5 +1,7 @@
 # Work log: MY-29 to MY-37 (branch `onda/my-29-37`)
 
+> Historical: written before the project followed Keel and no longer maintained. Where it disagrees with [docs/README.md](README.md) and the files it lists, they win.
+
 A resumable record of the October 2026 batch: Linux build, profile and statistics, model
 languages, custom AI providers, local polish models, tray icon choice, branded installer and
 WebView2 attribution. No secrets belong here.

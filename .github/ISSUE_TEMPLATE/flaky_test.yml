@@ -1,0 +1,65 @@
+name: Flaky test
+description: A test or CI step that fails without a code change.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A flaky test is quarantined, not deleted, and never hidden by a retry or a wider
+        timeout below L6 (TESTING.md, flaky tests). This issue records the pattern.
+  - type: input
+    id: test
+    attributes:
+      label: Test or step
+      placeholder: models::tests::truncated_http_body_keeps_a_resumable_prefix, or "L6 native smoke in WebView2"
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Level
+      options:
+        - L1 unit
+        - L2 contract
+        - L3 integration
+        - L4 browser journey
+        - L5 visual
+        - L6 real app
+        - L7 installer
+        - L8 distributions
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platforms
+      placeholder: windows-x64 (windows-2022 runner)
+    validations:
+      required: true
+  - type: input
+    id: rate
+    attributes:
+      label: How often
+      description: Failures out of runs, and over which runs.
+      placeholder: 2 of 18 runs of the step in the last 60 ci runs
+    validations:
+      required: true
+  - type: textarea
+    id: runs
+    attributes:
+      label: Failing runs
+      description: Links to each failing run, with the commit.
+    validations:
+      required: true
+  - type: textarea
+    id: message
+    attributes:
+      label: Failure message
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Tried to reproduce
+      description: A loop around cargo test or --repeat-each=30 in Playwright, on the failing platform, and what came out.
