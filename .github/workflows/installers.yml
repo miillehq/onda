@@ -86,6 +86,19 @@ jobs:
           if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'Uninstaller missing' }
           $uninstallation = Start-Process -FilePath $uninstaller -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
           if ($uninstallation.ExitCode -ne 0) { throw 'Silent uninstallation failed' }
+      - name: Install, probe the workers, launch, observe and uninstall (L7)
+        run: |
+          $installer = Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*setup.exe' | Select-Object -First 1
+          $report = ./scripts/installer-smoke.ps1 -InstallerPath $installer.FullName
+          $report | Select-Object status, cpuWorker, avx2Worker, startupSeconds, startupLogObserved, shell, helper, helperExitedOnParentClose, applicationDataPreserved, uninstallerExitCode | ConvertTo-Json -Depth 4
+      - name: Upload the installed-app report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: installed-smoke-windows-x64
+          path: .artifacts/installed-smoke/*.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload reviewable installer and notices
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:

@@ -37,22 +37,33 @@ with an identical tree.
 | 2026-11-13 | L2 probe | removing the mock's duplicate check fails "the same word in another case and spacing is refused" | windows-x64, local | planted in `ui/src/mock/backend.ts`, `npx vitest run`, restored |
 | 2026-11-13 | L1 | retired after their replacements: `languages.rs` `the_catalog_language_table_matches_whisper_order_and_excludes_cantonese` (now `engine.rs` `languages_the_models_lack_never_reach_the_worker`) and `api.rs` `public_account_dto_contains_no_credentials` (now `the_account_sent_to_the_interface_has_only_its_public_fields`); both replacements pass | windows-x64, local | `cargo test --locked -p onda-asr -p onda-app --lib` |
 | 2026-11-13 | L3 flaky fix | `models.rs` `truncated_http_body_keeps_a_resumable_prefix` failed once on `ubuntu-24.04-arm` (run 43352512685: the `.part` file was empty) and passed on every other run. Cause: the mock server closed its socket after one read, so a reset could discard the 4 bytes it had sent. The mock now reads the whole request, closes gracefully and drains; the test's assertions are unchanged. 15 of 15 local runs green | windows-x64, local; linux-arm64 in CI | `cargo test --locked -p onda-asr --lib models::` |
+| 2026-11-13 | L0 to L3, L6, L7 | the first green GitHub Actions run, on the pre-Keel `ci.yml`: format, contracts, strict clippy and the workspace tests on both runners; the WebKitGTK smoke on Linux; on Windows the real-model test, cargo-deny and the NSIS silent install and uninstall | windows-x64, linux-x64 CI | [run 43349184270](https://github.com/miillehq/onda/actions/runs/43349184270), PR #1, `0791656` |
+| 2026-11-13 | L0 to L3, L6 | Tier 1 on the last retrofit PR: fmt, both clippy runs and TypeScript; contracts and 40 Vitest tests; workspace tests 181 passed and 6 ignored on Windows, 171 passed and 7 ignored on Linux (summed over every test binary); quality fixtures; the real-shell suite (3 spec files, 26 tests) in WebView2 and in WebKitGTK; the WebKitGTK native smoke | windows-x64, linux-x64 CI | [run 43356494799](https://github.com/miillehq/onda/actions/runs/43356494799), PR #15, `0acb14c`; the suite first passed in CI in run 43349336742 (PR #4) |
+| 2026-11-13 | L3 | real-model golden tests: the public-domain JFK clip transcribes, a failed GPU probe falls back to real CPU transcription, cancelled inference kills the worker without losing the shell; 3 passed | windows-x64 CI | run 43356494799, step "L3 real-model transcription" |
+| 2026-11-13 | L1 | the Linux-only tests written on Windows pass on Linux: a process is identified by its `/proc` start time and name, the local day key, `civil_from_days`, the sealed-bytes framing; the keyring round trip stays ignored (it needs a Secret Service session) | linux-x64 CI | run 43356494799 |
+| 2026-11-13 | L4, L5 | the browser suite against the labelled mock, chromium and webkit, tiers 1 and 2; pixel checks skip without runner baselines | windows-x64, linux-x64, macos-arm64 CI | run 43356494799; first green in run 43352512685 (PR #9) |
+| 2026-11-13 | L1, L3 | Tier 2, advisory: `cargo test --workspace --exclude onda-app` passes on all four platforms (macos-x64 and macos-arm64 125 passed and 5 ignored, windows-arm64 158 and 6, linux-arm64 151 and 7); on linux-arm64 the speech and shortcut workers build and the app shell's tests pass. On `master` the workers do not build on macOS (`prepare.sh` under bash 3.2) or Windows arm64 (whisper.cpp refuses MSVC for ARM); both fixes are in PR #11 | macos-x64, macos-arm64, windows-arm64, linux-arm64 CI | run 43356494799 |
+| 2026-11-13 | policy | cargo-deny (licences, advisories, sources) and `npm audit --omit=dev --audit-level=high` pass | linux-x64 CI | run 43356494799, job "dependency policy" |
+| 2026-11-13 | L7 | Linux deb: installs, ships the shortcut helper and both speech workers, the installed app is still running after 6 s, removed; the AppImage is still running after 6 s | linux-x64 CI | [installers run 43358207762](https://github.com/miillehq/onda/actions/runs/43358207762), `d9bb7bc` |
+| 2026-11-13 | L7 | Windows NSIS: silent per-user install with all four binaries, the hashed MSVC runtime and the MPL source, then silent uninstall; the installed app is not launched | windows-x64 CI | installers runs 43357218055 (`d1efc93`) and 43358207762 (`d9bb7bc`) |
 
 ## Unverified
 
-- No GitHub Actions run has passed yet. The first (run 43344083850) failed on Linux before any
-  test: `scripts/prepare.sh` was committed without its executable bit.
-- Linux: nothing run since 2026-10-29 (VPS, `docs/testing.md`), including the Linux-only tests.
-- macOS: no code yet; nothing built.
-- Windows arm64 and Linux arm64: nothing built.
-- L5 tier 3: no pixel baselines until the snapshots workflow runs on the runners. L6: the WebView2
-  smoke (`scripts/smoke.ps1`) has not run since 0.1.x.
-- L7: the NSIS install test has not passed in CI yet; the Linux deb and AppImage test
-  (`scripts/installer-test.sh`) is written but runs first in the installers workflow on `master`.
-- Real-model golden tests: not run since 2026-10-29.
+- Windows NSIS (L7): the install test checks the layout but does not launch the installed app.
+- L5 tier 3: no pixel baselines until the snapshots workflow runs on the runners. The history view
+  has no browser test.
+- L6 on Windows: the WebView2 smoke (`scripts/smoke.ps1`, the checks in `ui/src/smoke.ts`) has not
+  run since 0.1.x; on Linux the same checks run on every PR.
+- L8: the Fedora, Debian and Arch container checks had not finished their first run on `master`
+  when this was written.
+- macOS and ARM: the ports are in PR #11, not on `master`. On `master` only the crates without the
+  app shell are tested on macOS and Windows arm64.
+- Linux: the keyring seal round trip and Secret Service key storage are ignored tests; they need a
+  desktop session. The golden tests run in CI on Windows only; on Linux not since 2026-10-29.
+  The Vulkan golden needs a GPU and stays ignored.
 - Dictation into real applications, physical microphones and real provider accounts on any OS:
   manual matrix, not run for 0.2.0.
-- Linux only, written on Windows and first run by Linux CI: the strengthened `/proc` identity test, the Linux day key, and the keyring seal framing test (checked only in an extracted copy with an in-memory keyring).
 - Observed once, not reproduced: in 1 of 12 local real-shell runs (the first after a rebuild), the
-  second spec's session failed to start and the restart spec then failed. 8 further runs were green.
-  If CI repeats it, it is quarantined with an issue (TESTING.md, flaky tests).
+  second spec's session failed to start and the restart spec then failed. 8 further runs were green,
+  and no CI run listed above repeated it. If CI repeats it, it is quarantined with an issue
+  (TESTING.md, flaky tests).
