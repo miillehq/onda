@@ -31,6 +31,15 @@ Rulings:
 - Slice 2: Ruling: Tier 2 runs on every PR as advisory jobs, not only nightly — the macOS and ARM
   ports need feedback per change — cost if wrong: about 4 extra jobs per PR, free on a public
   repository.
+- Slice 2, follow-up (the owner approved, 2026-11-13): `master` also requires `ui windows-x64` and
+  `ui linux-x64`, so a red browser suite on a Tier 1 platform blocks the merge, as `AGENTS.md`
+  says; `ui macos-arm64` stays advisory with the rest of Tier 2.
+- Slice 2: Ruling: the WebView2 smoke retries once after a timeout instead of being quarantined —
+  it is L6, where one retry is allowed for launch noise on fresh runners, and quarantining would
+  make the only Windows check of the hidden-desktop IPC path advisory; a failed check still fails
+  at once, and the first attempt's diagnosis goes to the log, a warning and issue #25 — cost if
+  wrong: a real intermittent hang that passes on the second try shows only as a warning and in
+  the issue.
 - Slice 3: Ruling: the first L6 journey uses settings and the dictionary, not dictation — hosted
   runners have no microphone or foreground rights — cost if wrong: dictation's real-shell path
   waits for the debug WAV replay fixture to be wired into L6.

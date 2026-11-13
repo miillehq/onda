@@ -102,10 +102,21 @@ jobs:
           cargo test --locked -p onda-asr --test golden -- --ignored --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'Real ASR golden tests failed' }
       - name: L6 native smoke in WebView2
+        # L6 may retry once (AGENTS.md, rule 5): a timeout retries, a failed check fails at once.
+        # Each retry is a data point for https://github.com/miillehq/onda/issues/25.
         run: |
           cargo build --locked -p onda-app --bin onda
           if ($LASTEXITCODE -ne 0) { throw 'Debug desktop build failed' }
-          ./scripts/smoke.ps1 -SkipBuild
+          try {
+            ./scripts/smoke.ps1 -SkipBuild
+          } catch {
+            $first = $_.Exception.Message
+            if ($first -notlike 'Hidden desktop IPC smoke timed out.*') { throw }
+            Write-Output $first
+            $annotation = $first.Replace('%', '%25').Replace("`r", '').Replace("`n", '%0A')
+            Write-Output "::warning title=WebView2 smoke timed out and was retried::Add this run to https://github.com/miillehq/onda/issues/25%0A$annotation"
+            ./scripts/smoke.ps1 -SkipBuild
+          }
       - name: L6 real-shell journeys
         run: |
           npx tsc -p tests/e2e/tsconfig.json --noEmit

@@ -14,10 +14,10 @@ Every check runs at the cheapest level that can catch the bug it guards.
 | L1 | a function or module does what it says | `cargo test`, Vitest | `cargo test --locked --workspace`; `npm run test:unit` | every push | Rust; Vitest harness |
 | L2 | the mock and the real backend agree | ts-rs drift check; `contracts/examples.ts` run against the mock (Vitest) and the real app (L6) | `npm run contracts:check`; `npm run test:unit` | every push | types, defaults, validation, profile names |
 | L3 | modules work against real I/O: SQLite files, temp dirs, localhost servers, child processes, DPAPI or keyring | `cargo test`; golden real-model tests | `cargo test --locked --workspace` | every push | yes |
-| L4 | a user can do the journey, against the labelled mock | Playwright, chromium and webkit (`tests/ui/`) | `npm run test:ui` | every PR, 3 OSes | onboarding, dictionary, settings, error display |
-| L5 | structure, layout and pixels have not drifted | ARIA snapshot, geometry snapshot, per-OS pixels | with L4 | with L4 | tiers 1 and 2; tier 3 once the snapshots workflow runs |
-| L6 | the debug app launches and the UI reaches the real backend | WebdriverIO embedded provider (`tests/e2e/`); `ui/src/smoke.ts` | `npm run build:e2e`, then `npm run test:e2e` | every PR | settings and dictionary across a restart |
-| L7 | the bundle installs, launches and uninstalls | NSIS steps in `installers.yml`; `scripts/installer-test.sh` for deb, AppImage and dmg | `installers` workflow | `master`, release | NSIS; deb and AppImage |
+| L4 | a user can do the journey, against the labelled mock | Playwright, chromium and webkit (`tests/ui/`) | `npm run test:ui` | every PR, 3 OSes | onboarding, dictionary, settings, error display, History, the Mac wording (`?platform=macos`) |
+| L5 | structure, layout and pixels have not drifted | ARIA snapshot, geometry snapshot, per-OS pixels | with L4 | with L4 | tiers 1 to 3; tier 3 baselines for chromium and webkit on Windows, Linux and macOS, from the snapshots workflow (PR #19) |
+| L6 | the debug app launches and the UI reaches the real backend | WebdriverIO embedded provider (`tests/e2e/`); `ui/src/smoke.ts` | `npm run build:e2e`, then `npm run test:e2e` | every PR, Tier 1 and Tier 2 | the shared contract examples, settings and dictionary across a restart, whether Onda can paste into other apps; the WebView2 and WebKitGTK smoke |
+| L7 | the bundle installs, launches and uninstalls | NSIS steps in `installers.yml`; `scripts/installer-test.sh` for deb, AppImage and dmg | `installers` workflow | `master`, release | NSIS; deb and AppImage; dmg (unsigned) |
 | L8 | other distributions, assistive tech | Debian, Fedora and Arch containers (libraries resolve); manual | `installers` workflow, advisory | `master`, release | containers; screen readers manual |
 
 Rules for the mock: it implements the same `Backend` interface from the same generated types,
@@ -28,7 +28,7 @@ dispatcher by the contract suite before any test depends on it.
 
 | Journey | Proven at |
 |---|---|
-| Hold the shortcut, speak, release: text lands in the focused field (Windows hook; Linux portal and paste; macOS event tap) | L1 matcher and state, L3 real-model ASR, L6 replay into an owned field, manual on real apps |
+| Hold the shortcut, speak, release: text lands in the focused field (Windows hook; Linux portal and paste; macOS today leaves the words on the clipboard for ⌘V: no event tap or Accessibility yet) | L1 matcher and state, L3 real-model ASR, L6 replay into an owned field, manual on real apps |
 | AI polish with the chosen provider; any failure keeps the original text and calls no other provider | L1 validation, L2 error mapping, L3 localhost providers, L4 error display, quality fixtures |
 | ChatGPT sign-in, refresh and sign-out | L3 on every OS that stores accounts |
 | Download, verify and select a model | L3 resume, checksum and verification before use; L4 model page |
@@ -62,7 +62,8 @@ A test that fails without a code change is reproduced first (a loop around `carg
 `--repeat-each=30` in Playwright, on the failing platform), then quarantined with `#[ignore]` or
 `test.fixme` and an issue that records the rate and the message, and kept running in an advisory
 job. It returns only after a fix that is shown red without it. Retries are allowed only in L6 and
-L7 jobs, once; below that a retry hides a bug.
+L7 jobs, once; below that a retry hides a bug. The WebView2 smoke uses its retry after a timeout
+only, and each retry is added to [issue #25](https://github.com/miillehq/onda/issues/25).
 
 ## Budgets
 
