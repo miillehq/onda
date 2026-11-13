@@ -2,7 +2,7 @@
 // kit's mark and wordmark, the interface's own icons and fonts, and its light and dark palettes.
 //   npm run readme:images
 import { chromium } from "@playwright/test";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { capture, screensDirectory } from "./capture.mjs";
@@ -12,14 +12,12 @@ const output = join(root, "docs", "images");
 const studioDirectory = join(root, ".artifacts", "readme");
 const url = (path) => pathToFileURL(path).href;
 
-const brand = readFileSync(join(root, "ui", "src", "components", "Brand.tsx"), "utf8");
-const MARK = /MARK_PATH =\s*"([^"]+)"/.exec(brand)[1];
-const WORDMARK = /WORDMARK_PATH =\s*"([^"]+)"/.exec(brand)[1];
-const mark = (height, color = "currentColor") =>
-  `<svg viewBox="0 0 521.378 340" height="${height}" width="${(height * 521.378) / 340}"><path fill="${color}" d="${MARK}"/></svg>`;
-const wordmark = (height, color = "currentColor") =>
-  `<svg viewBox="0 0 727 217" height="${height}" width="${(height * 727) / 217}"><path fill="${color}" d="${WORDMARK}"/></svg>`;
-const lockup = (height, color = "currentColor") => `<span class="lockup">${mark(height, color)}${wordmark(height * 0.86, color)}</span>`;
+// The brand kits' own files, used as they are (docs/images/brand): black on light backgrounds,
+// white on dark ones, the mark never below 14 px tall and the lockup never below 100 px wide.
+const brandFile = (name) => url(join(output, "brand", name));
+const mark = (theme, height = 14) =>
+  `<img class="brand-mark" src="${brandFile(`onda-mark-${theme === "dark" ? "white" : "black"}.svg`)}" style="height: ${Math.max(14, height)}px" alt="">`;
+const lockup = (color, width) => `<img src="${brandFile(`onda-lockup-${color}.svg`)}" style="width: ${Math.max(100, width)}px; display: block;" alt="Onda">`;
 
 const icons = {};
 for (const name of ["mic", "audio-lines", "cpu", "sparkles", "text-cursor-input", "lock", "shield-check", "key-round", "cloud-off", "message-square", "arrow-right", "rotate-ccw-clock", "book-open", "keyboard", "wifi-off", "trash"]) {
@@ -54,7 +52,7 @@ const css = `
 * { box-sizing: border-box; }
 body { margin: 0; padding: 40px; font-family: "Inter", sans-serif; color: var(--fg); background: transparent; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
 .shot { position: relative; overflow: hidden; border-radius: 22px; background: var(--canvas); margin-bottom: 40px; }
-.lockup { display: inline-flex; align-items: center; gap: 0.32em; }
+.brand-mark { display: block; width: auto; }
 .window { position: absolute; border-radius: 14px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .window > img { display: block; width: 100%; }
 .titlebar { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: var(--base); border-bottom: 1px solid var(--line); color: var(--fg2); font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; }
@@ -127,7 +125,7 @@ const messageWindow = (theme) => `
 const studio = (theme) => `<!doctype html><html class="${theme}"><head><meta charset="utf-8"><style>${css}</style></head><body>
 <section id="hero" class="shot" style="width: 1200px; height: 680px;">
   <div class="window" style="left: 44px; top: 46px; width: 780px;">
-    <div class="titlebar">${mark(12)}<span>Onda</span><span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="titlebar">${mark(theme)}<span>Onda</span><span class="dots"><i></i><i></i><i></i></span></div>
     <img src="${screen(theme === "dark" ? "home-dark" : "home")}">
   </div>
   ${messageWindow(theme)}
@@ -202,7 +200,7 @@ const studio = (theme) => `<!doctype html><html class="${theme}"><head><meta cha
 ${["history", "stats", "dictionary", "speech"]
   .map(
     (name) => `<section id="screen-${name}" class="frame" style="width: 1060px;">
-  <div class="window" style="width: 100%;"><div class="titlebar">${mark(12)}<span>Onda</span><span class="dots"><i></i><i></i><i></i></span></div><img src="${screen(theme === "dark" ? `${name}-dark` : name)}"></div>
+  <div class="window" style="width: 100%;"><div class="titlebar">${mark(theme)}<span>Onda</span><span class="dots"><i></i><i></i><i></i></span></div><img src="${screen(theme === "dark" ? `${name}-dark` : name)}"></div>
 </section>`,
   )
   .join("\n")}
@@ -219,7 +217,7 @@ body { padding: 0; }
 </style></head><body>
 <section id="social">
   <div class="copy">
-    ${lockup(46, "#FFFFFF")}
+    ${lockup("white", 250)}
     <h1>Your voice, typed<br>where your cursor is.</h1>
     <p>Offline voice dictation. Local Whisper speech recognition, optional AI polish with the provider you choose.</p>
     <div class="platforms"><span>Windows</span><span>macOS</span><span>Linux</span></div>
@@ -232,15 +230,10 @@ body { padding: 0; }
 </section>
 </body></html>`;
 
-const lockupSvg = (color) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 340" width="260" height="68" role="img" aria-label="Onda"><title>Onda</title><path fill="${color}" d="${MARK}"/><g transform="translate(573 63) scale(1.2903)"><path fill="${color}" d="${WORDMARK}"/></g></svg>\n`;
-
 export async function render({ recapture = true } = {}) {
   if (recapture) await capture();
   mkdirSync(output, { recursive: true });
   mkdirSync(studioDirectory, { recursive: true });
-  writeFileSync(join(output, "onda-logo-light.svg"), lockupSvg("#0F0F10"));
-  writeFileSync(join(output, "onda-logo-dark.svg"), lockupSvg("#F2F2F3"));
   const browser = await chromium.launch();
   try {
     for (const theme of ["light", "dark"]) {
