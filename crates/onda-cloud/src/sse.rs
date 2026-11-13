@@ -123,6 +123,29 @@ mod tests {
     }
 
     #[test]
+    fn the_event_cap_applies_to_each_event_not_to_the_stream() {
+        // 64 events of about 16 KiB each: four times the cap in total, each far below it.
+        let deltas: Vec<String> = (0..64)
+            .map(|index| format!("{index}:{}", "x".repeat(16 * 1024)))
+            .collect();
+        let stream: String = deltas
+            .iter()
+            .map(|delta| format!("event: delta\ndata: {delta}\n\n"))
+            .collect();
+        assert!(stream.len() > 4 * MAX_EVENT_BYTES);
+        let mut decoder = SseDecoder::default();
+        let events = decoder
+            .push(stream.as_bytes())
+            .unwrap_or_else(|error| panic!("a long stream of small events was refused: {error}"));
+        assert_eq!(events.len(), deltas.len());
+        for (event, delta) in events.iter().zip(&deltas) {
+            assert_eq!(&event.data, delta);
+            assert_eq!(event.event_type.as_deref(), Some("delta"));
+        }
+        assert!(!decoder.has_partial_event());
+    }
+
+    #[test]
     fn incomplete_frame_is_never_emitted() {
         let mut decoder = SseDecoder::default();
         assert!(decoder

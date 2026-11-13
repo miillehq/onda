@@ -128,7 +128,15 @@ impl ModelManager {
         id: &str,
         cancellation: &CancellationToken,
     ) -> Result<PathBuf, AsrError> {
-        let model = find_model(id)?;
+        self.verified_path(find_model(id)?, cancellation).await
+    }
+
+    /// `verified_model_path` for a resolved catalog entry.
+    async fn verified_path(
+        &self,
+        model: &ModelSpec,
+        cancellation: &CancellationToken,
+    ) -> Result<PathBuf, AsrError> {
         let path = self.path_for(model, "bin")?;
         if !path.is_file() {
             return Err(AsrError::ModelMissing);
@@ -692,6 +700,53 @@ mod tests {
         ));
         assert!(!directory.path().join("new-location").exists());
     }
+    #[tokio::test]
+    async fn only_bytes_matching_the_manifest_reach_inference() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let manager = ModelManager::new(directory.path().to_path_buf()).expect("manager");
+        let model = test_model();
+        let cancellation = CancellationToken::new();
+        let installed = manager.path_for(&model, "bin").expect("destination");
+        assert!(matches!(
+            manager.verified_path(&model, &cancellation).await,
+            Err(AsrError::ModelMissing)
+        ));
+        // The manifest size with one byte changed: only the SHA-256 can tell.
+        fs::write(&installed, b"abcdefgX")
+            .await
+            .expect("corrupt model");
+        let corrupt = manager.verified_path(&model, &cancellation).await;
+        assert!(
+            matches!(corrupt, Err(AsrError::ChecksumMismatch)),
+            "a model whose bytes do not match the manifest SHA-256 reached inference: {corrupt:?}"
+        );
+        fs::write(&installed, b"abcdefgh").await.expect("model");
+        assert_eq!(
+            manager
+                .verified_path(&model, &cancellation)
+                .await
+                .expect("matching bytes are verified"),
+            installed
+        );
+        // The public entry point resolves the catalog and applies the same gate.
+        let catalog = find_model("whisper-tiny-en").expect("catalog model");
+        fs::write(
+            manager
+                .path_for(catalog, "bin")
+                .expect("catalog destination"),
+            b"not the published model",
+        )
+        .await
+        .expect("corrupt catalog model");
+        let corrupt = manager
+            .verified_model_path("whisper-tiny-en", &cancellation)
+            .await;
+        assert!(
+            matches!(corrupt, Err(AsrError::ChecksumMismatch)),
+            "a catalog model that fails its checksum reached inference: {corrupt:?}"
+        );
+    }
+
     #[test]
     fn range_and_redirects_are_strict() {
         assert!(validate_content_range(Some("bytes 5-9/10"), 5, 10).is_ok());

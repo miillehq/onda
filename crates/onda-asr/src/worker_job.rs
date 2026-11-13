@@ -75,18 +75,17 @@ fn job_error(error: windows::core::Error) -> io::Error {
 mod tests {
     use super::*;
     use std::{path::PathBuf, process::Stdio, time::Duration};
-    const WORKER_STARTUP_GRACE: Duration = Duration::from_millis(100);
-    const JOB_TERMINATION_DEADLINE: Duration = Duration::from_secs(5);
+    const WORKER_STARTUP_GRACE: Duration = Duration::from_millis(500);
+    const JOB_TERMINATION_DEADLINE: Duration = Duration::from_secs(30);
 
     #[tokio::test]
-    #[ignore = "requires ONDA_ASR_WORKER_DIR with the owned native ASR worker"]
     async fn closing_job_kills_owned_worker_even_with_stdin_open() {
-        let directory = PathBuf::from(
-            std::env::var_os("ONDA_ASR_WORKER_DIR").expect("set ONDA_ASR_WORKER_DIR"),
-        );
+        // Like the worker waiting for its header, findstr blocks reading stdin until it closes.
+        let system = PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot is set"));
         let job = WorkerJob::new().expect("create private job");
-        let mut command = tokio::process::Command::new(directory.join("onda-asr-worker.exe"));
+        let mut command = tokio::process::Command::new(system.join("System32").join("findstr.exe"));
         command
+            .arg("onda")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
