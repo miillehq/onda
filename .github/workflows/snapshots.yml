@@ -63,8 +63,14 @@ jobs:
           pattern: snapshots-*
           path: incoming
       - name: Merge the three capture sets
+        # Each set also holds its checkout's copies of the other OSes' baselines, which are stale:
+        # take from each runner only the pixels of its own OS, and the shared ARIA and geometry
+        # baselines from the Linux runner alone.
         run: |
-          for d in incoming/snapshots-*; do cp -R "$d"/. tests/ui/__snapshots__/; done
+          take() { (cd "incoming/snapshots-$1" && find . -type f \( "${@:2}" \) -exec cp --parents {} "$GITHUB_WORKSPACE/tests/ui/__snapshots__/" \;); }
+          take ubuntu-24.04 -name '*-linux.png' -o -name '*.aria.yml' -o -name '*.geometry.json'
+          take windows-2022 -name '*-win32.png'
+          take macos-latest -name '*-darwin.png'
           git status --short tests/ui/__snapshots__
       - name: Commit to the branch the workflow ran on
         # The organisation does not let Actions open pull requests, so on master the baselines go
