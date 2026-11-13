@@ -43,11 +43,13 @@ export async function tier2(page: Page, name: string): Promise<void> {
 /**
  * Tier 3: pixels, one baseline per engine and OS, captured only by the snapshots workflow on
  * the runners. Until that workflow has run for a screen, its pixel check is skipped and says so.
+ * `ready` is what the screen shows once it has rendered: no baseline may be taken before it.
  */
-export async function tier3(page: Page, name: string): Promise<void> {
+export async function tier3(page: Page, name: string, ready: Locator): Promise<void> {
   const file = `${name}-${test.info().project.name}-${process.platform}.png`;
   const updating = test.info().config.updateSnapshots === "all";
   test.skip(!updating && !existsSync(snapshotFile(file)), `no pixel baseline for ${file} yet; the snapshots workflow captures it on the runners`);
+  await expect(ready).toBeVisible();
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
