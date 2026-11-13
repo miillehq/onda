@@ -4,7 +4,7 @@
 // contain them, so mock-only sample data (a picture, demo history) does not matter.
 import type { ApiRequest, ApiResponse } from "../ui/src/generated/api";
 import type { AppError, Settings } from "../ui/src/generated/core";
-import { DEFAULT_SETTINGS, LIMITS } from "../ui/src/generated/core";
+import { DEFAULT_SETTINGS, LIMITS, MACOS_DEFAULT_SETTINGS } from "../ui/src/generated/core";
 
 type DeepPartial<T> = T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 export type Outcome = { response: DeepPartial<ApiResponse> } | { error: Pick<AppError, "code" | "message"> };
@@ -19,12 +19,12 @@ const named = (name: string | null): ApiRequest => ({ command: "setProfileName",
 // One grapheme, two code points: the case where counting code points instead of graphemes drifts.
 const flags = (count: number) => "\u{1F1F3}\u{1F1FF}".repeat(count);
 
-/** Must run before anything changes the profile. */
-export const freshProfile: Example[] = [
+/** Must run before anything changes the profile. A Mac starts with its own dictation chord. */
+export const freshProfile = (macos: boolean): Example[] => [
   {
     name: "a fresh profile starts from Rust's default settings",
     request: { command: "getSettings" },
-    expect: { response: { type: "settings", payload: DEFAULT_SETTINGS } },
+    expect: { response: { type: "settings", payload: macos ? MACOS_DEFAULT_SETTINGS : DEFAULT_SETTINGS } },
   },
 ];
 
@@ -80,4 +80,5 @@ export const dictionaryEntries: Example[] = [
   { name: "the saved word is removed", request: { command: "deleteDictionaryEntry", args: { id: "contract-word" } }, expect: { response: { type: "unit" } } },
 ];
 
-export const allExamples: Example[] = [...freshProfile, ...settingsRefusals, ...profileNames, ...dictionaryEntries];
+/** Every example, in order, for a backend on macOS (`macos`) or on Windows and Linux. */
+export const examplesFor = (macos: boolean): Example[] => [...freshProfile(macos), ...settingsRefusals, ...profileNames, ...dictionaryEntries];

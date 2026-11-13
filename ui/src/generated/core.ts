@@ -100,7 +100,7 @@ export type LearningProposal = { id: string, original: string, corrected: string
 export type SpanMetric = { operationId: string, subsystem: string, durationMs: number, success: boolean, };
 export type AppEvent = { "type": "stateChanged", "payload": OperationState } | { "type": "resultReady", "payload": OperationResult } | { "type": "learningProposed", "payload": LearningProposal } | { "type": "metric", "payload": SpanMetric } | { "type": "error", "payload": AppError } | { "type": "cloudDelta", "payload": { operationId: string, delta: string, } };
 
-/** `Settings::default()`: what a fresh profile starts with. */
+/** `Settings::default()` on Windows and Linux: what a fresh profile starts with. */
 export const DEFAULT_SETTINGS: Settings = {
   "executionPreference": "auto",
   "qualityProfile": "fast",
@@ -116,6 +116,64 @@ export const DEFAULT_SETTINGS: Settings = {
     "keys": [
       162,
       91,
+      32
+    ]
+  },
+  "transformShortcut": {
+    "keys": [
+      162,
+      164,
+      80
+    ]
+  },
+  "commandShortcut": {
+    "keys": [
+      162,
+      164,
+      67
+    ]
+  },
+  "toggleShortcut": {
+    "keys": [
+      162,
+      164,
+      68
+    ]
+  },
+  "toggleEnabled": false,
+  "defaultTransformId": "polish",
+  "appProfiles": [],
+  "theme": "system",
+  "launchAtLogin": false,
+  "showPill": true,
+  "playSounds": true,
+  "onboardingCompleted": false,
+  "historyDays": 3,
+  "trayIcon": "auto",
+  "aiProvider": "chatgpt",
+  "openaiBaseUrl": null,
+  "openaiModel": null,
+  "anthropicModel": null,
+  "localBaseUrl": null,
+  "localModel": null
+};
+
+/** `Settings::default()` on macOS: the same, but Control+Shift+Space dictates. */
+export const MACOS_DEFAULT_SETTINGS: Settings = {
+  "executionPreference": "auto",
+  "qualityProfile": "fast",
+  "modelId": null,
+  "modelDirectory": null,
+  "language": null,
+  "microphoneId": null,
+  "maxRecordingSeconds": 180,
+  "enhancementEnabled": false,
+  "contextEnabled": false,
+  "learningEnabled": false,
+  "pushToTalk": {
+    "keys": [
+      162,
+      160,
       32
     ]
   },
