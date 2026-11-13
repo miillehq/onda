@@ -1,0 +1,55 @@
+- main "Content":
+  - heading "History" [level=1]
+  - paragraph:
+    - text: What you said, kept for 3 days and encrypted on this PC.
+    - button "Change"
+  - button "Clear all"
+  - text: 6 entries
+  - searchbox "Search history"
+  - region "Today":
+    - heading "Today" [level=2]
+    - list:
+      - listitem:
+        - time: /9:\d+ AM/
+        - paragraph: Let's move the design review to Thursday at three and send the notes after.
+        - text: Slack Polished
+        - button "Show before polish"
+        - button "Copy"
+        - button "Delete"
+      - listitem:
+        - time: /9:\d+ AM/
+        - paragraph: Hi Priya, thanks for the quick turnaround. The numbers look right to me, so let's send the deck to the client tomorrow morning.
+        - text: Not typed Outlook On this PC
+        - button "Copy"
+        - button "Delete"
+      - listitem:
+        - time: /9:\d+ AM/
+        - paragraph: Move standup to 9 tomorrow and invite the two new hires.
+        - text: VS Code On this PC Polish skipped
+        - button "Show before polish"
+        - button "Show polished version"
+        - button "Copy"
+        - button "Delete"
+      - listitem:
+        - time: /8:\d+ AM/
+        - paragraph: "You asked: “make it more formal”"
+        - paragraph: The pilot ran for six weeks across three teams. Adoption was strongest where managers used it first.
+        - text: Word Voice edit Polished
+        - button "Show original"
+        - button "Copy"
+        - button "Delete"
+  - region "Yesterday":
+    - heading "Yesterday" [level=2]
+    - list:
+      - listitem:
+        - time: /8:\d+ AM/
+        - paragraph: "Ideas for the offsite: a short retro, a demo hour, and dinner somewhere walkable."
+        - text: Notion On this PC
+        - button "Copy"
+        - button "Delete"
+      - listitem:
+        - time: /7:\d+ AM/
+        - paragraph: Order confirmation for the standing desk, delivery window Tuesday.
+        - text: Chrome On this PC
+        - button "Copy"
+        - button "Delete"
