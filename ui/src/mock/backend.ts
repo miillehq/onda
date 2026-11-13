@@ -160,8 +160,16 @@ const snapshot: Snapshot = {
   updaterConfigured: false,
   platform,
   providerKeys: { openaiCompatible: provider === "openaiCompatible", anthropic: provider === "anthropic", local: false },
-  typingAccess: platform === "linux" ? "notAllowed" : platform === "macos" ? "unavailable" : "allowed",
+  typingAccess: platform === "windows" ? "allowed" : "notAllowed",
 };
+
+/* A Mac answers "allow typing" before the user flips Onda's switch in System Settings. The mock
+ * flips it when the window gets focus back, as if the user had done it and returned. */
+let macSwitchedOnInSettings = false;
+if (platform === "macos")
+  window.addEventListener("focus", () => {
+    if (macSwitchedOnInSettings) snapshot.typingAccess = "allowed";
+  });
 
 function today(): Date {
   return new Date();
@@ -517,11 +525,16 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       return wait(500).then(() => ({ type: "resources", payload: resources() }));
     case "allowTyping":
       return wait(600).then(() => {
+        if (platform === "macos") {
+          macSwitchedOnInSettings = true;
+          throw { code: "cancelled", message: "Turn on Onda in System Settings › Privacy & Security › Accessibility. Until then, dictation is copied for you to paste.", retryable: true } satisfies AppError;
+        }
         snapshot.typingAccess = "allowed";
         return { type: "unit" };
       });
     case "stopTyping":
-      snapshot.typingAccess = "notAllowed";
+      // A Mac opens System Settings; Onda stays on until the user switches it off there.
+      if (platform !== "macos") snapshot.typingAccess = "notAllowed";
       return { type: "unit" };
     case "restartShortcuts":
       snapshot.shortcutStatus = "ready";

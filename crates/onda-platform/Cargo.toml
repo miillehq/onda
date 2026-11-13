@@ -24,8 +24,11 @@ ring = "0.17"
 zbus = "5.9"
 
 # The data protection key lives in the macOS Keychain; Onda seals the data itself, as on Linux.
+# Core Foundation types carry the Accessibility API's values.
 [target.'cfg(target_os = "macos")'.dependencies]
 arboard = { version = "3.6", default-features = false }
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
 keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
 libc = "0.2"
 ring = "0.17"

@@ -86,8 +86,11 @@ Update download/check requests have a ten-minute bound. Installation reserves op
 Not wanted for now (the owner's ruling, PLAN.md slice 15): the dmg ships unsigned. The
 `installers` workflow builds it on `macos-latest` and the installer test clears the quarantine
 attribute before launching it. On a user's Mac, Gatekeeper refuses the first launch; the user
-allows Onda under System Settings › Privacy & Security › Open Anyway. When signing is wanted, it
-needs an Apple Developer Program membership first. Then:
+allows Onda under System Settings › Privacy & Security › Open Anyway. The unsigned app also costs
+the Accessibility permission that lets Onda paste: macOS ties it to the exact build, so after an
+update Onda can show as on under Privacy & Security › Accessibility and still not be allowed until
+the user switches it off and on again. A Developer ID signature keeps the permission across
+updates. When signing is wanted, it needs an Apple Developer Program membership first. Then:
 
 1. Export a "Developer ID Application" certificate as a .p12 and add repository secrets
    `APPLE_CERTIFICATE` (the .p12 as base64), `APPLE_CERTIFICATE_PASSWORD`,

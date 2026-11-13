@@ -13,10 +13,14 @@ describe("a fresh profile in the real app", () => {
   });
 
   it("says whether it can paste into other apps", async () => {
-    // Windows types; a Mac leaves dictation on the pasteboard for ⌘V; a Linux desktop decides.
+    // Windows types; a Mac types once the user allows it under Accessibility; a Linux desktop
+    // decides.
     const state = await snapshot();
+    console.log(`typing access on ${state.platform}: ${state.typingAccess}`);
     if (state.platform === "windows") expect(state.typingAccess).toBe("allowed");
-    if (state.platform === "macos") expect(state.typingAccess).toBe("unavailable");
+    // A runner may or may not have granted the permission; "unavailable" would mean the Mac
+    // path is not asking at all.
+    if (state.platform === "macos") expect(["allowed", "notAllowed"]).toContain(state.typingAccess);
   });
 
   it("adds a dictionary word through the interface", async () => {

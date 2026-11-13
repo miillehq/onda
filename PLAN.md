@@ -20,7 +20,7 @@ test has been seen red with its probe.
 | 10 | Retire replaced tests | `languages.rs` constant test (replaced by the engine language test), `public_account_dto_contains_no_credentials` (replaced by a key-set test), `ui/src/smoke.ts` checks covered by L6 | L1, L6 | done for both Rust tests (PRs #13, #15); `smoke.ts` stays by ruling |
 | 11 | macOS builds | the workspace compiles and `cargo test` passes on `macos-latest` with macOS modules that report "unsupported"; the CPU worker builds; the app launches under the L6 suite | L0 to L3, L6 | done (PR #11) |
 | 12 | macOS storage and desktop | Keychain for API keys, accounts and the history key; launch at login; menu-bar icon; microphone usage text | L1, L3 on macOS | done (PR #11); the Keychain round trip is an ignored test |
-| 13 | macOS input | event-tap shortcut helper; Accessibility focused-field identity, password refusal and Cmd+V paste; matcher tests shared with Windows and Linux | L1, L3; real typing unverified | partly (PR #11): system hotkeys, no event tap or Accessibility; no focused-field identity, typing, selection rewrites or password refusal; dictation goes to the pasteboard with a ⌘V hint. Control+Shift+Space dictates by default (PR #22); the interface uses Mac names and wording (PR #23) |
+| 13 | macOS input | event-tap shortcut helper; Accessibility focused-field identity, password refusal and Cmd+V paste; matcher tests shared with Windows and Linux | L1, L3; real typing unverified | partly: system hotkeys, no event tap (PR #11); Control+Shift+Space dictates by default (PR #22); Mac names and wording (PR #23); Accessibility focused-field identity, password and secure-input refusal, ⌘V paste that puts the pasteboard back, and selected text for rewrites, behind the user's Accessibility switch (Accessibility paste PR), built and checked on the runners but not run on a real Mac; no span selection for undo |
 | 14 | macOS speech | Metal worker beside the CPU worker; golden real-model test on `macos-latest` | L3 | partly (PR #11): the Metal worker builds; no golden run on macOS |
 | 15 | macOS packaging | dmg built and installer-tested on `macos-latest`; signing and notarization hooks that stay off without an Apple account | L7 | done for now (PR #11): dmg built and installer-tested; signing and notarization deferred (ruling), the steps stay in `docs/release.md` |
 | 16 | ARM | sidecars per target triple, no AVX2 worker on ARM, L1 to L6 green on `windows-11-arm` and `ubuntu-24.04-arm`, packages built | L1 to L7 | partly (PR #11): L1 to L6 green on both ARM runners; no ARM packages |
@@ -86,6 +86,17 @@ Rulings:
   opens Emoji & Symbols; Option+Space is Raycast's, Alfred's and ChatGPT's default and
   Control+Option+Space switches input sources — cost if wrong: one default to change before
   macOS users have profiles to migrate.
+- Slice 13: Ruling (the owner asked for it, 2026-11-13): Accessibility paste lands before anyone
+  can run it on a real Mac — the owner has no Mac and runners cannot press keys into another app —
+  so it stays behind the user's own Accessibility switch, checks the target again right before
+  ⌘V and falls back to the clipboard; the ruling above that real typing is unverified stands —
+  cost if wrong: a paste bug that only Mac users see.
+- Slice 13: Ruling: an app that shows Onda no focused field is typed into while the same app and
+  window stay in front, rather than refused — Electron and Chromium windows often expose no field
+  — cost if wrong: in such an app a paste can land in another field of the same window.
+- Slice 13: Ruling: ⌘V is posted on the V key's ANSI position (`kVK_ANSI_V`) — finding the key
+  for "v" in the current layout needs Text Input Sources — cost if wrong: on Dvorak, ⌘ goes with
+  another letter.
 - Slice 15: Ruling (the owner, 2026-11-13): no macOS signing or notarization for now; the dmg
   ships unsigned and `docs/release.md` keeps the steps — cost if wrong: every Mac user has to
   allow an unsigned app in System Settings until signing is wired.

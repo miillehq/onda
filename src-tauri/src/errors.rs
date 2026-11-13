@@ -26,6 +26,7 @@ pub fn platform(error: onda_platform::PlatformError) -> AppError {
         E::SecureField=>(ErrorCode::PasswordField,"Password and secure controls cannot receive dictation.",false),
         E::ElevatedTarget=>(ErrorCode::ElevatedTarget,"Windows blocked insertion into an elevated app. Copy the result manually.",false),
         E::TargetUnavailable(_)|E::SelectionUnavailable if cfg!(windows)=>(ErrorCode::UnsupportedControl,"This app did not expose a safe accessible text target.",true),
+        E::TargetUnavailable(_)|E::SelectionUnavailable if cfg!(target_os="macos")=>(ErrorCode::UnsupportedControl,"This app doesn't show Onda its text field, so Onda can't read or replace text there.",true),
         E::TargetUnavailable(_)|E::SelectionUnavailable=>(ErrorCode::UnsupportedControl,"This app doesn't show Onda its text field. Apps built with GTK or Qt do; browsers and Electron apps need the desktop's accessibility support on.",true),
         E::EmptySelection=>(ErrorCode::SelectionRequired,"Select text in your target app before using a transform or spoken editing shortcut.",true),
         E::UnsupportedClipboardFormat(_)=>(ErrorCode::ClipboardUnsupported,"The clipboard contains a format that cannot be preserved safely. Copy the result manually.",true),
