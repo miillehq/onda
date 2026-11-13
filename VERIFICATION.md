@@ -61,6 +61,10 @@ with an identical tree.
 | 2026-11-13 | L7 | macOS dmg (Apple Silicon, unsigned, 10.6 MiB): mounted, Onda.app copied to `~/Applications`, still running after 6 s, removed. The same run with the macOS and ARM changes: the Windows installed-app test passes (startup 7.9 s), as do the Linux deb and AppImage and the three containers | macos-arm64, windows-x64, linux-x64 CI | [installers run 43367304794](https://github.com/miillehq/onda/actions/runs/43367304794), `fe9dad6`, branch `macos/builds` |
 | 2026-11-13 | L7 | first `master` run after the macOS and ARM merge: the Windows installed app, the Linux deb and AppImage, the macOS dmg and the three containers all pass | windows-x64, linux-x64, macos-arm64 CI | installers run 43369678193, `095bb2f` |
 | 2026-11-13 | L6 flaky | the WebView2 smoke timed out once (30 s, no report) in Tier 1 on `master` (ci run 43369678237, `095bb2f`), on a tree that passed it in 5 other Tier 1 runs. Not reproduced: 30 of 30 green on a Windows runner with a cold Vite cache each time (4 to 11 s each), 20 of 20 locally. A timeout now reports whether the dev server answered, the app's log messages and Vite's output | windows-x64 CI; windows-x64, local | smoke-loop run 43371909526 (branch `probe/smoke-loop`); `scripts/smoke.ps1 -SkipBuild` in a loop |
+| 2026-11-13 | L1, L2, L6 | the macOS default dictation chord: a fresh profile on macOS starts with Control+Shift+Space and elsewhere with Ctrl+Win+Space; the real app's fresh profile matches `MACOS_DEFAULT_SETTINGS` on both macOS runners and `DEFAULT_SETTINGS` on the others; the generated contract is the same on every OS | windows-x64, linux-x64 CI (Tier 1); macos-arm64, macos-x64, windows-arm64, linux-arm64 CI (Tier 2) | [ci run 43407537744](https://github.com/miillehq/onda/actions/runs/43407537744), `488e6c5`, PR #22 |
+| 2026-11-13 | L1, L2 probe | three planted bugs fail `a_mac_dictates_with_a_chord_macos_leaves_free`: the Mac keeping Control+Command+Space, a fresh profile taking the other platform's defaults, a second default differing on the Mac. The Mac expectation fails the fresh-profile example against the mock, which answers as Windows. With the Mac defaults, `shortcut_bindings_reject_modifier_alias_conflicts_and_multi_primary_keys` as first written fails; it now pins the Windows chord | windows-x64, local | planted one at a time in `contracts.rs`, `tests/unit/contract.test.ts` and `runtime.rs`, restored |
+| 2026-11-13 | L1, L4, L6 | the interface on a Mac, against the mock's `?platform=macos`: keys named Control, Shift, Option and Command, Esc alone cancels, and the Shortcuts page, Home, Privacy and Updates and help say what macOS does; in the real app on Windows, typing is reported as allowed | windows-x64, local | `npx vitest run tests/unit`; `npx playwright test` (56 passed, chromium and webkit); `npm run build:e2e`, `npm run test:e2e` (27 passing); PR #23 |
+| 2026-11-13 | L1, L4, L6 probe | ten planted bugs each fail a test: Mac names falling back to Super, macOS cancelling like Linux, the recorder naming Windows keys, the Linux lede or typing section on a Mac, a Mac profile on the Windows chord, the mock reporting typing as allowed, keyring wording on a Mac, the resource report on a Mac, and Windows reporting typing as unavailable (L6) | windows-x64, local | planted one at a time, restored; PR #23 |
 
 ## Unverified
 
@@ -68,8 +72,11 @@ with an identical tree.
   selection rewrite or password refusal yet (the platform calls report "unsupported"); dictation
   goes to the pasteboard with a ⌘V hint. The Keychain round trip is an
   ignored test. The Metal worker has not transcribed (no golden run on macOS). Signing and
-  notarization are documented in `docs/release.md` but need an Apple Developer account. Open
-  decision: the default chord Ctrl+Cmd+Space collides with macOS's Emoji & Symbols viewer.
+  notarization are deferred by the owner (PLAN.md, slice 15): the dmg is unsigned, so each user
+  allows Onda in System Settings once. That macOS and common apps leave the default dictation
+  chord Control+Shift+Space free is not checked on a real Mac; Onda reports a chord it could not
+  claim. The interface's Mac wording has been checked in a browser against the mock, not in
+  WKWebView on a Mac. macOS has no resource report (no process sampling).
 - ARM: no ARM packages are built; the installers workflow builds x64 and Apple Silicon only.
 - Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 10 s is not
   investigated.
