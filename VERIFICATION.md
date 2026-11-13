@@ -59,6 +59,8 @@ with an identical tree.
 | 2026-11-13 | L5 fix | two capture bugs, fixed in PR #19: the Linux pill baselines were blank (captured mid fade-in, diagnosed on the runner in run 43363554626), and the snapshots workflow restored the other OSes' stale baselines (run 43363961850 changed nothing); run 43364686147 then replaced exactly the two blank images | linux-x64 CI | PR #19 |
 | 2026-11-13 | L0 to L3, L6 | macOS and ARM (Tier 2): crates, frontend, speech and shortcut workers, the app shell and the real-shell suite (3 spec files, 26 tests) pass on macos-arm64 and macos-x64 (WKWebView), windows-arm64 (WebView2) and linux-arm64 (WebKitGTK). Rust tests 159 passed and 6 ignored on macOS, 181 and 6 on Windows arm64, 174 and 7 on Linux arm64; on macOS the LaunchAgent test passes and the Keychain round trip is ignored | macos-arm64, macos-x64, windows-arm64, linux-arm64 CI | ci runs 43364156804 (`06d4a2e`; on macos-x64 every test passed and only the screenshot upload hit a runner DNS error) and 43367309751 (`fe9dad6`), PR #11 |
 | 2026-11-13 | L7 | macOS dmg (Apple Silicon, unsigned, 10.6 MiB): mounted, Onda.app copied to `~/Applications`, still running after 6 s, removed. The same run with the macOS and ARM changes: the Windows installed-app test passes (startup 7.9 s), as do the Linux deb and AppImage and the three containers | macos-arm64, windows-x64, linux-x64 CI | [installers run 43367304794](https://github.com/miillehq/onda/actions/runs/43367304794), `fe9dad6`, branch `macos/builds` |
+| 2026-11-13 | L7 | first `master` run after the macOS and ARM merge: the Windows installed app, the Linux deb and AppImage, the macOS dmg and the three containers all pass | windows-x64, linux-x64, macos-arm64 CI | installers run 43369678193, `095bb2f` |
+| 2026-11-13 | L6 flaky | the WebView2 smoke timed out once (30 s, no report) in Tier 1 on `master` (ci run 43369678237, `095bb2f`), on a tree that passed it in 5 other Tier 1 runs. Not reproduced: 30 of 30 green on a Windows runner with a cold Vite cache each time (4 to 11 s each), 20 of 20 locally. A timeout now reports whether the dev server answered, the app's log messages and Vite's output | windows-x64 CI; windows-x64, local | smoke-loop run 43371909526 (branch `probe/smoke-loop`); `scripts/smoke.ps1 -SkipBuild` in a loop |
 
 ## Unverified
 
@@ -81,3 +83,5 @@ with an identical tree.
   second spec's session failed to start and the restart spec then failed. 8 further runs were green,
   and no CI run listed above repeated it. If CI repeats it, it is quarantined with an issue
   (TESTING.md, flaky tests).
+- Observed once, not reproduced: the WebView2 smoke's timeout in Tier 1 on `master` (row above).
+  If it repeats, its diagnosis goes into an issue and the step is quarantined.
