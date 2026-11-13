@@ -22,21 +22,3 @@ pub const WHISPER_LANGUAGES: [&str; 99] = [
 pub fn is_supported_language(code: &str) -> bool {
     WHISPER_LANGUAGES.contains(&code)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_catalog_language_table_matches_whisper_order_and_excludes_cantonese() {
-        assert_eq!(WHISPER_LANGUAGES[0], "en");
-        assert_eq!(WHISPER_LANGUAGES[1], "zh");
-        assert_eq!(WHISPER_LANGUAGES[98], "su");
-        let unique: std::collections::HashSet<_> = WHISPER_LANGUAGES.iter().collect();
-        assert_eq!(unique.len(), WHISPER_LANGUAGES.len());
-        assert!(!is_supported_language("yue"));
-        assert!(!is_supported_language("zh-HK"));
-        assert!(!is_supported_language("cmn"));
-        assert!(is_supported_language("haw"));
-    }
-}

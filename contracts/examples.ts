@@ -62,4 +62,22 @@ export const profileNames: Example[] = [
   { name: "an empty name clears it", request: named("   "), expect: { response: { type: "profile", payload: { name: null } } } },
 ];
 
-export const allExamples: Example[] = [...freshProfile, ...settingsRefusals, ...profileNames];
+const word = (id: string, phrase: string, replacement: string | null = null): ApiRequest => ({
+  command: "saveDictionaryEntry",
+  args: { entry: { id, kind: replacement === null ? "vocabulary" : "replacement", phrase, replacement, enabled: true, starred: false, source: "manual" } },
+});
+
+/** Dictionary entries: Rust's validation and one entry per trigger. The last example removes the word again. */
+export const dictionaryEntries: Example[] = [
+  { name: "a word is saved to the dictionary", request: word("contract-word", "Keelson"), expect: { response: { type: "dictionary", payload: [{ id: "contract-word", phrase: "Keelson" }] } } },
+  { name: "the same word in another case and spacing is refused", request: word("contract-twin", "  KEELSON "), expect: refused("This trigger already exists. Edit the existing entry.") },
+  { name: "a phrase without a word is refused", request: word("contract-symbols", "!!!"), expect: refused("Dictionary phrase must contain a word and at most 160 characters.") },
+  {
+    name: "a vocabulary word cannot carry a replacement",
+    request: { command: "saveDictionaryEntry", args: { entry: { id: "contract-mixed", kind: "vocabulary", phrase: "Keel", replacement: "keel", enabled: true, starred: false, source: "manual" } } },
+    expect: refused("Vocabulary has no replacement; a correction needs an output phrase."),
+  },
+  { name: "the saved word is removed", request: { command: "deleteDictionaryEntry", args: { id: "contract-word" } }, expect: { response: { type: "unit" } } },
+];
+
+export const allExamples: Example[] = [...freshProfile, ...settingsRefusals, ...profileNames, ...dictionaryEntries];

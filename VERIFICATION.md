@@ -33,6 +33,10 @@ with an identical tree.
 | 2026-11-13 | probe | 39 planted bugs, one at a time, each failing only its intended test (for example the prune and history cap turned ascending, `matches()` without `is_active()`, the crop origin at 0, shared key slots, a missing model sent as an empty string) and passing once restored | windows-x64, local | planted in a worktree, restored and checked by SHA-256 |
 | 2026-11-13 | L1 | replacements before retirement: the engine language test now refuses zh-HK and cmn and accepts haw; the account sent to the interface has exactly its seven public fields | windows-x64, local | `cargo test --locked -p onda-asr --lib engine::`; `cargo test --locked -p onda-app --lib api::` |
 | 2026-11-13 | L1 probe | accepting `zh-*` and `cmn` fails the engine test ("zh-HK reached the worker"); dropping AccountInfo's camelCase renaming fails the key-set test, while the old string search stays green | windows-x64, local | planted one at a time, run red, restored |
+| 2026-11-13 | L2, L6 | dictionary entries: a saved word, the same word in another case and spacing refused, a phrase without a word refused, a vocabulary word with a replacement refused; the mock (Vitest, 20 contract examples) and the real app (00-contract.spec.ts, 21 tests) agree | windows-x64, local | `npm run test:unit`; `npm run build:e2e`; `npm run test:e2e` |
+| 2026-11-13 | L2 probe | removing the mock's duplicate check fails "the same word in another case and spacing is refused" | windows-x64, local | planted in `ui/src/mock/backend.ts`, `npx vitest run`, restored |
+| 2026-11-13 | L1 | retired after their replacements: `languages.rs` `the_catalog_language_table_matches_whisper_order_and_excludes_cantonese` (now `engine.rs` `languages_the_models_lack_never_reach_the_worker`) and `api.rs` `public_account_dto_contains_no_credentials` (now `the_account_sent_to_the_interface_has_only_its_public_fields`); both replacements pass | windows-x64, local | `cargo test --locked -p onda-asr -p onda-app --lib` |
+| 2026-11-13 | L3 flaky fix | `models.rs` `truncated_http_body_keeps_a_resumable_prefix` failed once on `ubuntu-24.04-arm` (run 43352512685: the `.part` file was empty) and passed on every other run. Cause: the mock server closed its socket after one read, so a reset could discard the 4 bytes it had sent. The mock now reads the whole request, closes gracefully and drains; the test's assertions are unchanged. 15 of 15 local runs green | windows-x64, local; linux-arm64 in CI | `cargo test --locked -p onda-asr --lib models::` |
 
 ## Unverified
 
@@ -49,3 +53,6 @@ with an identical tree.
 - Dictation into real applications, physical microphones and real provider accounts on any OS:
   manual matrix, not run for 0.2.0.
 - Linux only, written on Windows and first run by Linux CI: the strengthened `/proc` identity test, the Linux day key, and the keyring seal framing test (checked only in an extracted copy with an in-memory keyring).
+- Observed once, not reproduced: in 1 of 12 local real-shell runs (the first after a rebuild), the
+  second spec's session failed to start and the restart spec then failed. 8 further runs were green.
+  If CI repeats it, it is quarantined with an issue (TESTING.md, flaky tests).
