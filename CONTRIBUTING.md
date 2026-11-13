@@ -33,8 +33,9 @@ Every platform needs Rust from `rust-toolchain.toml` (rustup installs it) and No
   `scripts/prepare.sh` and `npm run tauri dev`.
 - **macOS:** Xcode Command Line Tools and CMake, then `npm ci`, `scripts/prepare.sh` and
   `npm run tauri dev`. CI builds and tests macOS on every pull request, but it is not yet a
-  supported platform ([ADR 007](docs/adr/007-platform-support.md)). On a Mac, dictation is
-  copied to the clipboard for ⌘V instead of being typed in.
+  supported platform ([ADR 007](docs/adr/007-platform-support.md)). On a Mac, Onda pastes into
+  other apps only after you turn it on under Privacy & Security › Accessibility; until then
+  dictation is copied for ⌘V. A rebuilt, unsigned app may need that switch turned off and on again.
 
 `prepare` builds the real speech and shortcut workers that the app embeds; never replace them
 with placeholders. In debug builds, `ONDA_DEV_PROFILE=<absolute folder>` keeps your test profile
