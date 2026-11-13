@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Linux counterpart of build.ps1: release speech workers, contracts and notices, then the Tauri
-# bundles from tauri.linux.conf.json (deb and AppImage by default).
-#   scripts/build.sh [--with-vulkan] [--bundles deb|appimage|deb,appimage]
+# Linux and macOS counterpart of build.ps1: release speech workers, contracts and notices, then
+# the Tauri bundles (deb and AppImage by default; pass --bundles app,dmg on macOS).
+#   scripts/build.sh [--with-vulkan] [--bundles deb|appimage|deb,appimage|app,dmg]
 set -euo pipefail
 repository="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository"
@@ -23,4 +23,5 @@ if [[ " ${prepare[*]} " == *" --with-vulkan "* ]]; then
   printf '%s\n' '{"bundle":{"externalBin":["binaries/onda-input","binaries/onda-asr-worker","binaries/onda-asr-avx2-worker","binaries/onda-asr-vulkan-worker"]}}' > .artifacts/linux-bundle-config.json
   overlay=(--config .artifacts/linux-bundle-config.json)
 fi
-npm run tauri build -- --bundles "$bundles" "${overlay[@]}"
+# bash 3.2 (macOS) treats an empty array as unset under `set -u`.
+npm run tauri build -- --bundles "$bundles" ${overlay[@]+"${overlay[@]}"}

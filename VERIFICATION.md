@@ -41,8 +41,8 @@ with an identical tree.
 - Windows arm64 and Linux arm64: nothing built.
 - L5 tier 3: no pixel baselines until the snapshots workflow runs on the runners. L6: the WebView2
   smoke (`scripts/smoke.ps1`) has not run since 0.1.x.
-- L7: the NSIS install test has not passed in CI yet; Linux packages have never been installed by
-  a script.
+- L7: the NSIS install test has not passed in CI yet; the Linux deb and AppImage test
+  (`scripts/installer-test.sh`) is written but runs first in the installers workflow on `master`.
 - Real-model golden tests: not run since 2026-10-29.
 - Dictation into real applications, physical microphones and real provider accounts on any OS:
   manual matrix, not run for 0.2.0.

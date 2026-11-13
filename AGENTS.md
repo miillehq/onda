@@ -26,7 +26,8 @@ design in `DESIGN.md`.
 - UI against the labelled mock: `npm run dev`, then http://127.0.0.1:1420 (`?mock=empty|onboarding|error`,
   `?theme=dark`, `?platform=linux`, `/pill.html?pill=listening`)
 - the app: `npm run desktop` (Windows); Linux in `docs/linux.md`
-- packages: `npm run release` (Windows NSIS); `scripts/build.sh --bundles deb` (Linux)
+- packages: `npm run release` (Windows NSIS); `scripts/build.sh --bundles deb,appimage` (Linux);
+  then `scripts/installer-test.sh` installs, launches and removes them (L7)
 - a failed CI run: `gh run view <id> --log-failed`
 
 ## Layout
