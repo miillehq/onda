@@ -1,4 +1,4 @@
-# Release engineering (Windows, and Linux packages)
+# Release engineering (Windows, Linux packages and macOS)
 
 ## Support policy and prerequisites
 
@@ -80,3 +80,19 @@ CI prepares workers, checks tests/types/quality/dependencies, builds NSIS and ve
 Before public distribution record the Windows/hardware/app/physical-microphone/OAuth matrix. The implementation host proves real CPU/GPU recognition, controlled Win32 insertion and native IPC, but is not a substitute for all supported machines. Observed final build/installer status belongs in testing.md.
 
 Update download/check requests have a ten-minute bound. Installation reserves operation admission, verifies downloaded bytes before shutting down native services, joins the hook supervisor, and relies on kill-on-close Windows Job Objects to contain inference children even during an immediate installer exit. These mechanics are compiled and locally reviewed; a real signed update channel still needs certificate-backed qualification.
+
+## macOS signing and notarization
+
+The `installers` workflow builds an unsigned `.dmg` on `macos-latest` and the installer test
+clears the quarantine attribute before launching it. Gatekeeper blocks an unsigned app on a user's
+Mac, so a public macOS release needs an Apple Developer Program membership first. Then:
+
+1. Export a "Developer ID Application" certificate as a .p12 and add repository secrets
+   `APPLE_CERTIFICATE` (the .p12 as base64), `APPLE_CERTIFICATE_PASSWORD`,
+   `APPLE_SIGNING_IDENTITY` (for example `Developer ID Application: Name (TEAMID)`), and for
+   notarization `APPLE_ID`, `APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID`.
+2. Pass those secrets as environment variables to the `scripts/build.sh --bundles app,dmg` step.
+   `tauri build` signs the app, the sidecars and the disk image, and notarizes them, when they are
+   set.
+3. Re-sign before recording evidence: Accessibility and Input Monitoring grants belong to the
+   signing identity, so a grant made to an unsigned development build does not carry over.

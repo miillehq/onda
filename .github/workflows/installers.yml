@@ -1,6 +1,6 @@
 # L7: build the release bundles and install, launch and uninstall them the way a user does:
-# NSIS on Windows, deb and AppImage on Linux. Runs on master and on demand; pull requests stay
-# within the 20-minute budget without it.
+# NSIS on Windows, deb and AppImage on Linux, dmg on macOS (advisory). Runs on master and on demand;
+# pull requests stay within the 20-minute budget without it.
 name: installers
 
 on:
@@ -151,3 +151,36 @@ jobs:
           path: |
             target/release/bundle/deb/*.deb
             target/release/bundle/appimage/*.AppImage
+
+  macos:
+    name: installers macos-arm64
+    runs-on: macos-latest
+    timeout-minutes: 60
+    # Tier 2 (ADR 007) while the macOS port lands: reports without blocking.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with:
+          toolchain: "1.95.0"
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          shared-key: macos-arm64-release
+          cache-on-failure: true
+          cache-bin: false
+      - name: Install locked frontend
+        run: npm ci
+      - name: Build the app and dmg (unsigned)
+        run: scripts/build.sh --bundles app,dmg
+      - name: Mount, copy, launch and remove the app (L7)
+        run: scripts/installer-test.sh
+      - name: Upload the disk image
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: onda-macos-arm64-unsigned
+          if-no-files-found: error
+          path: target/release/bundle/dmg/*.dmg
