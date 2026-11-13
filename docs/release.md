@@ -1,30 +1,82 @@
-# Release engineering (Windows, Linux packages and macOS)
+# Release engineering
 
-## Support policy and prerequisites
+## What a release contains
 
-Production architecture is x86-64/MSVC. Windows 11 is the primary target; the minimum project support target is Windows 10 22H2 build 19045, with WebView2 at least 120.0.2210.55. The API/dependency choice is compatible with that baseline, but it remains a release qualification target until the clean-machine matrix is recorded. Windows 7/8 and ARM64 are not certified. ARM64 can follow after native/ASR/installer qualification without changing domain contracts.
+0.3.0 is a GitHub pre-release with unsigned packages for:
 
-End users need no Node, Rust, SDK, API key or administrator account. The installer includes native helpers and approved app-local Microsoft C++ runtime DLLs. The OS supplies UCRT/Windows API sets. The official WebView2 bootstrapper downloads only when needed; a fully offline first install with no runtime requires Tauri's offline runtime installer option. Models are separate explicit downloads; installed local dictation works offline. Optional Vulkan releases need a functional vendor driver and fall back to CPU after accelerator failure.
+| Platform | Package | Support |
+| --- | --- | --- |
+| Windows 10 22H2 (build 19045) and 11, x64 and ARM64 | per-user NSIS installer (`*-setup.exe`) with a SHA-256 file beside it | x64 supported, ARM64 Tier 2 |
+| Linux, x64 and ARM64 | deb and AppImage | x64 supported, ARM64 Tier 2 |
+| macOS 12 or later, Apple Silicon and Intel | dmg | experimental (Tier 2) |
 
-Build prerequisites: Rust 1.95.0, Node 24, Visual Studio 2022 C++ Build Tools with Windows SDK/CMake/Ninja, and LLVM's `libclang.dll`. `scripts/toolchain.ps1` discovers CMake/LLVM, or accepts `LIBCLANG_PATH`. The implementation host also used an isolated libclang package outside Git; no developer tool package is shipped. Do not set `WHISPER_DONT_GENERATE_BINDINGS=1` on Windows: pinned bundled bindings do not match Windows libc ABI. `.cargo/config.toml` intentionally disables native-host/AVX assumptions.
+The tiers are in [ADR 007](adr/007-platform-support.md). Because nothing is signed, Windows
+SmartScreen warns on first launch, and on macOS the user allows Onda under System Settings ›
+Privacy & Security › Open Anyway. Which packages have passed the installer test (L7) is recorded
+in [VERIFICATION.md](../VERIFICATION.md). On `master`, the `installers` workflow builds and
+installer-tests the Windows x64, Linux x64 and Apple Silicon packages; the ARM64 and Intel Mac
+packages are being added to CI. Before a release, run the manual matrix in
+[testing.md](testing.md).
 
-## Build and install
+End users need no Node, Rust, SDK, API key or administrator account. The Windows installer
+includes the native helpers and approved app-local Microsoft C++ runtime DLLs; the OS supplies
+UCRT and the Windows API sets. The official WebView2 bootstrapper downloads WebView2 (at least
+120.0.2210.55) only when needed; a fully offline first install without WebView2 needs Tauri's
+offline runtime installer option. The deb declares the libraries it needs. Models are separate
+explicit downloads; after that, local dictation works offline. Windows 7 and 8 and 32-bit systems
+are not supported.
+
+## Build
+
+Windows (Rust from `rust-toolchain.toml`, Node 24, Visual Studio 2022 C++ Build Tools with the
+Windows SDK, CMake and Ninja, and LLVM's `libclang.dll`; `scripts/toolchain.ps1` finds CMake and
+LLVM or accepts `LIBCLANG_PATH`):
 
 ```powershell
 npm ci
-./scripts/build.ps1                  # unsigned CPU release
+./scripts/build.ps1                  # unsigned CPU release (npm run release)
 $env:VULKAN_SDK = 'C:\VulkanSDK\1.4.363.0'
 $env:ONDA_VULKAN_TARGET_DIR = 'C:\evn'
-./scripts/build.ps1 -WithVulkan      # CPU plus isolated GPU worker
+./scripts/build.ps1 -WithVulkan      # CPU plus the isolated GPU worker
 ```
 
-The Vulkan helper captures/imports only build-relevant MSVC variables, selects Ninja and uses a short separate target. MSBuild shader subprojects exceeded MAX_PATH even in shorter build directories. Preparation restores the prior CMake generator, and builds CPU first. Compiler/SDK tools remain build-only.
+On Windows on ARM, `prepare.ps1` loads `scripts/arm64-toolchain.ps1`, because whisper.cpp builds
+there only with clang-cl. Do not set `WHISPER_DONT_GENERATE_BINDINGS=1` on Windows: the bundled
+bindings do not match the Windows ABI. The Vulkan helper imports only build-relevant MSVC
+variables, selects Ninja and uses a short separate target, because MSBuild's shader subprojects
+exceed MAX_PATH; preparation builds the CPU workers first and restores the CMake generator.
 
-Preparation stages genuine release workers with Tauri target-triple names: the SSE2 baseline CPU worker, the AVX2 CPU worker that Onda prefers on CPUs that support it, and optionally the Vulkan worker. The build regenerates types and complete locked dependency notices, packages an exact/reproducible MPL source ZIP, and collects verified Microsoft runtime resources/licenses. Local installers include these resources. Model binaries, credentials, signing keys and debug profiles never enter the bundle.
+Linux and macOS (see [CONTRIBUTING.md](../CONTRIBUTING.md) and [linux.md](linux.md) for the
+packages each needs):
 
-Artifacts are `target/release/bundle/nsis/*setup.exe` with adjacent SHA-256. Installation is per user with shortcuts/uninstaller. Upgrade/reinstall preserves the identifier's local data directory, SQLite schema and model assets. External configured model directories are preserved too. Keep `identifier` stable through branding changes unless implementing an explicit data migration. Uninstall does not destroy user assets by default.
+```bash
+npm ci
+scripts/build.sh --bundles deb,appimage   # Linux; add --with-vulkan for the GPU worker
+scripts/build.sh --bundles app,dmg        # macOS
+scripts/installer-test.sh                 # install, launch and remove the result (L7)
+```
 
-After final linking or against installed executables, run `collect-msvc-runtime.ps1 -ExecutablePaths @(...) -WithVulkan` to audit the full import closure. It verifies Microsoft signatures/x64 architecture/hashes, never copies System32/debug runtime DLLs, and records relative provenance. The publisher's redistribution eligibility and app-local servicing obligation are in third-party-licenses.md.
+`build.sh` runs `prepare.sh --release`, the contracts and the notices, then `tauri build` with
+`tauri.linux.conf.json` or `tauri.macos.conf.json`.
+
+Preparation stages the release workers under Tauri's target-triple names: the SSE2 baseline CPU
+worker, the AVX2 worker that Onda prefers on CPUs that support it (on ARM, the baseline worker
+under that name), and optionally the Vulkan worker. The build regenerates types and the complete
+locked dependency notices. On Windows it also packages an exact, reproducible MPL source ZIP and
+collects the verified Microsoft runtime DLLs and licenses. Model files, credentials, signing keys
+and debug profiles never enter a package.
+
+Packages land in `target/release/bundle/` (`nsis/`, `deb/`, `appimage/`, `dmg/`). Installation is
+per user. Upgrading or reinstalling keeps the data directory, the SQLite schema and the models,
+and external model directories; uninstalling does not delete user data. Keep the `identifier`
+(`com.miille.onda`) stable through branding changes unless implementing an explicit data
+migration.
+
+After final linking, or against installed executables, run
+`collect-msvc-runtime.ps1 -ExecutablePaths @(...) -WithVulkan` to audit the full import closure. It
+verifies Microsoft signatures, x64 architecture and hashes, never copies System32 or debug runtime
+DLLs, and records relative provenance. The publisher's redistribution eligibility and app-local
+servicing obligation are in [third-party-licenses.md](third-party-licenses.md).
 
 ### Installer branding
 
@@ -36,50 +88,43 @@ The NSIS installer and uninstaller use the Onda brand (`tauri.conf.json` › `bu
   of clear space.
 - `sidebarImage`: `icons/installer/sidebar.bmp` (164×314). The dark app icon at 88 px and the white
   wordmark on the graphite tile (#262628 → #0F0F10 → #040404), for the Welcome and Finish pages.
-- `minimumWebview2Version` moved from the deprecated `nsis` key to `bundle.windows`, with the same
-  value.
 
 Regenerate the bitmaps with `scripts/installer-art.sh` (rsvg-convert and ImageMagick) from the brand
 masters in `icons/installer/source/`, copied unchanged from the brand package. NSIS needs
 uncompressed 24-bit BMP3 files without alpha; Windows stretches them at higher display scaling, as
-it does for every MUI2 installer.
-
-Checked on Linux: the config validates against Tauri CLI 2.12.1's schema (`config.schema.json`), and
-NSIS 3.10 compiled a MUI2 script that wires the same files the way Tauri's template does. **Not
-checked:** building the real installer, and how the pages look on Windows at 100–200% scaling and
-in high-contrast themes. See the installer checklist in testing.md.
-
-## Linux packages
-
-`scripts/build.sh [--bundles deb|appimage|deb,appimage] [--with-vulkan]` is the Linux counterpart of
-`build.ps1`: release speech workers (`prepare.sh --release`), contracts, notices, then `tauri build`
-with `tauri.linux.conf.json`, which bundles only the speech workers (no keyboard helper). The
-packages are unsigned. See [linux.md](linux.md) for what the Linux build does.
+it does for every MUI2 installer. How the pages look at 100–200 % scaling and in high-contrast
+themes is checked by hand ([testing.md](testing.md)).
 
 ## Signing and updates
 
-Unsigned builds work without secrets. Authenticode and updater signatures serve different purposes. A public release requires a real publisher certificate/private signing capability, an HTTPS channel and a separate Tauri signing key.
+Unsigned builds work without secrets. Authenticode and updater signatures serve different purposes. A public signed release requires a real publisher certificate or signing service, an HTTPS update channel and a separate Tauri signing key.
 
-- `ONDA_WINDOWS_CERT_THUMBPRINT`: accessible publisher certificate/private key in the Windows store. `sign-windows.ps1` signs/validates helpers; Tauri signs the shell/installer with SHA-256 and timestamping. This path awaits a real certificate.
-- `ONDA_WINDOWS_SIGN_COMMAND`: alternative trusted distributor/HSM command for Tauri's signCommand. Its operator must also sign helpers using its HSM procedure. Never embed passwords/private bytes in this variable.
+- `ONDA_WINDOWS_CERT_THUMBPRINT`: an accessible publisher certificate and private key in the Windows store. `sign-windows.ps1` signs and validates the helpers; Tauri signs the shell and installer with SHA-256 and timestamping. This path awaits a real certificate.
+- `ONDA_WINDOWS_SIGN_COMMAND`: an alternative trusted distributor/HSM command for Tauri's `signCommand`. Its operator must also sign the helpers using its HSM procedure. Never embed passwords or private bytes in this variable.
 - `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: updater signing material, release environment/CI secrets only.
-- `ONDA_UPDATE_ENDPOINT`, `ONDA_UPDATE_PUBLIC_KEY`: public build-time channel configuration. Endpoint must be HTTPS.
+- `ONDA_UPDATE_ENDPOINT`, `ONDA_UPDATE_PUBLIC_KEY`: public build-time channel configuration. The endpoint must be HTTPS.
 
 ```powershell
 ./scripts/build.ps1 -SignedUpdates -WithVulkan
 ```
 
-No configured endpoint/key means disabled UI actions and refused backend update commands. The plugin has an explicit empty unsigned configuration so startup still works. Signed releases require version-bearing signatures (`requireSignedVersion:true`) and newer-version comparison. This prevents a fabricated manifest pairing a signed old installer with a claimed new version. Legacy artifacts lacking a trusted version comment need re-signing before use. Insecure HTTP/TLS and unsigned installation are never enabled. Real certificate/channel publication/tamper qualification remain external gates; no signer identity was invented.
+Without a configured endpoint and key, the update actions are disabled in the interface and the backend refuses update commands. The plugin has an explicit empty unsigned configuration so startup still works. Signed releases require version-bearing signatures (`requireSignedVersion: true`) and a newer-version comparison, so a fabricated manifest cannot pair a signed old installer with a claimed new version. Insecure HTTP/TLS and unsigned installation are never enabled.
 
-## Verification and CI
+Update download and check requests have a ten-minute bound. Installation reserves operation admission, verifies the downloaded bytes before shutting down native services, joins the hook supervisor, and relies on kill-on-close Windows Job Objects to contain inference children even during an immediate installer exit. No signed update channel exists yet, so this path has not run against a real one.
 
-Use testing.md, including real-model gates and opt-in controlled desktop insertion. `scripts/smoke.ps1` runs a real hidden WebView2 window against an isolated debug profile. `-UnavailableCloudStorage` seeds an immutable directory collision and proves local controls still work. It owns/stops its Vite process; release builds reject its reporting command and ignore its profile environment variable.
+## CI
 
-CI prepares workers, checks tests/types/quality/dependencies, builds NSIS and verifies silent install/uninstall, DLL hashes/source-license layout/import closure. The release workflow builds tag/manual candidates with optional GPU/signing inputs. Both use pinned action commits and Windows Server 2022, uploading artifacts without automatic publication. Hosted success is not claimed from local workflow lint.
+`ci.yml` runs on every pull request ([TESTING.md](../TESTING.md)). `installers.yml` runs on
+`master` and on demand: it builds the packages and installs, launches and removes them, and checks
+that the deb and AppImage resolve their libraries in Fedora, Debian and Arch containers.
+`release.yml` runs on a `v*` tag or on demand and builds a Windows x64 candidate, with optional
+Vulkan and updater-signing inputs, for review. All of them use pinned action commits and
+read-only repository permissions, so none publishes a GitHub release.
 
-Before public distribution record the Windows/hardware/app/physical-microphone/OAuth matrix. The implementation host proves real CPU/GPU recognition, controlled Win32 insertion and native IPC, but is not a substitute for all supported machines. Observed final build/installer status belongs in testing.md.
-
-Update download/check requests have a ten-minute bound. Installation reserves operation admission, verifies downloaded bytes before shutting down native services, joins the hook supervisor, and relies on kill-on-close Windows Job Objects to contain inference children even during an immediate installer exit. These mechanics are compiled and locally reviewed; a real signed update channel still needs certificate-backed qualification.
+`scripts/smoke.ps1` runs a real hidden WebView2 window against an isolated debug profile;
+`-UnavailableCloudStorage` seeds an unusable account store and proves local controls still work.
+It owns and stops its Vite process; release builds reject its reporting command and ignore its
+profile environment variable.
 
 ## macOS signing and notarization
 

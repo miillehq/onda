@@ -2,7 +2,7 @@
 
 Strategy only: what each level proves, the tool, the command and where it runs. Evidence goes in
 [VERIFICATION.md](VERIFICATION.md). The audit behind this plan is [docs/TEST-AUDIT.md](docs/TEST-AUDIT.md);
-pre-Keel validation records and the manual release matrix are in [docs/testing.md](docs/testing.md).
+the manual release matrix and the opt-in tests are in [docs/testing.md](docs/testing.md).
 
 ## Levels
 
@@ -28,7 +28,7 @@ dispatcher by the contract suite before any test depends on it.
 
 | Journey | Proven at |
 |---|---|
-| Hold the shortcut, speak, release: text lands in the focused field (Windows hook; Linux portal and paste; macOS Accessibility and ⌘V once the user allows it, the clipboard until then; no event tap) | L1 matcher, state and the Mac frontmost-app check, L3 real-model ASR, L4 the Mac permission flow, L6 replay into an owned field (Windows) and the Mac permission state, manual on real apps (never yet on a Mac) |
+| Hold the shortcut, speak, release: text lands in the focused field (Windows hook; Linux portal and paste; macOS Accessibility and ⌘V once the user allows it, the clipboard until then; no event tap) | L1 matcher, state and the Mac frontmost-app check, L3 real-model ASR, L4 the Mac permission flow, L6 the typing permission state (Windows, macOS); the replay into an owned field (Windows) is opt-in (`docs/testing.md`), not in CI; manual on real apps (never yet on a Mac) |
 | AI polish with the chosen provider; any failure keeps the original text and calls no other provider | L1 validation, L2 error mapping, L3 localhost providers, L4 error display, quality fixtures |
 | ChatGPT sign-in, refresh and sign-out | L3 on every OS that stores accounts |
 | Download, verify and select a model | L3 resume, checksum and verification before use; L4 model page |

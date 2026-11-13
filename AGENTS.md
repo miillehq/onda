@@ -3,19 +3,20 @@
 Onda by miille is voice dictation that types wherever the cursor is. Speech recognition runs
 locally (whisper.cpp in an isolated worker); optional text cleanup and selection rewrites use the
 AI provider the user chooses. It is a Tauri 2 app: a Preact and Vite UI over a Rust workspace.
-Windows and Linux work today; macOS and ARM are being added ([ADR 007](docs/adr/007-platform-support.md)).
+Windows and Linux on x64 are supported; macOS (experimental) and the ARM64 builds are Tier 2
+([ADR 007](docs/adr/007-platform-support.md)).
 Decisions live in `docs/adr/`, product behaviour in `docs/product-behavior.md`, the visual
 design in `DESIGN.md`.
 
 ## Commands
 
-- setup: `npm ci`, then `./scripts/prepare.ps1` (Windows) or `scripts/prepare.sh` (Linux). It
+- setup: `npm ci`, then `./scripts/prepare.ps1` (Windows) or `scripts/prepare.sh` (Linux, macOS). It
   builds the real speech and shortcut workers that Tauri embeds; never substitute placeholders.
   On Windows, dot-source `./scripts/toolchain.ps1` first so CMake and libclang are found.
 - lint (L0): `cargo fmt --all --check`; `cargo clippy --locked --workspace --all-targets -- -D warnings`;
   `cargo clippy --locked -p onda-asr --features native-asr --all-targets -- -D warnings`; `npx tsc --noEmit`
-- unit and integration (L1, L3): `cargo test --locked --workspace`
-- contracts (L2): `npm run contracts:check`; regenerate with `npm run contracts`
+- unit and integration (L1, L3): `cargo test --locked --workspace`; `npm run test:unit` (Vitest)
+- contracts (L2): `npm run contracts:check` and `npm run test:unit`; regenerate with `npm run contracts`
 - real-shell journeys (L6): `npm run build:e2e`, then `npm run test:e2e`. The suite launches the debug
   app on a throwaway profile under `artifacts/e2e/`, so it runs beside an installed Onda.
 - browser UI and visual (L4, L5): `npm run test:ui` (Playwright starts `npm run dev`; run
@@ -24,10 +25,10 @@ design in `DESIGN.md`.
 - real-model tests: `docs/testing.md` (`cargo test -p onda-asr --test golden -- --ignored` with a
   downloaded model)
 - UI against the labelled mock: `npm run dev`, then http://127.0.0.1:1420 (`?mock=empty|onboarding|error`,
-  `?theme=dark`, `?platform=linux`, `/pill.html?pill=listening`)
-- the app: `npm run desktop` (Windows); Linux in `docs/linux.md`
-- packages: `npm run release` (Windows NSIS); `scripts/build.sh --bundles deb,appimage` (Linux);
-  then `scripts/installer-test.sh` installs, launches and removes them (L7)
+  `?theme=dark`, `?platform=linux|macos`, `/pill.html?pill=listening`)
+- the app: `npm run desktop` (Windows); `npm run tauri dev` after `scripts/prepare.sh` (Linux, macOS)
+- packages: `npm run release` (Windows NSIS); `scripts/build.sh --bundles deb,appimage` (Linux) or
+  `--bundles app,dmg` (macOS), then `scripts/installer-test.sh` installs, launches and removes them (L7)
 - a failed CI run: `gh run view <id> --log-failed`
 
 ## Layout

@@ -1,6 +1,6 @@
 # Windows integration
 
-The native implementation is in `crates/onda-platform`; the keyboard helper and parent supervisor are in `crates/onda-input`. These crates target Windows and keep microphone samples, focused-field text, and clipboard data out of the renderer. Native calls belong on application worker threads, never the WebView event loop.
+The native implementation is in `crates/onda-platform`; the keyboard helper and parent supervisor are in `crates/onda-input`. This page covers their Windows implementations; Linux is in [linux.md](linux.md), and the Mac in [product-behavior.md](product-behavior.md) and [security.md](security.md). The crates keep microphone samples, focused-field text, and clipboard data out of the renderer. Native calls belong on application worker threads, never the WebView event loop.
 
 ## Microphone capture
 
@@ -62,14 +62,14 @@ Events are `ready`, `heartbeat`, `pressed`, `released`, `reset`, or `error`. Pre
 
 The message loop emits a heartbeat every 500 ms. `HelperSupervisor::start(explicit_sibling_path, config)` canonicalizes the helper path and launches it hidden without shell/PATH resolution. `poll(Duration)` monitors exit and a three-second heartbeat gap, kills/restarts unhealthy helpers, and emits `Reset`. Restarts are limited to three per minute; exhaustion reports shortcuts unavailable. The application must cancel any recording on Reset/Error. Dropping the supervisor kills/waits for its child. Protocol messages and configuration are version checked.
 
-Windows can silently remove a hook after exceeding its timeout; heartbeat alone cannot establish hook presence. The helper reinstalls its hook every 30 seconds while no trigger is active, limiting undetectable removal. It reconciles held trigger state every heartbeat using `GetAsyncKeyState` and emits Reset on a missed release/desktop loss. Recovery on resume/session changes is through these mechanisms, not dedicated WTS or power notifications. RDP and unusual desktop transitions require the manual matrix below. Process isolation reduces starvation risk but is not a Windows scheduler guarantee.
+Windows can silently remove a hook after exceeding its timeout; heartbeat alone cannot establish hook presence. The helper reinstalls its hook every 30 seconds while no trigger is active, limiting undetectable removal. Every heartbeat it checks whether its desktop still receives input (`UOI_IO`) and emits Reset when it does not; the hook's own key-up events decide when a held trigger ends, and `GetAsyncKeyState` only seeds modifier state when the hook starts. Recovery on resume/session changes is through these mechanisms, not dedicated WTS or power notifications. RDP and unusual desktop transitions are in the manual matrix ([testing.md](testing.md)). Process isolation reduces starvation risk but is not a Windows scheduler guarantee.
 
 ## Task Manager and WebView2 processes
 
 Task Manager's Processes tab shows "Onda" under Apps at a few MB. The WebView2 processes that draw
 its windows ("WebView2: Onda", "WebView2: Onda dictation", GPU, Network and Storage utilities,
 Crashpad), about 180 MB together, appear in a separate "WebView2 Manager" group under Background
-processes. onda-input.exe also appears on its own (see the MY-37 screenshots).
+processes. onda-input.exe also appears on its own.
 
 What is established:
 
@@ -95,23 +95,12 @@ private commit and say so). CPU is the change in `GetProcessTimes` over half a s
 of all logical CPUs. The page explains the WebView2 Manager grouping in plain words, and notes when
 no WebView2 process was found under Onda (the elevated case).
 
-Not done, and why: `ICoreWebView2Environment8::GetProcessInfos` would also find WebView2 processes
-started from explorer.exe, and `MemoryUsageTargetLevel = Low` on the hidden pill could lower memory.
-Both need WebView2 COM code in the app crate, which cannot be compiled on the Linux machine this
-work was done on. Shipping it untested was not worth the risk; they are listed as follow-ups in
-testing.md. The process-tree code itself type-checks for `x86_64-pc-windows-msvc`
-(`cargo clippy --target x86_64-pc-windows-msvc -p onda-platform`) but has not run on Windows.
+Not done: `ICoreWebView2Environment8::GetProcessInfos` would also find WebView2 processes started
+from explorer.exe, and `MemoryUsageTargetLevel = Low` on the hidden pill could lower memory. Both
+need WebView2 COM code in the app crate.
 
-## Validation and support limits
+## Tests and support limits
 
-On the implementation host, ordinary native tests passed, and the opt-in desktop harness passed real Win32 Edit Unicode/emoji/Japanese paste, delayed-render receipt, custom-format restoration, focused-field reading, selection replacement, unchanged-document undo, stale-document refusal, cancellation after publication, external clipboard-copy races, and password refusal. The helper process probe passed startup, two 500 ms heartbeats, and clean shutdown. Test commands:
+`cargo test -p onda-platform -p onda-input` runs the ordinary tests. The opt-in desktop harness (Unicode, emoji and Japanese paste into a real Win32 Edit, the delayed-render receipt, custom-format restoration, focused-field reading, selection replacement, undo, stale-document refusal, cancellation after publication, clipboard-copy races and password refusal) opens its own windows and changes the clipboard, so CI leaves it ignored; [testing.md](testing.md) says how to run it. Neither replaces the manual matrix of real apps there.
 
-```powershell
-cargo test -p onda-platform -p onda-input
-$env:ONDA_DESKTOP_TESTS = '1'
-cargo test -p onda-platform real_edit_unicode -- --ignored --test-threads=1
-```
-
-The interactive harness opens its own controlled windows and temporarily changes the clipboard after preserving the original. Run it while the desktop is idle. CI leaves it ignored. It cannot substitute for the release application matrix: Notepad, Edge/Chrome text fields and password fields, VS Code/Electron, WPF/WinUI, Windows Terminal/PowerShell, RDP, 32-bit targets, elevated targets, foreground changes during inference, clipboard managers, user copies during paste, microphone unplug/default switch, suspend/resume, and hook stress under CPU load.
-
-Native APIs used require Windows 8 or earlier individually; the full application's documented Tauri/WebView2 release floor governs actual support. Windows 11 x64 is the production target. ARM64-compatible Win32 types are used, but these crates have only been compiled/exercised on x64 here. A signed `uiAccess` build would require separate security/release work and is not enabled. Password protection relies on the target provider honestly declaring its secure status; custom canvas editors and defective accessibility providers cannot be treated as verified secure/editable fields.
+The native APIs used exist on Windows 8 and later; the Tauri/WebView2 floor, Windows 10 22H2, governs actual support. The same code builds for x64 and ARM64 and its tests run on both in CI. A signed `uiAccess` build would require separate security/release work and is not enabled. Password protection relies on the target provider honestly declaring its secure status; custom canvas editors and defective accessibility providers cannot be treated as verified secure/editable fields.

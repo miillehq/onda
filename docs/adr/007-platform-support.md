@@ -38,3 +38,10 @@ Public repository: standard hosted runners, including macOS and ARM, are free, s
 is wall clock, not money. Per PR: two Tier 1 jobs (budget 20 minutes, which moves the NSIS build
 and installer test to `master` and releases) plus the advisory Tier 2 matrix. Per release: every
 tier, installers on all three OS families.
+
+Update (2026-11-13): The macOS port exists (PLAN.md, slices 11 to 15): Keychain storage, launch at
+login, the menu-bar icon, the microphone text, a Metal-enabled worker and an unsigned dmg.
+Shortcuts are system hotkeys rather than an event-tap helper, and Accessibility paste is built but
+has not run on a real Mac. Release packages for the other Tier 2 platforms (Windows and Linux
+ARM64, Intel macOS) are being added for 0.3.0; [VERIFICATION.md](../../VERIFICATION.md) records
+which have been installer-tested.

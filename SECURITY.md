@@ -40,8 +40,9 @@ The limits listed in [docs/security.md](docs/security.md), for example:
 - elevated windows that Onda refuses to type into;
 - clipboard managers that ignore the privacy markers.
 
-The macOS build is currently unsigned, by decision (see [PLAN.md](PLAN.md)), so a report that it
-is unsigned is already known.
+Release builds are currently unsigned on every platform (on macOS by decision, see
+[PLAN.md](PLAN.md); on Windows until a certificate exists), so a report that they are unsigned is
+already known.
 
 ## Supported versions
 

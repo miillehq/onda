@@ -1,8 +1,9 @@
 # Verification ledger
 
 Append-only. One row per claim; a claim names the level, the platform and the run (a CI run link
-or the exact local command and commit). Anything not here is "built", not "tested". Records from
-before Keel are in [docs/testing.md](docs/testing.md) and were not re-verified.
+or the exact local command and commit). Anything not here is "built", not "tested". Checks made
+before the project followed Keel (October 2026) are not carried over; they remain in the git
+history of `docs/testing.md` and were not re-verified.
 
 Commits: the 2026-11-12 runs used `852860d`, which the attribution cleanup rewrote to `60eb6d6`
 with an identical tree.
@@ -86,15 +87,19 @@ with an identical tree.
   chord Control+Shift+Space free is not checked on a real Mac; Onda reports a chord it could not
   claim. The interface's Mac wording has been checked in a browser against the mock, not in
   WKWebView on a Mac. macOS has no resource report (no process sampling).
-- ARM: no ARM packages are built; the installers workflow builds x64 and Apple Silicon only.
+- Packages beyond Windows x64, Linux x64 and Apple Silicon: the Windows ARM64 installer, the
+  Linux ARM64 deb and AppImage and the Intel Mac dmg are being added to CI for 0.3.0; none has a
+  row above, so none is installer-tested (L7).
+- Upgrades: installing a new build over an older one on any OS has no run recorded; migrations
+  are tested at L3 only.
 - Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 10 s is not
   investigated.
 - L5 tier 3 catches rendering breakage, not small changes (PLAN.md ruling).
 - Linux: the keyring seal round trip and Secret Service key storage are ignored tests; they need a
-  desktop session. The golden tests run in CI on Windows only; on Linux not since 2026-10-29.
-  The Vulkan golden needs a GPU and stays ignored.
+  desktop session. The real-model golden tests run in CI on Windows only, never on Linux or macOS
+  in this ledger. The Vulkan golden needs a GPU and stays ignored.
 - Dictation into real applications, physical microphones and real provider accounts on any OS:
-  manual matrix, not run for 0.2.0.
+  the manual matrix in `docs/testing.md`, with no run recorded for 0.3.0.
 - Observed once, not reproduced: in 1 of 12 local real-shell runs (the first after a rebuild), the
   second spec's session failed to start and the restart spec then failed. 8 further runs were green,
   and no CI run listed above repeated it. If CI repeats it, it is quarantined with an issue

@@ -13,7 +13,8 @@ was considered. A separate server was chosen because:
   in build b7990, with fixes into b8209). Shipping our own copy would mean rebuilding and
   re-releasing Onda for each one; Ollama, LM Studio and llama.cpp already do this.
 - GPU support differs per machine (CUDA, ROCm, Vulkan, Metal). Those servers ship builds for each,
-  while Onda ships CPU and one Vulkan whisper worker. A second inference stack would multiply that.
+  while Onda ships only its whisper workers (CPU, AVX2, optional Vulkan, Metal on macOS). A second
+  inference stack would multiply that.
 - Model files are 0.5–10 GB. Users who already run a local server keep one copy for every app.
 - It reuses the OpenAI-compatible adapter, so the code path is small and already tested.
 
@@ -34,14 +35,14 @@ provider interface would not change.
 - Qwen publishes no GGUF files. Community GGUFs: `unsloth/Qwen3.5-0.8B-GGUF` (Q4_K_M 532.5 MB,
   SHA-256 `bd258782…dc517`), `ggml-org`, `bartowski` and `lmstudio-community`. The vision projector
   (about 205 MB) is not needed for text.
-- Runtimes: llama.cpp b7990 or later (current stable b11960 used here), Ollama 0.30.0 or later
+- Runtimes: llama.cpp b7990 or later (b11960 for the measurements below), Ollama 0.30.0 or later
   (`qwen3.5:0.8b`, about 1.3 GB with its projector and draft layer), LM Studio 0.4.6 or later via the
   lmstudio-community repo. llama.cpp's default port changed from 8080 to 9931 in b11521; Onda's
   presets use 9931 and the field hint mentions 8080.
 - LM Studio's handling of `enable_thinking` over `/v1` is unverified; its bug tracker reports it is
   ignored. If LM Studio rejects either switch, Onda retries once without them on the same server.
 
-## Measured on this VPS (CPU only)
+## Measured on a CPU-only server (2026-10-29)
 
 Shared 4-vCPU Intel Haswell VPS (AVX2, no AVX-512), about 5 GB free memory, llama.cpp b11960
 Ubuntu x64 CPU build (release asset SHA-256 `31cc3a6b…1d97a`), Qwen3.5-0.8B Q4_K_M, `-c 4096 -t 3`:
@@ -83,7 +84,8 @@ ONDA_LOCAL_LLM_URL=http://127.0.0.1:9931/v1 ONDA_LOCAL_LLM_MODEL=qwen3.5-0.8b \
 
 ## GPU test procedure (to run on a machine with a GPU)
 
-Nothing here was run on a GPU. Record the results in testing.md.
+Nothing here has been run on a GPU yet. Record the results in
+[VERIFICATION.md](../VERIFICATION.md).
 
 1. **llama.cpp, Windows Vulkan:** download `llama-b11960-bin-win-vulkan-x64.zip` from the same
    release and check its SHA-256 against the release page. Run

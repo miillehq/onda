@@ -5,12 +5,12 @@ decision changes. Keep it short: decisions and their reasons, not essays. The ap
 board is `docs/design/onda-concept.html` (image: `onda-concept.png`).
 
 ## Product
-- Audience and primary job: people who write a lot on Windows and want to speak instead of type,
-  anywhere their cursor is. The job happens in other apps; Onda's window is for setup, review and
+- Audience and primary job: people who write a lot and want to speak instead of type, anywhere
+  their cursor is. The job happens in other apps; Onda's window is for setup, review and
   teaching it words. Optimise for the hundredth dictation, not the first launch.
-- Surfaces: Windows desktop (Tauri 2, WebView2), and Linux (WebKitGTK) with fewer features; see
-  docs/linux.md. Two webviews: the main window (`ui/index.html`) and the dictation pill
-  (`ui/pill.html`).
+- Surfaces: Tauri 2 on Windows (WebView2), Linux (WebKitGTK; docs/linux.md) and, experimentally,
+  macOS (WKWebView). Two webviews: the main window (`ui/index.html`) and the dictation pill
+  (`ui/pill.html`). `?platform=linux|macos` previews the platform wording against the mock.
 - Register per surface: product. First-run setup borrows a little brand warmth.
 - Desktop fidelity: branded-native. Custom identity in the content; native title bar (tinted),
   caption buttons, Snap, tray, keyboard and accessibility at the edges.
@@ -38,7 +38,7 @@ Graphics explain things wherever a paragraph would otherwise go.
   brand moments: the hero, the pill, setup's art panel, empty-state and learning icons.
 - Semantic colors: green ok, amber warn, red error. Status only, never decoration.
 - Dark mode and high-contrast notes: dark is its own palette (base `#0B0B0C`, panel `#161618`),
-  not an inversion, with the same contrast targets. Theme follows Windows by default; the
+  not an inversion, with the same contrast targets. Theme follows the system by default; the
   setting drives the native window theme, which drives the webview's `prefers-color-scheme`.
   `forced-colors` adds outlines and borders.
 
@@ -63,7 +63,7 @@ Graphics explain things wherever a paragraph would otherwise go.
 - Primary interactions: dictation happens through global shortcuts in other apps. In the app,
   edits save immediately (optimistic, rolled back with a message if native validation refuses).
   Deletions are immediate with Undo in a toast; nothing reversible asks for confirmation.
-- Command palette and shortcuts: Ctrl+K searches pages, settings and actions; Ctrl+, opens
+- Command palette and shortcuts: Ctrl+K (⌘K on a Mac) searches pages, settings and actions; Ctrl+, opens
   settings; Esc closes dialogs. Esc stays reserved for cancelling dictation globally. Shortcuts are
   shown as keycaps wherever they are mentioned. Dev builds only: Ctrl+Shift+F9 toggles dictation
   through IPC, because the shortcut helper ignores injected keys by design.
@@ -120,6 +120,8 @@ Graphics explain things wherever a paragraph would otherwise go.
 - 2026-10-23: AI polish fixed at the protocol layer (plan streams have no Content-Type and an
   empty completion `output`) and the preservation check relaxed so number formatting and
   abbreviations may change, because every polish, rewrite and voice edit was falling back.
+- 2026-10-23: Quality cards say "In use" only for the model actually running; a card picked
+  but downgraded for low memory says "Selected" and the footnote names the model in use.
 - 2026-10-24: "Say it to teach Onda" on dictionary words: three short takes, and whatever the
   local model writes instead becomes an opt-out list of replacements, because speech models take
   spelling hints rather than pronunciations (Dragon's spoken-form training has no Whisper
@@ -181,6 +183,13 @@ Graphics explain things wherever a paragraph would otherwise go.
 - 2026-10-29: The installer uses the brand: the black lockup in the page header, and the dark app
   icon with the white wordmark on the graphite tile for the Welcome and Finish pages.
 - 2026-10-29: On Linux the hero shows the `onda --dictate` command instead of keycaps, and a
-  finished dictation reads "Copied · press Ctrl+V", because Onda cannot type there yet.
-- 2026-10-23: Quality cards say "In use" only for the model actually running; a card picked
-  but downgraded for low memory says "Selected" and the footnote names the model in use.
+  finished dictation reads "Copied · press Ctrl+V", because Onda could not type there yet.
+- 2026-11-02: Linux uses the desktop's portals: the hero shows keycaps when the shortcuts portal
+  works (`onda --dictate` only without it), and Settings › Shortcuts › Typing into apps asks once
+  for the remote desktop permission, because Wayland lets apps neither watch keys nor type.
+- 2026-11-13: On macOS keys are named Control, Shift, Option and Command, Esc alone cancels, the
+  default chord is Control+Shift+Space (Control+Command+Space opens Emoji & Symbols), and pages
+  speak of ⌘V and the Keychain, because Windows key names and Ctrl+V are wrong on a Mac.
+- 2026-11-13: Typing into apps on a Mac offers Allow, then Open System Settings, and re-reads the
+  permission when the window regains focus, because only System Settings can switch
+  Accessibility, and after an unsigned update it can show as on without working.

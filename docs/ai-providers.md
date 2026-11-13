@@ -1,11 +1,12 @@
 # AI providers
 
 AI polish, rewrites and spoken edits can use one of four providers, chosen in Settings › AI polish.
-Sign in with ChatGPT is unchanged; see [optional-chatgpt.md](optional-chatgpt.md).
+Sign in with ChatGPT is described in [openai-sign-in.md](openai-sign-in.md) and
+[optional-chatgpt.md](optional-chatgpt.md).
 
 | Provider | Endpoint | Credential | Text leaves the computer |
 | --- | --- | --- | --- |
-| ChatGPT | Fixed OpenAI endpoints | OAuth, DPAPI (Windows only) | Yes, to OpenAI |
+| ChatGPT | Fixed OpenAI endpoints | OAuth tokens in protected storage | Yes, to OpenAI |
 | OpenAI-compatible | User's base URL; HTTPS, or HTTP only to loopback | Optional bearer key | Yes, to that host |
 | Anthropic | Fixed `https://api.anthropic.com/v1/` | Required API key (`x-api-key`) | Yes, to Anthropic |
 | On this computer | User's base URL, loopback only | Optional bearer key | No |
@@ -39,8 +40,10 @@ Keys are entered once, validated (printable ASCII, no spaces, at most 512 bytes)
 - Windows: a DPAPI-protected file per provider in the app data folder (`provider-keys/*.bin`),
   bound to the Windows user, with per-provider entropy so files cannot be swapped between slots.
 - Linux: the desktop Secret Service (GNOME Keyring, KWallet's Secret Service, KeePassXC).
-  Only an empty marker file is written to disk, so checking whether a key exists never prompts to
-  unlock the keyring.
+- macOS: the Keychain.
+
+On Linux and macOS only an empty marker file is written to disk, so checking whether a key exists
+never prompts to unlock the keyring.
 
 Keys never enter settings, the database, logs, prompts or the webview. The webview sends a key once
 and then only learns whether one is saved.
@@ -67,6 +70,7 @@ and then only learns whether one is saved.
   policy, headers, request bodies, key handling, streaming, think-block removal, truncation,
   refusals, redirects, unreachable servers, error redaction and model lists in OpenAI, Ollama and
   Anthropic shapes.
-- Live check on this machine: llama.cpp b11960 serving Qwen3.5-0.8B (see local-models.md).
-- **Pending:** a real OpenAI-compatible cloud service and a real Anthropic key. No credentials were
-  available, so neither has been called. See the checklist in testing.md.
+- An ignored live test polishes text through a real llama.cpp server ([local-models.md](local-models.md)).
+- Real cloud services (an OpenAI-compatible service, an Anthropic key, ChatGPT) are in the manual
+  matrix ([testing.md](testing.md)); [VERIFICATION.md](../VERIFICATION.md) records no real
+  provider call yet.

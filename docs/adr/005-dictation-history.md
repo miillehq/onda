@@ -12,3 +12,5 @@ Onda keeps a history of user-initiated dictations, voice edits and rewrites (not
 - Users can delete one entry, clear everything (Privacy or History) or delete the visible result.
 - History text never enters logs, diagnostics, metrics or WebView storage. Logs record only that a write failed, with the operation ID.
 - Updates still refuse to restart over an untyped, uncopied failed result when history is session-only, because the restart would lose it.
+
+Update (2026-11-13): On Linux and macOS each entry is sealed with ChaCha20-Poly1305 under a random key that the desktop keyring (Secret Service) or the macOS Keychain keeps for the user (`crates/onda-platform/src/protect.rs`). On Linux without a keyring, history stays in memory until Onda quits.

@@ -67,13 +67,6 @@ Rulings:
   not for a lighter hairline grey, a label moved 4 px or a smaller corner radius — text and
   structure belong to tier 1, positions to tier 2 — cost if wrong: a small visual change reaches
   users unseen.
-- Slice 8, follow-up done in its own contract PR: the mock refuses a duplicate dictionary entry as
-  Rust does, held by four new contract examples.
-- Slice 10: replacements first (this PR), retirements later, each named:
-  `languages.rs` `the_catalog_language_table_matches_whisper_order_and_excludes_cantonese` is
-  replaced by `engine.rs` `languages_the_models_lack_never_reach_the_worker` (now also zh-HK, cmn
-  refused and haw accepted); `api.rs` `public_account_dto_contains_no_credentials` is replaced by
-  `the_account_sent_to_the_interface_has_only_its_public_fields`.
 - Slice 10: Ruling: `ui/src/smoke.ts` stays until every check in it maps to an L6 test by name —
   the smoke is the only real-shell coverage today — cost if wrong: two suites run for a while.
 - Slice 11: Ruling: macOS lands first as compile-only stubs, then features — a build that fails
