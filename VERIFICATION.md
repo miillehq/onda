@@ -25,6 +25,8 @@ with an identical tree.
 | 2026-11-13 | L1 probe | one planted bug per module turns its tests red: diff ties, Esc accepted, Sunday-first weeks, the MB threshold, an error action to a missing route, swapped attack and release | windows-x64, local | each planted in `ui/src/lib/`, `npx vitest run tests/unit/lib.test.ts`, restored |
 | 2026-11-13 | L1, L3 | probes A1 (model checksum before inference), A3 (CPU-only never probes a GPU), C1 (PKCE verifier, code and redirect checked by the token mock), C2 (the 256 KiB cap is per event) now caught; the OAuth callback, JWT and pre-cancel tests run beyond Windows; the Job Object kill test runs unignored; `audio_context` is tested in the library. onda-cloud 42 passed and 1 ignored, onda-asr 18 passed | windows-x64, local | `cargo test --locked -p onda-cloud -p onda-asr` |
 | 2026-11-13 | probe | every new, strengthened or moved test above failed with its bug planted (checksum skipped; CPU-only dropped; nonce, state or a wrong redirect sent; the frame counter not reset; state and nonce checks removed; kill-on-close removed; the context margin removed) and passed once restored | windows-x64, local | planted one at a time in a worktree |
+| 2026-11-13 | L1 | probes P1 (paste waits while Onda still owns the unread clipboard), P3 (silence, speech and clipping from `RecordingBuffer::finish`) and I1 (an auto-repeat never starts a shortcut) now caught; strengthened: the paste chord's KEYUP flags and marker, the 16 KiB helper line cap, the local day key and `civil_from_days`. onda-platform 28 passed and 1 ignored, onda-input 13 and 1 passed | windows-x64, local | `cargo test --locked -p onda-platform -p onda-input` |
+| 2026-11-13 | probe | each of those failed with its bug planted (owner check inverted, KEYUP dropped, marker zeroed, silence threshold inverted, energy not summed, clipping without `abs`, repeat filter dropped, size check removed or off by one, year and month offsets, leap-day arithmetic) and passed once restored | windows-x64, local | planted one at a time in a worktree |
 
 ## Unverified
 
@@ -41,3 +43,4 @@ with an identical tree.
 - Dictation into real applications, physical microphones and real provider accounts on any OS:
   manual matrix, not run for 0.2.0.
 - The 11 missed probes above are unguarded until PLAN.md slice 4.
+- Linux only, written on Windows and first run by Linux CI: the strengthened `/proc` identity test, the Linux day key, and the keyring seal framing test (checked only in an extracted copy with an in-memory keyring).
