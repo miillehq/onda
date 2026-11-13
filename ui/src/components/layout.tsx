@@ -5,12 +5,12 @@ import { X } from "lucide-preact";
 export function Page({ title, lede, actions, children, wide = false }: { title: string; lede?: ComponentChildren; actions?: ComponentChildren; children: ComponentChildren; wide?: boolean }) {
   return (
     <div class={`page${wide ? " page-wide" : ""}`}>
-      <header class="page-head">
+      <header class="page-head" data-geo="page-head">
         <div class="page-heading">
           <h1 tabIndex={-1}>{title}</h1>
           {lede && <p class="page-lede">{lede}</p>}
         </div>
-        {actions && <div class="page-actions">{actions}</div>}
+        {actions && <div class="page-actions" data-geo="page-actions">{actions}</div>}
       </header>
       {children}
     </div>

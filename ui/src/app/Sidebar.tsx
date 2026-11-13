@@ -141,7 +141,7 @@ export function Sidebar() {
     { to: "settings/about", label: "Updates and help", icon: <LifeBuoy size={19} /> },
   ];
   return (
-    <nav class="sidebar" aria-label={settingsMode ? "Settings" : "Main"}>
+    <nav class="sidebar" aria-label={settingsMode ? "Settings" : "Main"} data-geo="sidebar">
       {settingsMode ? (
         <button type="button" class="back" onClick={leaveSettings}>
           <span class="back-icon">

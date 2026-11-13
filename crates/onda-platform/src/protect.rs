@@ -52,23 +52,31 @@ mod keyring_seal {
     const SERVICE: &str = "com.miille.onda";
     const ACCOUNT: &str = "Data protection key";
     const FORMAT: u8 = 1;
-    const KEY_BYTES: usize = 32;
+    pub(super) const KEY_BYTES: usize = 32;
 
     static KEY: Mutex<Option<Zeroizing<[u8; KEY_BYTES]>>> = Mutex::new(None);
 
     fn key() -> Result<LessSafeKey, PlatformError> {
         let mut cached = KEY.lock().map_err(|_| PlatformError::Protection)?;
         if cached.is_none() {
-            *cached = Some(load_or_create()?);
+            *cached = Some(load_or_create(SERVICE, ACCOUNT)?);
         }
         let bytes = cached.as_ref().ok_or(PlatformError::Protection)?;
+        aead_key(bytes)
+    }
+
+    pub(super) fn aead_key(bytes: &[u8; KEY_BYTES]) -> Result<LessSafeKey, PlatformError> {
         let key = UnboundKey::new(&CHACHA20_POLY1305, bytes.as_slice())
             .map_err(|_| PlatformError::Protection)?;
         Ok(LessSafeKey::new(key))
     }
 
-    fn load_or_create() -> Result<Zeroizing<[u8; KEY_BYTES]>, PlatformError> {
-        let entry = keyring::Entry::new(SERVICE, ACCOUNT).map_err(|_| PlatformError::Protection)?;
+    /// Production passes `SERVICE` and `ACCOUNT`; the keyring test passes an entry of its own.
+    pub(super) fn load_or_create(
+        service: &str,
+        account: &str,
+    ) -> Result<Zeroizing<[u8; KEY_BYTES]>, PlatformError> {
+        let entry = keyring::Entry::new(service, account).map_err(|_| PlatformError::Protection)?;
         let mut key = Zeroizing::new([0; KEY_BYTES]);
         match entry.get_secret() {
             Ok(stored) => {
@@ -94,6 +102,20 @@ mod keyring_seal {
 
     /// Format byte, random nonce, then ciphertext and tag; `purpose` is authenticated data.
     pub(super) fn seal(purpose: &[u8], bytes: &[u8]) -> Result<Vec<u8>, PlatformError> {
+        seal_with(key, purpose, bytes)
+    }
+
+    pub(super) fn open(purpose: &[u8], sealed: &[u8]) -> Result<Vec<u8>, PlatformError> {
+        open_with(key, purpose, sealed)
+    }
+
+    /// Takes the key first, as `seal` always did. `open_with` takes it only once the framing is
+    /// valid, so a malformed record never prompts to unlock the keyring.
+    pub(super) fn seal_with(
+        key: impl FnOnce() -> Result<LessSafeKey, PlatformError>,
+        purpose: &[u8],
+        bytes: &[u8],
+    ) -> Result<Vec<u8>, PlatformError> {
         let key = key()?;
         let mut nonce = [0; NONCE_LEN];
         SystemRandom::new()
@@ -113,7 +135,11 @@ mod keyring_seal {
         Ok(sealed)
     }
 
-    pub(super) fn open(purpose: &[u8], sealed: &[u8]) -> Result<Vec<u8>, PlatformError> {
+    pub(super) fn open_with(
+        key: impl FnOnce() -> Result<LessSafeKey, PlatformError>,
+        purpose: &[u8],
+        sealed: &[u8],
+    ) -> Result<Vec<u8>, PlatformError> {
         let (format, rest) = sealed.split_first().ok_or(PlatformError::Protection)?;
         if *format != FORMAT || rest.len() < NONCE_LEN {
             return Err(PlatformError::Protection);
@@ -207,31 +233,91 @@ mod tests {
     }
 }
 
-/// Needs a desktop Secret Service; run inside `dbus-run-session` with an unlocked gnome-keyring
-/// (see docs/linux.md). Ignored by default so CI never touches a real keyring.
 #[cfg(all(test, target_os = "linux"))]
 mod linux_tests {
-    use super::*;
+    use super::keyring_seal::{aead_key, load_or_create, open_with, seal_with, KEY_BYTES};
+    use super::ENTROPY as HISTORY;
+    use crate::PlatformError;
+    use ring::aead::{LessSafeKey, CHACHA20_POLY1305, NONCE_LEN};
+
+    /// Fixed test keys: the seal format is checked without any keyring.
+    fn test_key() -> Result<LessSafeKey, PlatformError> {
+        aead_key(&[0x5a; KEY_BYTES])
+    }
+    fn other_key() -> Result<LessSafeKey, PlatformError> {
+        aead_key(&[0xa5; KEY_BYTES])
+    }
 
     #[test]
-    #[ignore]
-    fn keyring_sealed_bytes_round_trip_and_stay_apart_by_purpose() {
+    fn sealed_bytes_round_trip_and_stay_apart_by_purpose() {
         let plaintext = b"meet me at 4pm on Thursday";
-        let sealed = protect_user_data(plaintext).unwrap();
+        let sealed = seal_with(test_key, HISTORY, plaintext).unwrap();
         assert!(!sealed
             .windows(plaintext.len())
             .any(|window| window == plaintext));
-        assert_eq!(unprotect_user_data(&sealed).unwrap(), plaintext);
+        assert_eq!(
+            sealed.len(),
+            1 + NONCE_LEN + plaintext.len() + CHACHA20_POLY1305.tag_len()
+        );
+        assert_eq!(open_with(test_key, HISTORY, &sealed).unwrap(), plaintext);
+        let again = seal_with(test_key, HISTORY, plaintext).unwrap();
         assert_ne!(
-            protect_user_data(plaintext).unwrap(),
-            sealed,
+            &again[1..=NONCE_LEN],
+            &sealed[1..=NONCE_LEN],
             "nonces differ"
         );
-        let other = protect_for(b"another purpose", plaintext).unwrap();
-        assert!(unprotect_user_data(&other).is_err());
-        let mut tampered = sealed.clone();
-        *tampered.last_mut().unwrap() ^= 1;
-        assert!(unprotect_user_data(&tampered).is_err());
-        assert!(unprotect_user_data(b"").is_err());
+        assert_eq!(open_with(test_key, HISTORY, &again).unwrap(), plaintext);
+        let other = seal_with(test_key, b"another purpose", plaintext).unwrap();
+        assert!(open_with(test_key, HISTORY, &other).is_err());
+        assert_eq!(
+            open_with(test_key, b"another purpose", &other).unwrap(),
+            plaintext
+        );
+        assert!(open_with(other_key, HISTORY, &sealed).is_err());
+        for index in 0..sealed.len() {
+            let mut tampered = sealed.clone();
+            tampered[index] ^= 1;
+            assert!(
+                open_with(test_key, HISTORY, &tampered).is_err(),
+                "byte {index} was changed and still opened"
+            );
+        }
+        assert!(open_with(test_key, HISTORY, &sealed[..sealed.len() - 1]).is_err());
+        let empty = seal_with(test_key, HISTORY, b"").unwrap();
+        assert!(open_with(test_key, HISTORY, &empty).unwrap().is_empty());
+        // Malformed records fail before the key is asked for, so they never prompt the keyring.
+        let no_key = || -> Result<LessSafeKey, PlatformError> {
+            panic!("the key was asked for a malformed record")
+        };
+        let malformed: [&[u8]; 4] = [b"", &[1], &sealed[..NONCE_LEN], &[2; 64]];
+        for malformed in malformed {
+            assert!(matches!(
+                open_with(no_key, HISTORY, malformed),
+                Err(PlatformError::Protection)
+            ));
+        }
+    }
+
+    /// Needs a desktop Secret Service; run inside `dbus-run-session` with an unlocked
+    /// gnome-keyring (see docs/linux.md). Ignored by default so CI never touches a real keyring.
+    /// It uses a test entry, never the one that holds the user's history key.
+    #[test]
+    #[ignore]
+    fn keyring_sealed_bytes_round_trip_and_stay_apart_by_purpose() {
+        const SERVICE: &str = "com.miille.onda.test";
+        const ACCOUNT: &str = "Data protection key (test)";
+        let entry = keyring::Entry::new(SERVICE, ACCOUNT).unwrap();
+        let _ = entry.delete_credential();
+        let created = load_or_create(SERVICE, ACCOUNT).unwrap();
+        let loaded = load_or_create(SERVICE, ACCOUNT).unwrap();
+        assert!(*created == *loaded, "a stored key is reused, not replaced");
+        let plaintext = b"meet me at 4pm on Thursday";
+        let sealed = seal_with(|| aead_key(&created), HISTORY, plaintext).unwrap();
+        assert_eq!(
+            open_with(|| aead_key(&loaded), HISTORY, &sealed).unwrap(),
+            plaintext
+        );
+        assert!(open_with(|| aead_key(&loaded), b"another purpose", &sealed).is_err());
+        entry.delete_credential().unwrap();
     }
 }

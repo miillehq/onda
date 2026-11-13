@@ -477,19 +477,31 @@ fn wait_for_read(owner: &mut OwnerWindow) {
                 DispatchMessageW(&message);
             }
         }
-        if owner
-            .state
-            .read_at
-            .is_some_and(|at| at.elapsed() >= READ_SETTLE_DELAY)
-            || started.elapsed() >= PASTE_RECEIPT_TIMEOUT
-        {
-            break;
-        }
-        if unsafe { GetClipboardOwner() } != owner.hwnd {
+        if paste_wait_over(
+            owner.state.read_at.map(|at| at.elapsed()),
+            started.elapsed(),
+            owner.hwnd,
+            || unsafe { GetClipboardOwner() },
+        ) {
             break;
         }
         thread::sleep(Duration::from_millis(5));
     }
+}
+
+/// The paste is over once the target read the text and had `READ_SETTLE_DELAY` to finish, the
+/// deadline passed, or another program owns the clipboard. While Onda still owns it unread, the
+/// user's clipboard must not come back, or the target pastes that instead of the dictation.
+/// `clipboard_owner` is asked only when the read and the deadline leave it open.
+fn paste_wait_over(
+    read_for: Option<Duration>,
+    waited: Duration,
+    ours: HWND,
+    clipboard_owner: impl FnOnce() -> HWND,
+) -> bool {
+    read_for.is_some_and(|elapsed| elapsed >= READ_SETTLE_DELAY)
+        || waited >= PASTE_RECEIPT_TIMEOUT
+        || clipboard_owner() != ours
 }
 
 fn ensure_modifiers_released() -> Result<(), PlatformError> {
@@ -560,5 +572,79 @@ mod tests {
             assert_eq!(events[3].Anonymous.ki.wVk, 0x56);
             assert_eq!(events[5].Anonymous.ki.wVk, VK_CONTROL);
         }
+        // A release without KEYEVENTF_KEYUP is another press and leaves Ctrl and Shift held.
+        assert_eq!(
+            keys(&events),
+            [
+                (VK_CONTROL, 0),
+                (VK_SHIFT, 0),
+                (0x56, 0),
+                (0x56, KEYEVENTF_KEYUP),
+                (VK_SHIFT, KEYEVENTF_KEYUP),
+                (VK_CONTROL, KEYEVENTF_KEYUP),
+            ]
+        );
+        for shortcut in [
+            PasteShortcut::ControlV,
+            PasteShortcut::ControlShiftV,
+            PasteShortcut::ShiftInsert,
+        ] {
+            let events = keys(&chord(shortcut));
+            let (presses, releases) = events.split_at(events.len() / 2);
+            assert!(presses.iter().all(|&(_, flags)| flags == 0));
+            assert!(releases.iter().all(|&(_, flags)| flags == KEYEVENTF_KEYUP));
+            assert!(presses
+                .iter()
+                .map(|&(key, _)| key)
+                .eq(releases.iter().rev().map(|&(key, _)| key)));
+        }
+        for event in &events {
+            assert_eq!(event.r#type, INPUT_KEYBOARD);
+            assert_eq!(
+                unsafe { event.Anonymous.ki.dwExtraInfo },
+                INPUT_MARKER,
+                "every injected key carries Onda's marker"
+            );
+        }
+    }
+
+    fn keys(events: &[INPUT]) -> Vec<(u16, u32)> {
+        events
+            .iter()
+            .map(|event| unsafe { (event.Anonymous.ki.wVk, event.Anonymous.ki.dwFlags) })
+            .collect()
+    }
+
+    #[test]
+    fn paste_waits_while_onda_still_owns_the_unread_clipboard() {
+        let ours: HWND = ptr::without_provenance_mut(0x10);
+        let other: HWND = ptr::without_provenance_mut(0x20);
+        let early = Duration::from_millis(5);
+        // Nothing rendered and Onda still owns the clipboard: the target has not read the text.
+        assert!(!paste_wait_over(None, early, ours, || ours));
+        assert!(!paste_wait_over(
+            None,
+            PASTE_RECEIPT_TIMEOUT - early,
+            ours,
+            || ours
+        ));
+        // Rendered, but the target may still be reading it.
+        assert!(!paste_wait_over(
+            Some(READ_SETTLE_DELAY - early),
+            early,
+            ours,
+            || ours
+        ));
+        // Read and settled, or another program (or none) took the clipboard.
+        assert!(paste_wait_over(
+            Some(READ_SETTLE_DELAY),
+            early,
+            ours,
+            || ours
+        ));
+        assert!(paste_wait_over(None, early, ours, || other));
+        assert!(paste_wait_over(None, early, ours, ptr::null_mut));
+        // The deadline still ends a wait that no target answers.
+        assert!(paste_wait_over(None, PASTE_RECEIPT_TIMEOUT, ours, || ours));
     }
 }

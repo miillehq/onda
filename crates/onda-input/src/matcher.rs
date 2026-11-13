@@ -209,6 +209,26 @@ mod tests {
         );
     }
     #[test]
+    fn auto_repeat_of_a_key_held_before_the_modifiers_never_starts() {
+        let mut matcher = ShortcutMatcher::new(HelperConfig::default()).unwrap();
+        // Space is held first (typing), then Ctrl+Win join it: its auto-repeat is no fresh press.
+        assert!(!matcher.handle(0x20, true, false).suppress);
+        matcher.handle(0xa2, true, false);
+        matcher.handle(0x5b, true, false);
+        for _ in 0..8 {
+            let repeat = matcher.handle(0x20, true, false);
+            assert_eq!(repeat.event, None, "an auto-repeat started a shortcut");
+            assert!(!repeat.suppress);
+        }
+        assert!(matcher.active_key().is_none());
+        assert_eq!(matcher.handle(0x20, false, false).event, None);
+        // A genuine press with the modifiers already down still starts it.
+        assert_eq!(
+            matcher.handle(0x20, true, false).event,
+            Some((ShortcutAction::Dictation, true))
+        );
+    }
+    #[test]
     fn injected_keys_cannot_activate_and_reset_clears_latch() {
         let mut matcher = ShortcutMatcher::new(HelperConfig::default()).unwrap();
         matcher.handle(0xa2, true, true);

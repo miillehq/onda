@@ -14,8 +14,8 @@ Every check runs at the cheapest level that can catch the bug it guards.
 | L1 | a function or module does what it says | `cargo test`, Vitest | `cargo test --locked --workspace`; `npm run test:unit` | every push | Rust; Vitest harness |
 | L2 | the mock and the real backend agree | ts-rs drift check; `contracts/examples.ts` run against the mock (Vitest) and the real app (L6) | `npm run contracts:check`; `npm run test:unit` | every push | types, defaults, validation, profile names |
 | L3 | modules work against real I/O: SQLite files, temp dirs, localhost servers, child processes, DPAPI or keyring | `cargo test`; golden real-model tests | `cargo test --locked --workspace` | every push | yes |
-| L4 | a user can do the journey, against the labelled mock | Playwright, chromium and webkit | planned: `npm run test:ui` | every PR, 3 OSes | no |
-| L5 | structure, layout and pixels have not drifted | ARIA snapshot, geometry snapshot, per-OS pixels | with L4 | with L4 | no |
+| L4 | a user can do the journey, against the labelled mock | Playwright, chromium and webkit (`tests/ui/`) | `npm run test:ui` | every PR, 3 OSes | onboarding, dictionary, settings, error display |
+| L5 | structure, layout and pixels have not drifted | ARIA snapshot, geometry snapshot, per-OS pixels | with L4 | with L4 | tiers 1 and 2; tier 3 once the snapshots workflow runs |
 | L6 | the debug app launches and the UI reaches the real backend | WebdriverIO embedded provider (`tests/e2e/`); `ui/src/smoke.ts` | `npm run build:e2e`, then `npm run test:e2e` | every PR | settings and dictionary across a restart |
 | L7 | the bundle installs, launches and uninstalls | NSIS, deb, AppImage and dmg scripts | planned: installers workflow | `master`, release | Windows NSIS step |
 | L8 | other distributions, assistive tech | containers, manual | release checklist | release | manual matrix |
@@ -44,7 +44,11 @@ level from a journey needs a replacement that proves the same behaviour first.
 - Tier 1, structure: ARIA snapshots, one baseline shared by every OS and engine.
 - Tier 2, geometry: rounded boxes of elements marked `data-geo`, one JSON baseline, 8 px tolerance.
 - Tier 3, pixels: full-page PNG per engine per OS, `maxDiffPixelRatio` 0.002 (0.001 for the pill),
-  animations disabled. Baselines come only from the snapshots workflow on the runners.
+  animations disabled. Baselines come only from the snapshots workflow on the runners
+  (`.github/workflows/snapshots.yml`); a screen without one skips its pixel check and says so.
+- Every browser test fixes the clock (2026-11-13 10:00) so greetings and dates never move a
+  baseline. Refresh tiers 1 and 2 after an intended change with
+  `UPDATE_SNAPSHOTS=1 npx playwright test -g "tier 1|tier 2" --update-snapshots=all`.
 
 ## Proving a test
 

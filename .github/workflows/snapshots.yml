@@ -1,0 +1,84 @@
+# Captures the per-OS pixel baselines (tier 3) and refreshes the shared ARIA and geometry
+# snapshots on the runners themselves, then commits them to the branch it was started on.
+# Baselines never come from a laptop: a Windows machine cannot produce a macOS baseline, and
+# runner fonts differ. Start it from a pull request's branch: Actions > snapshots > Run workflow.
+name: snapshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: capture ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-latest]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Playwright browsers
+        timeout-minutes: 12
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+        run: |
+          bound=""; command -v timeout >/dev/null && bound="timeout 420"
+          for attempt in 1 2; do
+            $bound npx playwright install --with-deps chromium webkit && exit 0
+            echo "attempt $attempt failed or stalled; retrying"
+          done
+          exit 1
+      - name: Capture baselines
+        env:
+          CI: "1"
+        run: npm run test:ui:update
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: snapshots-${{ matrix.os }}
+          path: tests/ui/__snapshots__
+          retention-days: 3
+
+  commit:
+    name: commit baselines
+    needs: [capture]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          pattern: snapshots-*
+          path: incoming
+      - name: Merge the three capture sets
+        run: |
+          for d in incoming/snapshots-*; do cp -R "$d"/. tests/ui/__snapshots__/; done
+          git status --short tests/ui/__snapshots__
+      - name: Commit to the branch the workflow ran on
+        # The organisation does not let Actions open pull requests, so on master the baselines go
+        # to a new branch for a person to open a pull request from.
+        run: |
+          git add tests/ui/__snapshots__
+          if git diff --cached --quiet; then echo "No snapshot changes."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update visual baselines from snapshots run ${{ github.run_id }}"
+          if [ "${{ github.ref_name }}" = "master" ]; then
+            branch="snapshots/update-${{ github.run_id }}"
+            git push origin "HEAD:refs/heads/$branch"
+            echo "::notice::Baselines pushed to $branch; open a pull request from it."
+          else
+            git push origin "HEAD:${{ github.ref_name }}"
+          fi

@@ -49,7 +49,7 @@ fn utc_date() -> String {
     civil_from_days(days)
 }
 
-#[cfg(not(windows))]
+#[cfg(any(not(windows), test))]
 fn civil_from_days(days: i64) -> String {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
@@ -466,10 +466,74 @@ mod tests {
 
     #[test]
     fn local_date_is_a_day_key() {
+        let utc_day = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64
+                / 86_400
+        };
+        let before = utc_day();
         let day = local_date();
+        let after = utc_day();
         assert_eq!(day.len(), 10);
         assert_eq!(&day[4..5], "-");
         assert_eq!(&day[7..8], "-");
+        let (year, month, date) = parse_day(&day);
+        assert!(year >= 2024, "{day}: not this era's calendar year");
+        assert!((1..=12).contains(&month), "{day}: month outside 1-12");
+        assert!((1..=31).contains(&date), "{day}: day outside 1-31");
+        // Every time zone is within a day of UTC.
+        let local = days_since_epoch(year, month, date);
+        assert!(
+            (before - 1..=after + 1).contains(&local),
+            "{day} is more than a day from the UTC day"
+        );
+    }
+
+    #[test]
+    fn civil_from_days_counts_leap_days_and_year_ends() {
+        for (days, expected) in [
+            (0, "1970-01-01"),
+            (59, "1970-03-01"),
+            (10_956, "1999-12-31"),
+            (11_016, "2000-02-29"),
+            (19_722, "2023-12-31"),
+            (19_782, "2024-02-29"),
+            (19_783, "2024-03-01"),
+            (20_088, "2024-12-31"),
+            (20_818, "2026-12-31"),
+            (47_540, "2100-02-28"),
+            (47_541, "2100-03-01"),
+        ] {
+            assert_eq!(civil_from_days(days), expected, "day {days}");
+        }
+        for days in 0..60_000 {
+            let key = civil_from_days(days);
+            let (year, month, date) = parse_day(&key);
+            assert_eq!(days_since_epoch(year, month, date), days, "{key}");
+        }
+    }
+
+    fn parse_day(key: &str) -> (i64, i64, i64) {
+        let parts: Vec<i64> = key.split('-').map(|part| part.parse().unwrap()).collect();
+        assert_eq!(parts.len(), 3, "{key}");
+        (parts[0], parts[1], parts[2])
+    }
+
+    /// Days since 1970-01-01 for a date from 1970 on, counted year by year and month by month,
+    /// independently of `civil_from_days`'s era arithmetic.
+    fn days_since_epoch(year: i64, month: i64, date: i64) -> i64 {
+        let leap = |year: i64| (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+        let years: i64 = (1970..year).map(|year| 365 + i64::from(leap(year))).sum();
+        let months: i64 = (1..month)
+            .map(|month| match month {
+                2 => 28 + i64::from(leap(year)),
+                4 | 6 | 9 | 11 => 30,
+                _ => 31,
+            })
+            .sum();
+        years + months + date - 1
     }
 
     #[test]

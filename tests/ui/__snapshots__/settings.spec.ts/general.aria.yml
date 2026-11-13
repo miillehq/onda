@@ -1,0 +1,37 @@
+- main "Content":
+  - heading "General" [level=1]
+  - paragraph: How Onda looks and behaves on your PC.
+  - region "Profile":
+    - heading "Profile" [level=2]
+    - paragraph: Kept on this computer. A shared stats image includes it only if you switch it on there.
+    - text: Your name
+    - textbox "Your name":
+      - /placeholder: Optional
+      - text: Alex
+    - paragraph: Onda will say “Good morning, Alex”.
+    - button "Choose picture…"
+    - paragraph: PNG, JPEG or WebP. Onda keeps a small copy without its location or other details.
+  - region "Appearance":
+    - heading "Appearance" [level=2]
+    - button "Match Windows" [pressed]
+    - button "Light"
+    - button "Dark"
+  - region "Tray icon":
+    - heading "Tray icon" [level=2]
+    - paragraph: Automatic is white on a dark taskbar and black on a light one.
+    - radiogroup "Tray icon":
+      - radio "Automatic" [checked]
+      - radio "White"
+      - radio "Black"
+  - region "While you dictate":
+    - heading "While you dictate" [level=2]
+    - text: Show the dictation pill A small indicator above the taskbar shows when Onda is listening. It never takes focus from your app.
+    - switch "Show the dictation pill" [checked]
+    - text: Play sounds A soft tone when Onda starts and stops listening, so you know without looking.
+    - switch "Play sounds" [checked]
+  - region "Startup":
+    - heading "Startup" [level=2]
+    - text: Start Onda when you sign in Onda waits quietly in the tray, ready for your shortcut.
+    - switch "Start Onda when you sign in" [checked]
+    - text: Closing the window Onda keeps running in the tray so your shortcut still works. Quit from the tray icon's menu. Setup guide Walk through microphone, model and shortcut setup again.
+    - button "Run setup"

@@ -48,6 +48,13 @@ Rulings:
   sides — cost if wrong: a rule without an example can drift until one is added.
 - Slice 6: Ruling: only the fresh-install scenario must equal Rust's defaults; the other mock
   scenarios stand for a returning user and keep demo data — cost if wrong: none, they are labelled.
+- Slice 8: Ruling: a pixel check without a baseline skips with a message, locally and in CI, until
+  the snapshots workflow commits one — CI would otherwise be red until a runner captured it —
+  cost if wrong: a deleted baseline skips rather than fails; tiers 1 and 2 still run.
+- Slice 8: Ruling: the browser suite on macOS is advisory with the rest of Tier 2 — cost if wrong:
+  a webkit regression on macOS waits for a release check.
+- Slice 8, follow-up for the next contract PR: the mock saves a duplicate dictionary entry that
+  Rust refuses; add a contract example and the refusal to the mock.
 - Slice 10: Ruling: `ui/src/smoke.ts` stays until every check in it maps to an L6 test by name —
   the smoke is the only real-shell coverage today — cost if wrong: two suites run for a while.
 - Slice 11: Ruling: macOS lands first as compile-only stubs, then features — a build that fails
