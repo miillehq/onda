@@ -148,7 +148,8 @@ fn validate_setup(setup: &WorkerSetup) -> Result<(), &'static str> {
 
 fn load(setup: &WorkerSetup) -> Result<WhisperState, &'static str> {
     let mut context_options = WhisperContextParameters::default();
-    context_options.use_gpu(setup.backend == ExecutionBackend::Vulkan);
+    // A Metal build (macOS) always offers the GPU; whisper.cpp uses the CPU when Metal is absent.
+    context_options.use_gpu(setup.backend == ExecutionBackend::Vulkan || cfg!(feature = "metal"));
     let context = WhisperContext::new_with_params(&setup.model_path, context_options)
         .map_err(|_| "model load failed")?;
     let state = context

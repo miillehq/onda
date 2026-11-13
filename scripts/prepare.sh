@@ -29,6 +29,9 @@ case "$triple" in
   x86_64-*) x86=1 ;;
   *) x86=0 ;;
 esac
+# macOS workers run whisper.cpp on Metal (falling back to the CPU); elsewhere they are CPU only.
+asr_features=native-asr
+[[ "$(uname -s)" == Darwin ]] && asr_features=metal
 
 # .cargo/config.toml forces MSVC release flags for whisper.cpp; GCC and Clang need their own.
 # The same `--config` override is how prepare.ps1 switches on AVX2 below.
@@ -42,11 +45,11 @@ for flag in GGML_AVX GGML_AVX2 GGML_FMA GGML_F16C GGML_SSE42 GGML_BMI2; do
 done
 
 cargo build --locked -p onda-input --bin onda-input ${release_arguments[@]+"${release_arguments[@]}"}
-cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker "${unix_flags[@]}" ${release_arguments[@]+"${release_arguments[@]}"}
+cargo build --locked -p onda-asr --features "$asr_features" --bin onda-asr-worker "${unix_flags[@]}" ${release_arguments[@]+"${release_arguments[@]}"}
 avx2_target="$repository/target/avx2"
 if [[ $x86 -eq 1 ]]; then
   # The default worker is SSE2-only so it runs on any x86-64 CPU; this one needs AVX2/FMA/F16C.
-  cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker --target-dir "$avx2_target" \
+  cargo build --locked -p onda-asr --features "$asr_features" --bin onda-asr-worker --target-dir "$avx2_target" \
     "${unix_flags[@]}" "${avx2_flags[@]}" ${release_arguments[@]+"${release_arguments[@]}"}
 else
   # AVX2 is x86 only. Tauri's sidecar list still names the AVX2 worker, so ARM gets the generic
