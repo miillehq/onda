@@ -1,9 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/onda-logo-dark.svg">
-  <img src="docs/images/onda-logo-light.svg" alt="Onda" width="220">
-</picture>
+<img src="docs/images/brand/onda-icon-dark-512px.png" alt="Onda app icon: a wave passing behind a text cursor" width="128">
 
 # Onda: voice dictation that types wherever your cursor is
 
@@ -188,4 +185,14 @@ Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](C
 
 Onda is licensed under the [Apache License 2.0](LICENSE). Bundled components keep their own licenses: see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and [docs/third-party-licenses.md](docs/third-party-licenses.md).
 
-<div align="center"><sub>Onda by miille</sub></div>
+<br>
+
+<div align="center">
+<sub>Onda by</sub><br>
+<a href="https://github.com/miillehq">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/miille-horizontal-white.svg">
+  <img src="docs/images/brand/miille-horizontal-black.svg" alt="miille" width="120">
+</picture>
+</a>
+</div>
