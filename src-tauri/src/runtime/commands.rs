@@ -511,7 +511,8 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::StopTyping => {
-                #[cfg(target_os = "linux")]
+                // On a Mac this opens the Accessibility list, the only place to turn it off.
+                #[cfg(any(target_os = "linux", target_os = "macos"))]
                 tokio::task::spawn_blocking(onda_platform::stop_typing)
                     .await
                     .map_err(|_| {
@@ -615,7 +616,7 @@ impl Runtime {
         })
     }
 
-    /// Linux asks the desktop for permission to press the paste shortcut in other apps.
+    /// Linux asks the desktop, and a Mac the user, for permission to press paste in other apps.
     async fn allow_typing(&self) -> AppResult<()> {
         #[cfg(target_os = "linux")]
         {
@@ -639,6 +640,21 @@ impl Runtime {
                     true,
                 ),
             })?;
+        }
+        // A Mac shows its own dialog and opens the Accessibility list; the switch is there, so
+        // typing is usually still off when this returns.
+        #[cfg(target_os = "macos")]
+        {
+            tokio::task::spawn_blocking(onda_platform::allow_typing)
+                .await
+                .map_err(|_| AppError::new(ErrorCode::Internal, "Typing worker stopped.", true))?
+                .map_err(|_| {
+                    AppError::new(
+                        ErrorCode::Cancelled,
+                        "Turn on Onda in System Settings › Privacy & Security › Accessibility. Until then, dictation is copied for you to paste.",
+                        true,
+                    )
+                })?;
         }
         Ok(())
     }
@@ -1375,12 +1391,20 @@ async fn typing_access() -> String {
         }
         .into()
     }
+    #[cfg(target_os = "macos")]
+    {
+        use onda_platform::TypingAccess as A;
+        match tokio::task::spawn_blocking(onda_platform::typing_access).await {
+            Ok(A::Allowed) => "allowed",
+            Ok(A::NotAllowed) | Err(_) => "notAllowed",
+        }
+        .into()
+    }
     #[cfg(windows)]
     {
         "allowed".into()
     }
-    // A Mac hands dictation to the pasteboard with a ⌘V hint; Onda cannot press paste there yet.
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         "unavailable".into()
     }

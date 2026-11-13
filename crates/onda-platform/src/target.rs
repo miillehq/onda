@@ -140,20 +140,27 @@ impl WindowsTargetService {
         {
             crate::linux_target::snapshot()
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_target::snapshot()
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             Ok(TargetSnapshot::unidentified())
         }
     }
     pub fn revalidate(&self, target: &TargetSnapshot) -> Result<(), PlatformError> {
         let actual = self.snapshot()?;
-        // On Linux an app without accessibility reports no field before or after; there is
-        // nothing to compare, and the paste goes wherever the keyboard is.
-        if cfg!(target_os = "linux")
-            && target.focused_runtime_id.is_empty()
-            && actual.focused_runtime_id.is_empty()
-        {
-            return Ok(());
+        if target.focused_runtime_id.is_empty() {
+            // On Linux an app without accessibility reports no field before or after; there is
+            // nothing to compare, and the paste goes wherever the keyboard is.
+            if cfg!(target_os = "linux") && actual.focused_runtime_id.is_empty() {
+                return Ok(());
+            }
+            // A Mac still names the app and window that show no field.
+            if cfg!(target_os = "macos") {
+                return validate_frontmost_app(target, &actual);
+            }
         }
         validate_identity(target, &actual)
     }
@@ -168,7 +175,11 @@ impl WindowsTargetService {
         {
             crate::linux_target::can_type(target)
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_target::can_type(target)
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             let _ = target;
             false
@@ -189,7 +200,11 @@ impl WindowsTargetService {
         {
             crate::linux_target::read_text(target, max_characters, true)
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_target::read_text(target, max_characters, true)
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             let _ = target;
             Err(PlatformError::UnsupportedPlatform)
@@ -237,7 +252,11 @@ impl WindowsTargetService {
         {
             crate::linux_target::preceding_text(target, max_characters)
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_target::preceding_text(target, max_characters)
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             let _ = target;
             Err(PlatformError::UnsupportedPlatform)
@@ -258,7 +277,11 @@ impl WindowsTargetService {
         {
             crate::linux_target::read_text(target, max_characters, false)
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_target::read_text(target, max_characters, false)
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             let _ = target;
             Err(PlatformError::UnsupportedPlatform)
@@ -296,7 +319,11 @@ impl WindowsTargetService {
         {
             crate::linux_target::paste(target, text, shortcut, &should_cancel)
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_target::paste(target, text, shortcut, &should_cancel)
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             let _ = shortcut;
             Err(PlatformError::UnsupportedPlatform)
@@ -398,6 +425,35 @@ pub(crate) fn validate_limit(limit: usize) -> Result<(), PlatformError> {
         return Err(PlatformError::InvalidParameter(
             "text limit must be 1–100000 characters".into(),
         ));
+    }
+    Ok(())
+}
+
+/// A Mac app that shows Onda no field is still named, with its window: the paste goes ahead
+/// only while the same app, started at the same moment, has the same window in front.
+pub(crate) fn validate_frontmost_app(
+    expected: &TargetSnapshot,
+    actual: &TargetSnapshot,
+) -> Result<(), PlatformError> {
+    if expected.is_password || actual.is_password {
+        return Err(PlatformError::SecureField);
+    }
+    if expected.process_id == 0 || expected.window_handle == 0 {
+        return Err(PlatformError::TargetUnavailable(
+            "no frontmost app or window".into(),
+        ));
+    }
+    let same_process = expected.process_id == actual.process_id
+        && expected.process_created_at == actual.process_created_at;
+    if !same_process || expected.window_handle != actual.window_handle {
+        tracing::warn!(
+            subsystem = "target",
+            app = %expected.executable_name,
+            same_process,
+            same_window = expected.window_handle == actual.window_handle,
+            "frontmost app or window changed"
+        );
+        return Err(PlatformError::TargetChanged);
     }
     Ok(())
 }
@@ -522,6 +578,53 @@ mod tests {
             validate_identity(&expected, &changed),
             Err(PlatformError::TargetChanged)
         ));
+    }
+    /// What a Mac snapshot holds for an app that shows Onda no field.
+    fn app_without_field() -> TargetSnapshot {
+        TargetSnapshot {
+            focused_runtime_id: Vec::new(),
+            focused_control: ControlFingerprint {
+                process_id: 2,
+                ..ControlFingerprint::default()
+            },
+            integrity_level: 0,
+            ..target()
+        }
+    }
+    #[test]
+    fn an_app_without_a_field_is_typed_into_only_while_it_keeps_the_same_window_in_front() {
+        let expected = app_without_field();
+        assert!(validate_frontmost_app(&expected, &app_without_field()).is_ok());
+        // The app shows a field by the time the text is ready: still the same window.
+        assert!(validate_frontmost_app(&expected, &target()).is_ok());
+        let mut other_window = app_without_field();
+        other_window.window_handle = 9;
+        let mut other_app = app_without_field();
+        other_app.process_id = 77;
+        let mut reused_pid = app_without_field();
+        reused_pid.process_created_at += 1;
+        for changed in [other_window, other_app, reused_pid] {
+            assert!(matches!(
+                validate_frontmost_app(&expected, &changed),
+                Err(PlatformError::TargetChanged)
+            ));
+        }
+        let mut secure_input = app_without_field();
+        secure_input.is_password = true;
+        assert!(matches!(
+            validate_frontmost_app(&expected, &secure_input),
+            Err(PlatformError::SecureField)
+        ));
+        for unknown in [TargetSnapshot::unidentified(), {
+            let mut no_window = app_without_field();
+            no_window.window_handle = 0;
+            no_window
+        }] {
+            assert!(matches!(
+                validate_frontmost_app(&unknown, &unknown.clone()),
+                Err(PlatformError::TargetUnavailable(_))
+            ));
+        }
     }
     #[test]
     fn secure_or_unknown_control_is_rejected() {

@@ -1,10 +1,10 @@
 import { Ban, CircleCheck, ClipboardPaste, Hand, Hourglass, Mic, Repeat, TriangleAlert, WandSparkles } from "lucide-preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Button, Keys, Switch } from "../../components/controls";
 import { Callout, Page, Row, Rows, Section } from "../../components/layout";
 import { ShortcutRecorder } from "../../components/ShortcutRecorder";
 import type { Settings } from "../../generated/core";
-import { allowTyping, cancelKeys, isMac, isWindows, restartShortcuts, saveSettings, settings, snapshot, stopTyping } from "../../lib/store";
+import { allowTyping, cancelKeys, isMac, isWindows, refresh, restartShortcuts, saveSettings, settings, snapshot, stopTyping } from "../../lib/store";
 
 function save(patch: Partial<Settings>) {
   return saveSettings(patch, { quiet: true });
@@ -48,6 +48,53 @@ function TypingIntoApps() {
           }
         />
       </Rows>
+    </Section>
+  );
+}
+
+/** macOS: Onda pastes for you once the user turns it on under Accessibility in System Settings. */
+function MacTypingIntoApps() {
+  const allowed = snapshot.value?.typingAccess === "allowed";
+  const [busy, setBusy] = useState(false);
+  // The switch is in System Settings, so look again whenever the user comes back.
+  useEffect(() => {
+    const recheck = () => void refresh().catch(() => undefined);
+    window.addEventListener("focus", recheck);
+    return () => window.removeEventListener("focus", recheck);
+  }, []);
+  const act = async (action: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await action();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Section title="Typing into apps">
+      <Rows>
+        <Row
+          icon={<ClipboardPaste size={18} />}
+          title="Paste into the app you're using"
+          description={
+            allowed
+              ? "On. Onda pastes what you say where your cursor is, and puts back what you had copied. To stop, turn Onda off under Privacy & Security › Accessibility."
+              : "Off. What you say is copied, ready for ⌘V. Turn on Onda under Privacy & Security › Accessibility and it pastes for you."
+          }
+          control={
+            allowed ? (
+              <Button variant="ghost" busy={busy} onClick={() => void act(stopTyping)}>
+                Open System Settings
+              </Button>
+            ) : (
+              <Button variant="primary" busy={busy} onClick={() => void act(allowTyping)}>
+                Allow
+              </Button>
+            )
+          }
+        />
+      </Rows>
+      <p class="footnote">Onda never pastes into password fields, or while an app protects what you type. After an update, macOS may need Onda switched off and on again there.</p>
     </Section>
   );
 }
@@ -179,7 +226,7 @@ export function Shortcuts() {
       {isWindows.value ? (
         <p class="footnote">Shortcuts that use the Windows key can also trigger Windows features, such as switching keyboard layouts.</p>
       ) : isMac.value ? (
-        <p class="footnote">Onda can't paste into other apps on a Mac yet. What you say is copied, ready for ⌘V.</p>
+        <MacTypingIntoApps />
       ) : (
         <>
           <p class="footnote">Changing a shortcut here asks your desktop again. Keys you chose in its dialog are listed in its keyboard settings.</p>

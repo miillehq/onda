@@ -3386,6 +3386,8 @@ name = "onda-platform"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "core-foundation 0.10.1",
+ "core-foundation-sys",
  "cpal",
  "keyring",
  "libc",

@@ -1,5 +1,6 @@
 //! Sensitive desktop operations remain in the native backend, outside the renderer. Windows uses
-//! UI Automation and SendInput; Linux uses the accessibility bus (AT-SPI) and desktop portals.
+//! UI Automation and SendInput; Linux uses the accessibility bus (AT-SPI) and desktop portals;
+//! macOS uses the Accessibility API and Quartz keyboard events.
 mod audio;
 #[cfg(windows)]
 mod clipboard;
@@ -14,6 +15,10 @@ mod linux_target;
 mod linux_typing;
 #[cfg(target_os = "macos")]
 mod macos_clipboard;
+#[cfg(target_os = "macos")]
+mod macos_target;
+#[cfg(target_os = "macos")]
+mod macos_typing;
 #[cfg(target_os = "linux")]
 pub mod portal;
 mod processes;
@@ -37,6 +42,8 @@ pub use protect::{protect_for, protect_user_data, unprotect_for, unprotect_user_
 pub use linux_target::start_focus_tracking;
 #[cfg(target_os = "linux")]
 pub use linux_typing::{allow_typing, restore_typing, stop_typing, typing_access, TypingAccess};
+#[cfg(target_os = "macos")]
+pub use macos_typing::{allow_typing, stop_typing, typing_access, TypingAccess};
 pub use target::{
     ControlFingerprint, InsertionOutcome, PasteShortcut, TargetSnapshot, WindowsTargetService,
     MAX_TEXT_CHARACTERS,

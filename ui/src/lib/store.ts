@@ -338,7 +338,8 @@ export async function removeProviderKey(provider: AiProvider): Promise<void> {
   if (await run("Couldn't remove the key", { command: "removeProviderKey", args: { provider } })) await refresh().catch(() => undefined);
 }
 
-/** Linux: the desktop shows its permission dialog; typing starts if the user allows it. */
+/** Linux: the desktop shows its permission dialog; typing starts if the user allows it. A Mac
+ * opens System Settings, where the user turns Onda on under Accessibility. */
 export async function allowTyping(): Promise<void> {
   if (await run("Typing wasn't turned on", { command: "allowTyping" })) toast({ tone: "ok", title: "Onda can type into apps" }, 2400);
   await refresh().catch(() => undefined);
