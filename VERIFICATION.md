@@ -35,6 +35,7 @@ with an identical tree.
 | 2026-11-13 | L1 probe | accepting `zh-*` and `cmn` fails the engine test ("zh-HK reached the worker"); dropping AccountInfo's camelCase renaming fails the key-set test, while the old string search stays green | windows-x64, local | planted one at a time, run red, restored |
 | 2026-11-13 | L2, L6 | dictionary entries: a saved word, the same word in another case and spacing refused, a phrase without a word refused, a vocabulary word with a replacement refused; the mock (Vitest, 20 contract examples) and the real app (00-contract.spec.ts, 21 tests) agree | windows-x64, local | `npm run test:unit`; `npm run build:e2e`; `npm run test:e2e` |
 | 2026-11-13 | L2 probe | removing the mock's duplicate check fails "the same word in another case and spacing is refused" | windows-x64, local | planted in `ui/src/mock/backend.ts`, `npx vitest run`, restored |
+| 2026-11-13 | L1 | retired after their replacements: `languages.rs` `the_catalog_language_table_matches_whisper_order_and_excludes_cantonese` (now `engine.rs` `languages_the_models_lack_never_reach_the_worker`) and `api.rs` `public_account_dto_contains_no_credentials` (now `the_account_sent_to_the_interface_has_only_its_public_fields`); both replacements pass | windows-x64, local | `cargo test --locked -p onda-asr -p onda-app --lib` |
 
 ## Unverified
 

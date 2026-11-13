@@ -527,27 +527,4 @@ mod tests {
             ]
         );
     }
-
-    #[test]
-    fn public_account_dto_contains_no_credentials() {
-        let profile = AccountInfo {
-            id: "safe-id".into(),
-            label: "account".into(),
-            email: None,
-            signed_in: false,
-            plan_usage_enabled: false,
-            active: false,
-            preferred_model: None,
-        };
-        let json = serde_json::to_string(&profile).unwrap();
-        for secret_field in [
-            "access_token",
-            "refresh_token",
-            "id_token",
-            "code_verifier",
-            "authorization",
-        ] {
-            assert!(!json.contains(secret_field));
-        }
-    }
 }
