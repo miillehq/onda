@@ -157,7 +157,7 @@ export function History() {
       }
     >
       {entries.length > 0 && (
-        <div class="toolbar">
+        <div class="toolbar" data-geo="history-toolbar">
           <span class="muted tabular">{plural(entries.length, "entry", "entries")}</span>
           <label class="search-field">
             <Search size={16} aria-hidden="true" />

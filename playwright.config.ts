@@ -24,6 +24,8 @@ export default defineConfig({
     viewport,
     deviceScaleFactor: 1,
     colorScheme: "light",
+    // Dates and times in the baselines ("9:58 AM") must not follow the runner's locale.
+    locale: "en-US",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
