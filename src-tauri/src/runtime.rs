@@ -33,6 +33,12 @@ const LEARNING_CHARACTERS: usize = 8192;
 const FOCUS_RETURN_DELAY: Duration = Duration::from_secs(3);
 const LEARNING_SAMPLE_DELAY: Duration = Duration::from_secs(4);
 const HELPER_POLL_TIMEOUT: Duration = Duration::from_millis(100);
+/// The paste chord the user presses when Onda leaves the words on the clipboard.
+const PASTE_KEYS: &str = if cfg!(target_os = "macos") {
+    "\u{2318}V"
+} else {
+    "Ctrl+V"
+};
 const LEVEL_INTERVAL: Duration = Duration::from_millis(50);
 const PRECEDING_CHARACTERS: usize = 2;
 /// Words in a model's display name that mark a lighter, faster model; Luna is the light
@@ -2195,7 +2201,7 @@ fn copy_untyped(mut error: AppError, text: &str) -> (AppError, bool) {
     };
     let copied = !text.trim().is_empty() && onda_platform::copy_text_to_clipboard(text).is_ok();
     error.message = if copied {
-        format!("{reason} Your words are on the clipboard, so press Ctrl+V to paste them.")
+        format!("{reason} Your words are on the clipboard, so press {PASTE_KEYS} to paste them.")
     } else {
         format!("{reason} Your words are saved in History.")
     };

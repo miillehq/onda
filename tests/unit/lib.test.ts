@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS } from "../../ui/src/generated/core";
 import { activityGrid, dayKey, parseDay } from "../../ui/src/lib/activity";
 import { wordDiff } from "../../ui/src/lib/diff";
 import { presentError } from "../../ui/src/lib/errors";
-import { appName, formatBytes, formatClock, formatDuration, greeting, greetingFor, providerName, routeLabel } from "../../ui/src/lib/format";
+import { appName, formatBytes, formatClock, formatDuration, greeting, greetingFor, pasteKeys, providerName, routeLabel } from "../../ui/src/lib/format";
 import { chordFrom, keyLabel, orderedKeys, sameChord, shortcutText, virtualKey, VK } from "../../ui/src/lib/keys";
 import { languageName } from "../../ui/src/lib/languages";
 import { levelFromRms, Smoother } from "../../ui/src/lib/level";
@@ -119,6 +119,11 @@ describe("formatting", () => {
     expect(providerName(settings({ aiProvider: "local" }))).toBe("the model on this computer");
     expect(routeLabel("anthropic")).toBe("Polished with Claude");
     expect(routeLabel("local")).toBeNull();
+  });
+
+  it("names the paste chord for the platform", () => {
+    expect(pasteKeys(true)).toBe("⌘V");
+    expect(pasteKeys(false)).toBe("Ctrl+V");
   });
 
   it("names apps from their executables", () => {

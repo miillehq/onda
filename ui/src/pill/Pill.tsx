@@ -6,7 +6,7 @@ import { Keys } from "../components/controls";
 import { Wave } from "../components/Wave";
 import type { AppError, OperationResult, OperationState, Settings } from "../generated/core";
 import { presentError } from "../lib/errors";
-import { formatClock } from "../lib/format";
+import { formatClock, pasteKeys } from "../lib/format";
 import { levelFromRms } from "../lib/level";
 
 const state = signal<OperationState | null>(null);
@@ -15,6 +15,8 @@ const level = signal(0);
 const settings = signal<Settings | null>(null);
 /** The pill loads no snapshot; WebView2 reports Windows in its user agent, WebKitGTK Linux. */
 const isWindows = { value: navigator.userAgent.includes("Windows") };
+/** WKWebView reports a Mac, where the paste chord is Command-V. */
+const isMac = navigator.userAgent.includes("Macintosh");
 const startedAt = signal(0);
 
 /** Exit fades start shortly before the native window hides (see src-tauri/src/pill.rs). */
@@ -185,7 +187,7 @@ export function Pill() {
           <span class="pill-check">
             <Check size={15} strokeWidth={3} />
           </span>
-          <span class="pill-label">{copied ? (fallback ? "Copied without polish · Ctrl+V" : "Copied · press Ctrl+V") : fallback ? "Inserted without polish" : "Inserted"}</span>
+          <span class="pill-label">{copied ? (fallback ? `Copied without polish · ${pasteKeys(isMac)}` : `Copied · press ${pasteKeys(isMac)}`) : fallback ? "Inserted without polish" : "Inserted"}</span>
         </div>
       );
     } else if (phase === "cancelled") {
