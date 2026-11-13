@@ -16,6 +16,8 @@ design in `DESIGN.md`.
   `cargo clippy --locked -p onda-asr --features native-asr --all-targets -- -D warnings`; `npx tsc --noEmit`
 - unit and integration (L1, L3): `cargo test --locked --workspace`
 - contracts (L2): `npm run contracts:check`; regenerate with `npm run contracts`
+- real-shell journeys (L6): `npm run build:e2e`, then `npm run test:e2e`. The suite launches the debug
+  app on a throwaway profile under `artifacts/e2e/`, so it runs beside an installed Onda.
 - quality fixtures: `npm run quality`
 - real-model tests: `docs/testing.md` (`cargo test -p onda-asr --test golden -- --ignored` with a
   downloaded model)
@@ -34,6 +36,8 @@ design in `DESIGN.md`.
 - `crates/onda-core`: domain and SQLite. `crates/onda-platform`: audio, focused-field identity,
   insertion, at-rest protection. `crates/onda-input`: the shortcut helper. `crates/onda-asr`:
   models and speech workers. `crates/onda-cloud`: ChatGPT sign-in, AI providers, API keys.
+- `tests/e2e/`: the real-shell suite (WebdriverIO). Its plugins exist only in debug builds made
+  with `--features e2e`, through the `src-tauri/tauri.e2e.conf.json` overlay.
 - `tests/fixtures/`: the ASR clip and quality fixtures. `scripts/`: prepare, build, smoke and
   installer checks.
 - `ARCHITECTURE.md` (boundaries), `TESTING.md` (strategy), `PLAN.md` (slices),

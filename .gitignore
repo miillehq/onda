@@ -32,5 +32,6 @@
 # Private notes and brainstorming; never published
 /.private/
 # Test output
+/artifacts/
 test-results/
 playwright-report/

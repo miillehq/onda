@@ -1,7 +1,7 @@
 # Every pull request and every push to master, in tiers (docs/adr/007-platform-support.md):
 #   tier1 windows-x64, tier1 linux-x64   required: L0 lint, L1/L3 cargo test, L2 contracts,
 #                                         quality fixtures; real-model ASR on Windows;
-#                                         WebKitGTK smoke (L6) on Linux.
+#                                         WebKitGTK smoke on Linux; real-shell journeys (L6).
 #   policy                               required: cargo-deny and npm audit, once.
 #   tier2 <platform>                     advisory while macOS and ARM are being ported:
 #                                         reports how far each platform builds and tests.
@@ -96,6 +96,22 @@ jobs:
           $env:ONDA_ASR_WORKER_DIR = Join-Path $PWD 'target/debug'
           cargo test --locked -p onda-asr --test golden -- --ignored --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'Real ASR golden tests failed' }
+      - name: L6 real-shell journeys
+        run: |
+          npx tsc -p tests/e2e/tsconfig.json --noEmit
+          if ($LASTEXITCODE -ne 0) { throw 'E2E suite type check failed' }
+          npm run build:e2e
+          if ($LASTEXITCODE -ne 0) { throw 'Debug e2e build failed' }
+          npm run test:e2e
+          if ($LASTEXITCODE -ne 0) { throw 'Real-shell tests failed' }
+      - name: Upload real-shell screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: e2e-windows-x64
+          path: artifacts/e2e
+          if-no-files-found: ignore
+          retention-days: 7
 
   linux:
     name: tier1 linux-x64
@@ -147,6 +163,21 @@ jobs:
           mkdir -p "$RUNNER_TEMP/smoke"
           timeout 300 dbus-run-session -- xvfb-run -a env ONDA_SMOKE_DIRECTORY="$RUNNER_TEMP/smoke" target/debug/onda
           python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print("\n".join(r["checks"])); sys.exit(0 if r["passed"] else 1)' "$RUNNER_TEMP/smoke/report.json"
+      - name: L6 real-shell journeys
+        env:
+          NO_AT_BRIDGE: "1"
+        run: |
+          npx tsc -p tests/e2e/tsconfig.json --noEmit
+          npm run build:e2e
+          dbus-run-session -- xvfb-run -a npm run test:e2e
+      - name: Upload real-shell screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: e2e-linux-x64
+          path: artifacts/e2e
+          if-no-files-found: ignore
+          retention-days: 7
 
   policy:
     name: dependency policy
@@ -168,7 +199,11 @@ jobs:
           cargo install cargo-deny --version 0.19.7 --locked
           cargo deny --locked check licenses advisories sources
       - name: Frontend advisories
-        run: npm audit --audit-level=high
+        # Shipped dependencies gate the build. Test tooling (WebdriverIO 9, pinned by the Tauri
+        # service) is reported, not gated, because it never ships: PLAN.md, slice 3 ruling.
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --audit-level=high || echo "::warning::High advisories in test-only dependencies (PLAN.md slice 3)"
 
   tier2:
     name: tier2 ${{ matrix.platform }}

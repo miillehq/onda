@@ -1,3 +1,6 @@
+// Real-shell test builds (`npm run build:e2e`) load WebdriverIO's bridge first; every other
+// build leaves it out, so shipped bundles never contain it.
+if (import.meta.env.MODE === "e2e") await import("@wdio/tauri-plugin");
 import "@fontsource-variable/inter";
 import "@fontsource-variable/newsreader";
 import "./styles/tokens.css";
