@@ -1,0 +1,35 @@
+// L4: what a Mac user reads where Onda behaves differently on macOS, against the labelled mock's
+// Mac variant (?platform=macos). Key names follow the browser's own platform, so a chord is
+// "Ctrl + Shift + Space" in a Windows browser and "Control + Shift + Space" in a Mac one.
+import { expect, test } from "@playwright/test";
+import { openMock } from "./visual";
+
+const content = (page: import("@playwright/test").Page) => page.getByRole("main", { name: "Content" });
+
+test("Shortcuts on a Mac: Control+Shift+Space dictates, Esc alone cancels, no desktop approves anything", async ({ page }) => {
+  await openMock(page, "/?platform=macos#settings/shortcuts");
+  const shortcuts = content(page);
+  await expect(shortcuts).toContainText("Onda listens for these anywhere on your Mac.");
+  await expect(shortcuts.getByRole("img", { name: /^(Ctrl|Control) \+ Shift \+ Space$/ })).toBeVisible();
+  await expect(shortcuts.getByRole("img", { name: "Escape" })).toBeVisible();
+  await expect(shortcuts).not.toContainText("desktop");
+  await expect(shortcuts.getByRole("heading", { name: "Typing into apps" })).toHaveCount(0);
+  await expect(shortcuts).toContainText("What you say is copied, ready for ⌘V.");
+});
+
+test("Home on a Mac says dictation waits on the clipboard for ⌘V", async ({ page }) => {
+  await openMock(page, "/?platform=macos#home");
+  await expect(page.locator(".hero-text")).toHaveText("Works in any app. Where Onda can't type, your words wait on the clipboard for ⌘V.");
+});
+
+test("Privacy on a Mac keeps the history key in the keychain", async ({ page }) => {
+  await openMock(page, "/?platform=macos#settings/privacy");
+  await expect(content(page)).toContainText("Encrypted with a key in your Mac's keychain");
+  await expect(content(page)).not.toContainText("desktop keyring");
+});
+
+test("Updates and help on a Mac offers no resource report, which macOS cannot measure yet", async ({ page }) => {
+  await openMock(page, "/?platform=macos#settings/about");
+  await expect(content(page).getByRole("heading", { name: "Shortcuts at a glance" })).toBeVisible();
+  await expect(content(page).getByRole("heading", { name: "What Onda is using" })).toHaveCount(0);
+});

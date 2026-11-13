@@ -154,14 +154,14 @@ export function Pill() {
           {handsFree && <Timer />}
           {command && <span class="pill-label">Say your edit</span>}
           <Wave mode="live" level={level} glyph />
-          {handsFree && settings.value && isWindows.value && (
+          {handsFree && settings.value && (isWindows.value || isMac) && (
             <>
               <span class="pill-divider" />
               <Keys keys={settings.value.toggleShortcut.keys} />
               <span class="pill-hint">to finish</span>
             </>
           )}
-          {handsFree && !isWindows.value && (
+          {handsFree && !isWindows.value && !isMac && (
             <>
               <span class="pill-divider" />
               <span class="pill-hint">Shortcut again to finish</span>

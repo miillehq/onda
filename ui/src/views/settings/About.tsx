@@ -7,7 +7,7 @@ import { Card, Page, Row, Rows, Section } from "../../components/layout";
 import type { ResourceUsage, UpdateInfo } from "../../generated/api";
 import { formatBytes } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { cancelKeys, commandShortcutOnly, getResourceUsage, isWindows, settings, snapshot, toast, toastError } from "../../lib/store";
+import { cancelKeys, commandShortcutOnly, getResourceUsage, isMac, isWindows, settings, snapshot, toast, toastError } from "../../lib/store";
 
 const ROLE_NAMES: Record<string, string> = {
   app: "Onda",
@@ -225,7 +225,8 @@ export function About() {
         )}
       </Section>
 
-      <ResourceReport />
+      {/* macOS has no process sampling yet, so there is nothing to measure there. */}
+      {!isMac.value && <ResourceReport />}
 
       <Section title="Help">
         <Rows>

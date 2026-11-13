@@ -12,6 +12,13 @@ describe("a fresh profile in the real app", () => {
     expect(state.settings.onboardingCompleted).toBe(false);
   });
 
+  it("says whether it can paste into other apps", async () => {
+    // Windows types; a Mac leaves dictation on the pasteboard for ⌘V; a Linux desktop decides.
+    const state = await snapshot();
+    if (state.platform === "windows") expect(state.typingAccess).toBe("allowed");
+    if (state.platform === "macos") expect(state.typingAccess).toBe("unavailable");
+  });
+
   it("adds a dictionary word through the interface", async () => {
     // Onboarding downloads a speech model; the journey under test starts after it.
     await saveSettings({ onboardingCompleted: true });

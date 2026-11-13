@@ -4,7 +4,7 @@ import { Button, Select, Switch } from "../../components/controls";
 import { Dialog, Page, Row, Rows, Section } from "../../components/layout";
 import { plural, providerName } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { aiReady, clearHistory, history, isWindows, saveSettings, settings, thisDevice, toast, yourDevice } from "../../lib/store";
+import { aiReady, clearHistory, history, isMac, isWindows, saveSettings, settings, thisDevice, toast, yourDevice } from "../../lib/store";
 import { retentionPhrase } from "../History";
 
 const NEVER = ["Recordings of your voice", "Your words in logs or diagnostics", "Analytics or usage tracking"];
@@ -99,7 +99,9 @@ export function Privacy() {
             description={
               isWindows.value
                 ? "So you can copy a dictation again if it didn't make it into your app. Encrypted with your Windows account and deleted automatically."
-                : "So you can copy a dictation again if it didn't make it into your app. Encrypted with a key in your desktop keyring and deleted automatically. Without a keyring, it's kept only until Onda quits."
+                : isMac.value
+                  ? "So you can copy a dictation again if it didn't make it into your app. Encrypted with a key in your Mac's keychain and deleted automatically."
+                  : "So you can copy a dictation again if it didn't make it into your app. Encrypted with a key in your desktop keyring and deleted automatically. Without a keyring, it's kept only until Onda quits."
             }
             control={
               <Select

@@ -1375,9 +1375,14 @@ async fn typing_access() -> String {
         }
         .into()
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
     {
         "allowed".into()
+    }
+    // A Mac hands dictation to the pasteboard with a ⌘V hint; Onda cannot press paste there yet.
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        "unavailable".into()
     }
 }
 

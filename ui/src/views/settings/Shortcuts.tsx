@@ -4,7 +4,7 @@ import { Button, Keys, Switch } from "../../components/controls";
 import { Callout, Page, Row, Rows, Section } from "../../components/layout";
 import { ShortcutRecorder } from "../../components/ShortcutRecorder";
 import type { Settings } from "../../generated/core";
-import { allowTyping, cancelKeys, isWindows, restartShortcuts, saveSettings, settings, snapshot, stopTyping } from "../../lib/store";
+import { allowTyping, cancelKeys, isMac, isWindows, restartShortcuts, saveSettings, settings, snapshot, stopTyping } from "../../lib/store";
 
 function save(patch: Partial<Settings>) {
   return saveSettings(patch, { quiet: true });
@@ -82,6 +82,12 @@ function ShortcutStatus({ status }: { status: string }) {
       setBusy(false);
     }
   };
+  if (status === "unavailable" && isMac.value)
+    return (
+      <Callout tone="error" icon={<TriangleAlert size={20} />} title="A shortcut is taken">
+        macOS or another app already uses one of these shortcuts, so Onda couldn't claim it. Choose other keys for it below.
+      </Callout>
+    );
   if (status === "unavailable")
     return (
       <Callout tone="error" icon={<TriangleAlert size={20} />} title="Shortcuts aren't working right now">
@@ -109,7 +115,7 @@ function ShortcutStatus({ status }: { status: string }) {
         Without them, start dictation from the tray menu.
       </Callout>
     );
-  if (status === "starting" && !isWindows.value)
+  if (status === "starting" && !isWindows.value && !isMac.value)
     return (
       <p class="status-line">
         <Hourglass size={16} aria-hidden="true" /> Waiting for your desktop to approve the shortcuts
@@ -128,11 +134,14 @@ export function Shortcuts() {
   const status = snapshot.value?.shortcutStatus ?? "starting";
   if (!isWindows.value && status === "desktop") return <DesktopShortcuts />;
   const cancel = cancelKeys(value.pushToTalk.keys);
+  const escOnly = cancel.length === 1;
+  const lede = isWindows.value
+    ? "Onda listens for these anywhere in Windows. Esc always cancels."
+    : isMac.value
+      ? "Onda listens for these anywhere on your Mac. Esc cancels while Onda is listening."
+      : "These work anywhere. Your desktop asks once before Onda can use them, and may let you pick other keys.";
   return (
-    <Page
-      title="Shortcuts"
-      lede={isWindows.value ? "Onda listens for these anywhere in Windows. Esc always cancels." : "These work anywhere. Your desktop asks once before Onda can use them, and may let you pick other keys."}
-    >
+    <Page title="Shortcuts" lede={lede}>
       <ShortcutStatus status={status} />
 
       <Section title="Dictation">
@@ -151,8 +160,8 @@ export function Shortcuts() {
           <Row
             icon={<Ban size={18} />}
             title="Cancel"
-            description={isWindows.value ? "Stops listening and discards what you said." : "Stops listening and discards what you said. Esc goes with your dictation keys, so other apps keep Esc."}
-            control={isWindows.value ? <Keys keys={cancel} size="md" label="Escape" /> : <Keys keys={cancel} size="md" />}
+            description={escOnly ? "Stops listening and discards what you said." : "Stops listening and discards what you said. Esc goes with your dictation keys, so other apps keep Esc."}
+            control={escOnly ? <Keys keys={cancel} size="md" label="Escape" /> : <Keys keys={cancel} size="md" />}
           />
         </Rows>
       </Section>
@@ -169,6 +178,8 @@ export function Shortcuts() {
       </Section>
       {isWindows.value ? (
         <p class="footnote">Shortcuts that use the Windows key can also trigger Windows features, such as switching keyboard layouts.</p>
+      ) : isMac.value ? (
+        <p class="footnote">Onda can't paste into other apps on a Mac yet. What you say is copied, ready for ⌘V.</p>
       ) : (
         <>
           <p class="footnote">Changing a shortcut here asks your desktop again. Keys you chose in its dialog are listed in its keyboard settings.</p>
