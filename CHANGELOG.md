@@ -41,6 +41,8 @@ Windows, SmartScreen asks once (**More info › Run anyway**); on a Mac, allow O
 ### Fixed
 
 - The Stats page's activity grid no longer draws month labels over its first row of days (#30).
+- On a Mac, Onda's icon is the brand kit's Mac icon, sized on Apple's icon grid like other apps,
+  instead of filling the whole tile (#34).
 - On a Mac, the Balanced and Quality speech profiles no longer fall back to the Fast models:
   Onda now reads how much memory the Mac has (#33).
 - On Windows on ARM, a build no longer fails after the speech worker by linking with the wrong
