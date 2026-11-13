@@ -5,5 +5,5 @@
     "skipLibCheck": true, "noUncheckedIndexedAccess": true, "exactOptionalPropertyTypes": true,
     "jsx": "react-jsx", "jsxImportSource": "preact"
   },
-  "include": ["ui/src/**/*.ts", "ui/src/**/*.tsx"]
+  "include": ["ui/src/**/*.ts", "ui/src/**/*.tsx", "contracts/**/*.ts", "tests/unit/**/*.ts"]
 }

@@ -69,10 +69,13 @@ One Tauri command, `application_call`, takes a tagged `ApiRequest` and returns a
 runtime events arrive on `onda://event`. ts-rs generates the TypeScript mirror into
 `ui/src/generated/` (`npm run contracts`), and `npm run contracts:check` fails CI when it drifts.
 The mock (`ui/src/mock/backend.ts`) is typed from the same generated types and loads only in
-development builds outside the shell. Planned in [PLAN.md](PLAN.md): shared request and response
-examples in `contracts/`, a contract suite (L2) that runs them against the mock and the real
-dispatcher, a real-shell suite (L6) that asserts at least one call against the same examples, and
-a visible mock badge so no browser test can pass against the mock by mistake.
+development builds outside the shell. It starts a fresh install from `DEFAULT_SETTINGS` and checks
+input with `LIMITS`, both generated from Rust beside the types, and mirrors `Settings::validate` in
+`ui/src/mock/validate.ts`. `contracts/examples.ts` holds shared requests and expected answers:
+Vitest runs them against the mock (`tests/unit/contract.test.ts`) and the real-shell suite runs
+them in the real app (`tests/e2e/00-contract.spec.ts`), so neither side can drift alone. The mock
+shows a "Development mock" badge; browser tests assert it and the real-shell suite asserts it is
+absent.
 
 ## State and data
 

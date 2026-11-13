@@ -12,6 +12,7 @@ import "./styles/pages.css";
 import { render } from "preact";
 import { call } from "./api";
 import { App } from "./app/App";
+import { MockBadge } from "./components/MockBadge";
 import { navigate, parseRoute } from "./lib/router";
 import * as store from "./lib/store";
 import { init, operation, toastError } from "./lib/store";
@@ -44,7 +45,13 @@ if (import.meta.env.DEV) {
 const linked = parseRoute(window.location.hash.slice(1));
 if (linked) navigate(linked);
 
-render(<App />, root);
+render(
+  <>
+    <App />
+    <MockBadge />
+  </>,
+  root,
+);
 
 void init()
   .then(async () => {
