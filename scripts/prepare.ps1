@@ -16,6 +16,15 @@ try {
     if (-not $x86) {
         foreach ($name in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'CMAKE_GENERATOR', 'CMAKE_GENERATOR_INSTANCE', 'CMAKE_GENERATOR_PLATFORM', 'CMAKE_GENERATOR_TOOLSET', 'CMAKE_C_COMPILER', 'CMAKE_CXX_COMPILER', 'CMAKE_ASM_COMPILER', 'CMAKE_C_COMPILER_TARGET', 'CMAKE_CXX_COMPILER_TARGET', 'CXXFLAGS_aarch64_pc_windows_msvc')) { $previousArmEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
         . (Join-Path $PSScriptRoot 'arm64-toolchain.ps1')
+        # A whisper.cpp CMake cache made with another compiler cannot be re-configured for clang-cl:
+        # CMake resets it mid-run and fails. Such a build directory (build output only) starts afresh.
+        $compilerLine = '^CMAKE_C_COMPILER:[A-Z]+=' + [regex]::Escape($env:CMAKE_C_COMPILER) + '$'
+        foreach ($cache in @(Get-Item -Path (Join-Path $repositoryDirectory "target/$buildMode/build/whisper-rs-sys-*/out/build/CMakeCache.txt") -ErrorAction SilentlyContinue)) {
+            if (-not (Select-String -LiteralPath $cache.FullName -Pattern $compilerLine -Quiet)) {
+                Write-Host "Removing a whisper.cpp CMake build made with another compiler: $($cache.Directory.FullName)"
+                Remove-Item -LiteralPath $cache.Directory.FullName -Recurse -Force
+            }
+        }
     }
     try {
         cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker @releaseArguments
