@@ -3308,6 +3308,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hound",
+ "libc",
  "num_cpus",
  "reqwest 0.12.28",
  "serde",
