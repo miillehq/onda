@@ -495,6 +495,40 @@ mod tests {
         assert!(serde_json::from_value::<ApiRequest>(serde_json::json!({"command":"startDictation","args":{"commandMode":true,"unexpected":true}})).is_err());
     }
     #[test]
+    fn the_account_sent_to_the_interface_has_only_its_public_fields() {
+        let profile = AccountInfo::from(onda_cloud::AccountProfile {
+            id: "safe-id".into(),
+            label: "account".into(),
+            email: Some("person@example.com".into()),
+            signed_in: true,
+            plan_usage_enabled: true,
+            active: true,
+            preferred_model: Some("model".into()),
+        });
+        let json = serde_json::to_value(&profile).unwrap();
+        let mut keys: Vec<&str> = json
+            .as_object()
+            .expect("an object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        // Any new field, a token above all, must be added here on purpose.
+        assert_eq!(
+            keys,
+            [
+                "active",
+                "email",
+                "id",
+                "label",
+                "planUsageEnabled",
+                "preferredModel",
+                "signedIn"
+            ]
+        );
+    }
+
+    #[test]
     fn public_account_dto_contains_no_credentials() {
         let profile = AccountInfo {
             id: "safe-id".into(),
