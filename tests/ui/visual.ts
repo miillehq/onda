@@ -53,5 +53,12 @@ export async function tier3(page: Page, name: string, ready: Locator): Promise<v
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
+  // Entrance animations must have ended: on the Linux runners a capture that began during the
+  // pill's fade-in saved the card fully transparent, although it paints once the fade ends.
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().filter((a) => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity).length), {
+      message: "every finite animation has ended",
+    })
+    .toBe(0);
   await expect(page).toHaveScreenshot(file, { fullPage: true });
 }
