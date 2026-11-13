@@ -16,4 +16,4 @@ test("a fresh install opens on the welcome step and moves on to the microphone c
 
 test("tier 1: the welcome step's structure", async ({ page }) => tier1(page.locator("main.setup-main"), "welcome"));
 test("tier 2: the welcome step's layout", async ({ page }) => tier2(page, "welcome"));
-test("tier 3: the welcome step's pixels", async ({ page }) => tier3(page, "welcome"));
+test("tier 3: the welcome step's pixels", async ({ page }) => tier3(page, "welcome", page.getByRole("heading", { name: "Welcome to Onda" })));

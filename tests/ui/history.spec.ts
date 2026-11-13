@@ -50,4 +50,4 @@ test("Clear all asks first, then empties History", async ({ page }) => {
 
 test("tier 1: History's structure", async ({ page }) => tier1(page.getByRole("main", { name: "Content" }), "history"));
 test("tier 2: History's layout", async ({ page }) => tier2(page, "history"));
-test("tier 3: History's pixels", async ({ page }) => tier3(page, "history"));
+test("tier 3: History's pixels", async ({ page }) => tier3(page, "history", day(page, "Yesterday")));

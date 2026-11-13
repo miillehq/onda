@@ -15,4 +15,4 @@ test("choosing Dark applies it at once and Light switches back", async ({ page }
 
 test("tier 1: General settings' structure", async ({ page }) => tier1(page.getByRole("main", { name: "Content" }), "general"));
 test("tier 2: General settings' layout", async ({ page }) => tier2(page, "general"));
-test("tier 3: General settings' pixels", async ({ page }) => tier3(page, "general"));
+test("tier 3: General settings' pixels", async ({ page }) => tier3(page, "general", page.getByRole("main", { name: "Content" }).getByRole("heading", { level: 1 })));
