@@ -58,7 +58,7 @@ with an identical tree.
 | 2026-11-13 | L5 probe | against the runner's Windows baselines, which this machine matches: a serif fallback for the UI font fails all five screens, the pill card without its background fails the pill, a 24 px wider sidebar fails the three pages with a sidebar; a lighter hairline grey, a label moved 4 px and a smaller corner radius pass (tolerance ruling in PLAN.md) | windows-x64, local, chromium | planted one at a time, `npx playwright test -g "tier 3" --project=chromium`, restored |
 | 2026-11-13 | L5 fix | two capture bugs, fixed in PR #19: the Linux pill baselines were blank (captured mid fade-in, diagnosed on the runner in run 43363554626), and the snapshots workflow restored the other OSes' stale baselines (run 43363961850 changed nothing); run 43364686147 then replaced exactly the two blank images | linux-x64 CI | PR #19 |
 | 2026-11-13 | L0 to L3, L6 | macOS and ARM (Tier 2): crates, frontend, speech and shortcut workers, the app shell and the real-shell suite (3 spec files, 26 tests) pass on macos-arm64 and macos-x64 (WKWebView), windows-arm64 (WebView2) and linux-arm64 (WebKitGTK). Rust tests 159 passed and 6 ignored on macOS, 181 and 6 on Windows arm64, 174 and 7 on Linux arm64; on macOS the LaunchAgent test passes and the Keychain round trip is ignored | macos-arm64, macos-x64, windows-arm64, linux-arm64 CI | ci runs 43364156804 (`06d4a2e`; on macos-x64 every test passed and only the screenshot upload hit a runner DNS error) and 43367309751 (`fe9dad6`), PR #11 |
-| 2026-11-13 | L7 | macOS dmg (Apple Silicon, unsigned, 10.6 MiB): mounted, Onda.app copied to `~/Applications`, still running after 6 s, removed | macos-arm64 CI | [installers run 43367304794](https://github.com/miillehq/onda/actions/runs/43367304794), `fe9dad6`, branch `macos/builds` |
+| 2026-11-13 | L7 | macOS dmg (Apple Silicon, unsigned, 10.6 MiB): mounted, Onda.app copied to `~/Applications`, still running after 6 s, removed. The same run with the macOS and ARM changes: the Windows installed-app test passes (startup 7.9 s), as do the Linux deb and AppImage and the three containers | macos-arm64, windows-x64, linux-x64 CI | [installers run 43367304794](https://github.com/miillehq/onda/actions/runs/43367304794), `fe9dad6`, branch `macos/builds` |
 
 ## Unverified
 
@@ -69,7 +69,7 @@ with an identical tree.
   notarization are documented in `docs/release.md` but need an Apple Developer account. Open
   decision: the default chord Ctrl+Cmd+Space collides with macOS's Emoji & Symbols viewer.
 - ARM: no ARM packages are built; the installers workflow builds x64 and Apple Silicon only.
-- Windows NSIS: why the installed app's first start on a fresh profile takes 10 s is not
+- Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 10 s is not
   investigated.
 - L5 tier 3 catches rendering breakage, not small changes (PLAN.md ruling).
 - Linux: the keyring seal round trip and Secret Service key storage are ignored tests; they need a
