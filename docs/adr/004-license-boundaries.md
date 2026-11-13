@@ -12,4 +12,6 @@ MPL has file-level source obligations and permits combining covered files with s
 
 The generated `THIRD_PARTY_NOTICES.txt` and `docs/dependency-inventory.json` inventory the exact Rust and npm locks, including build/optional/all-target dependencies. Inventory membership is broader than distributed Windows code. Direct native libraries (CPAL, windows-rs, whisper.cpp/whisper-rs, SQLite, ring transport/resampling) use permissive terms; see the generated notices and model manifest for exact versions/licenses.
 
+Update (2026-11-13): Only the Windows NSIS installer bundles `licenses/MPL-source.zip`. The deb, AppImage and dmg carry `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.txt` but not the ZIP, and no workflow attaches it beside them. How those packages meet the MPL source obligation is open.
+
 References: [Mozilla MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/), [MPL 2.0 text](https://www.mozilla.org/en-US/MPL/2.0/), [cargo-deny license policy](https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html).

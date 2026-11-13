@@ -46,3 +46,7 @@ Keep Tauri 2 with the Preact and Vite UI and the Rust workspace. Keel profile `t
 - Speech: the whisper.cpp CPU worker everywhere (NEON on ARM, where the AVX2 variant does not
   exist), the optional Vulkan worker on Windows and Linux, Metal on macOS.
 - Agents: Tauri 2's APIs differ from Tauri 1; the profile's recipes give the current shapes.
+
+Update (2026-11-13): macOS is ported (PLAN.md, slices 11 to 15). The owner deferred Developer ID
+signing and notarization (PLAN.md, slice 15 ruling): the dmg ships unsigned, and each user allows
+Onda once under System Settings › Privacy & Security.
