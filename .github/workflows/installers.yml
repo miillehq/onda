@@ -1,6 +1,8 @@
 # L7: build the release bundles and install, launch and uninstall them the way a user does:
-# NSIS on Windows, deb and AppImage on Linux, dmg on macOS (advisory). Runs on master and on demand;
-# pull requests stay within the 20-minute budget without it.
+# NSIS on Windows, deb and AppImage on Linux, dmg on macOS, each on x64 and ARM. Tier 1 (Windows
+# and Linux x64) must pass; the Tier 2 legs (ARM, macOS) report without blocking. Runs on master
+# and on demand; pull requests stay within the 20-minute budget without it. A release publishes
+# exactly the bundles one green run of this workflow built and tested (release.yml).
 name: installers
 
 on:
@@ -22,9 +24,16 @@ env:
 
 jobs:
   windows:
-    name: installers windows-x64
-    runs-on: windows-2022
-    timeout-minutes: 75
+    name: installers ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    continue-on-error: ${{ matrix.advisory }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: windows-x64, os: windows-2022, advisory: false, cache: windows-msvc-release }
+          - { platform: windows-arm64, os: windows-11-arm, advisory: true, cache: windows-arm64-release }
     defaults:
       run:
         shell: pwsh
@@ -39,7 +48,7 @@ jobs:
           toolchain: "1.95.0"
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
-          shared-key: windows-msvc-release
+          shared-key: ${{ matrix.cache }}
           cache-on-failure: true
       - name: Verify native toolchain
         run: |
@@ -49,7 +58,7 @@ jobs:
         run: |
           npm ci
           if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
-      - name: Build unsigned per-user NSIS installer
+      - name: Build the unsigned per-user NSIS installer
         run: ./scripts/build.ps1
       - name: Bundle reviewed MPL source
         run: |
@@ -95,15 +104,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: installed-smoke-windows-x64
+          name: installed-smoke-${{ matrix.platform }}
           path: .artifacts/installed-smoke/*.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload reviewable installer and notices
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: onda-windows-x64-cpu-unsigned
+          name: onda-${{ matrix.platform }}-unsigned
           if-no-files-found: error
+          # .artifacts holds the MPL source archive and the runtime manifest.
+          include-hidden-files: true
           path: |
             target/release/bundle/nsis/*.exe
             target/release/bundle/nsis/*.sha256
@@ -114,9 +125,16 @@ jobs:
             .artifacts/runtime/Microsoft-runtime-manifest.json
 
   linux:
-    name: installers linux-x64
-    runs-on: ubuntu-24.04
+    name: installers ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    continue-on-error: ${{ matrix.advisory }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x64, os: ubuntu-24.04, advisory: false, cache: linux-gnu-release }
+          - { platform: linux-arm64, os: ubuntu-24.04-arm, advisory: true, cache: linux-arm64-release }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -128,7 +146,7 @@ jobs:
           toolchain: "1.95.0"
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
-          shared-key: linux-gnu-release
+          shared-key: ${{ matrix.cache }}
           cache-on-failure: true
       - name: Install Tauri, audio and packaging dependencies
         env:
@@ -159,18 +177,24 @@ jobs:
       - name: Upload the Linux packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: onda-linux-x64-unsigned
+          name: onda-${{ matrix.platform }}-unsigned
           if-no-files-found: error
           path: |
             target/release/bundle/deb/*.deb
             target/release/bundle/appimage/*.AppImage
 
   macos:
-    name: installers macos-arm64
-    runs-on: macos-latest
+    name: installers ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     # Tier 2 (ADR 007) while the macOS port lands: reports without blocking.
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: macos-arm64, os: macos-latest }
+          - { platform: macos-x64, os: macos-15-intel }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -182,7 +206,7 @@ jobs:
           toolchain: "1.95.0"
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
-          shared-key: macos-arm64-release
+          shared-key: ${{ matrix.platform }}-release
           cache-on-failure: true
           cache-bin: false
       - name: Install locked frontend
@@ -194,7 +218,7 @@ jobs:
       - name: Upload the disk image
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: onda-macos-arm64-unsigned
+          name: onda-${{ matrix.platform }}-unsigned
           if-no-files-found: error
           path: target/release/bundle/dmg/*.dmg
 

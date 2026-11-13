@@ -1,4 +1,9 @@
-name: Windows release candidate
+# A `v*` tag on master publishes a GitHub release with exactly the bundles that one green
+# `installers` run built and installer-tested for the tagged commit, once the tag, package.json,
+# tauri.conf.json and the Cargo workspace agree on the version. 0.x versions are pre-releases.
+# A manual run builds a reviewable Windows candidate instead, optionally with the Vulkan worker
+# or signed updater artifacts; it publishes nothing.
+name: release
 
 on:
   push:
@@ -18,7 +23,101 @@ permissions:
   contents: read
 
 jobs:
+  gate:
+    name: gate (one version, on master, installers green)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run: ${{ steps.installers.outputs.run }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: The tag, the app and the crates carry one version
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          package=$(node -p "require('./package.json').version")
+          tauri=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          echo "tag $tag; package.json $package; tauri.conf.json $tauri; Cargo workspace $cargo"
+          if [ "$tag" != "$package" ] || [ "$tag" != "$tauri" ] || [ "$tag" != "$cargo" ]; then
+            echo "::error::the tag and the versions in package.json, tauri.conf.json and Cargo.toml differ"
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+      - name: The tagged commit is on master
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "::error::$GITHUB_SHA is not on master"; exit 1; }
+      - name: Every installers job passed on this commit
+        id: installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow installers.yml --commit "$GITHUB_SHA" --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          [ -n "$run" ] || { echo "::error::no successful installers run for $GITHUB_SHA"; exit 1; }
+          # Tier 2 legs report without failing their run, so each job is checked by name.
+          gh run view "$run" --repo "$GITHUB_REPOSITORY" --json jobs -q '.jobs[] | "\(.conclusion) \(.name)"' | tee jobs.txt
+          for platform in windows-x64 windows-arm64 linux-x64 linux-arm64 macos-arm64 macos-x64; do
+            grep -qx "success installers $platform" jobs.txt || { echo "::error::installers $platform did not pass in run $run"; exit 1; }
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: publish the release
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Collect the tested bundles and their checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ needs.gate.outputs.run }}
+        run: |
+          mkdir -p downloads assets
+          for platform in windows-x64 windows-arm64 linux-x64 linux-arm64 macos-arm64 macos-x64; do
+            gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --name "onda-$platform-unsigned" --dir "downloads/$platform"
+          done
+          find downloads -type f \( -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' \) -exec cp {} assets/ \;
+          count=$(ls assets | wc -l)
+          [ "$count" -eq 8 ] || { ls -la assets; echo "::error::expected 8 bundles, found $count"; exit 1; }
+          cp downloads/windows-x64/THIRD_PARTY_NOTICES.txt assets/
+          cp "$(find downloads/windows-x64 -name onda-mpl-source.zip | head -1)" assets/
+          (cd assets && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - name: Notes from the changelog
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+          RUN: ${{ needs.gate.outputs.run }}
+        run: |
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1; }
+          {
+            echo
+            echo "---"
+            echo
+            echo "Every installer here was built, installed, launched and removed on its own platform in [installers run $RUN]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN). Check a download against \`SHA256SUMS.txt\`."
+          } >> notes.md
+          cat notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          prerelease=()
+          case "$VERSION" in 0.*|*-*) prerelease=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Onda $VERSION" --notes-file notes.md "${prerelease[@]}" assets/*
+
   candidate:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-2022
     timeout-minutes: 90
     defaults:
