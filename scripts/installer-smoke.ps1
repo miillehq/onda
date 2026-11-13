@@ -19,6 +19,10 @@ $repositoryDirectory = Split-Path -Parent $PSScriptRoot
 $configuration = Get-Content -LiteralPath (Join-Path $repositoryDirectory 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
 $productName = [string]$configuration.productName
 $applicationId = [string]$configuration.identifier
+# The installed workers must answer with the protocol this checkout speaks; read it, never copy it.
+$protocolSource = Get-Content -LiteralPath (Join-Path $repositoryDirectory 'crates/onda-asr/src/protocol.rs') -Raw
+if ($protocolSource -notmatch 'pub const PROTOCOL_VERSION: u32 = (\d+);') { throw 'Worker protocol version not found in protocol.rs.' }
+$workerProtocolVersion = [int]$Matches[1]
 $artifactRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryDirectory '.artifacts/installed-smoke'))
 $testId = [guid]::NewGuid().ToString('N')
 $installDirectory = Join-Path $artifactRoot $testId
@@ -126,7 +130,7 @@ function Test-InstalledWorker {
     $json = $output.Result
     if ($json.Length -gt 8192) { throw 'Installed worker probe output exceeded its bound.' }
     $probe = $json | ConvertFrom-Json
-    if ($probe.version -ne 1) { throw 'Installed worker probe protocol mismatch.' }
+    if ($probe.version -ne $workerProtocolVersion) { throw "Installed worker probe protocol mismatch: $($probe.version), expected $workerProtocolVersion." }
     return [ordered]@{ binary = $Name; available = $true; vulkanDevices = $probe.vulkan_devices; exitCode = $process.ExitCode }
 }
 
