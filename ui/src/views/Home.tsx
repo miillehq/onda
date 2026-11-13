@@ -22,37 +22,10 @@ import { Diff, Suggestion } from "../components/feedback";
 import { Callout, EmptyState } from "../components/layout";
 import { Wave } from "../components/Wave";
 import { presentError } from "../lib/errors";
-import { formatBytes, formatDuration, formatInteger, greetingFor, routeLabel } from "../lib/format";
+import { formatBytes, formatDuration, formatInteger, greetingFor, pasteKeys, routeLabel } from "../lib/format";
 import { navigate } from "../lib/router";
 import { HistoryItem, retentionPhrase } from "./History";
-import {
-  acceptLearning,
-  catalog,
-  copyResult,
-  copySuggestion,
-  dictionary,
-  discardResult,
-  dismissError,
-  downloadModel,
-  downloads,
-  history,
-  isBusy,
-  lastResult,
-  learning,
-  modelReady,
-  operation,
-  pasteAgain,
-  provisional,
-  retryPolish,
-  settings,
-  snapshot,
-  undoRewrite,
-  isWindows,
-  profile,
-  usage,
-  commandShortcutOnly,
-  thisDevice,
-} from "../lib/store";
+import { acceptLearning, catalog, commandShortcutOnly, copyResult, copySuggestion, dictionary, discardResult, dismissError, downloadModel, downloads, history, isBusy, isWindows, lastResult, learning, modelReady, operation, pasteAgain, platform, profile, provisional, retryPolish, settings, snapshot, thisDevice, undoRewrite, usage } from "../lib/store";
 
 const TYPING_WPM = 40;
 const SAMPLE = "Running ten minutes late, start without me";
@@ -117,7 +90,7 @@ function Hero({ onPractice }: { onPractice: () => void }) {
               ? "Works in any app, wherever your cursor is."
               : snapshot.value?.typingAccess === "notAllowed"
                 ? "Works in any app. Allow typing in Shortcuts so Onda can paste for you."
-                : "Works in any app. Where Onda can't type, your words wait on the clipboard for Ctrl+V."}
+                : `Works in any app. Where Onda can't type, your words wait on the clipboard for ${pasteKeys(platform.value === "macos")}.`}
           </p>
           <div class="hero-actions">
             <Button variant="inverse" icon={<Mic size={16} />} onClick={onPractice}>

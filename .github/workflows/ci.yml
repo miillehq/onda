@@ -328,3 +328,19 @@ jobs:
       - name: App shell (L1)
         if: always()
         run: cargo test --locked -p onda-app
+      - name: Real-shell journeys (L6)
+        if: always()
+        shell: bash
+        env:
+          NO_AT_BRIDGE: "1"
+        run: |
+          npm run build:e2e
+          if [ "$RUNNER_OS" = "Linux" ]; then dbus-run-session -- xvfb-run -a npm run test:e2e; else npm run test:e2e; fi
+      - name: Upload real-shell screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: e2e-${{ matrix.platform }}
+          path: artifacts/e2e
+          if-no-files-found: ignore
+          retention-days: 7

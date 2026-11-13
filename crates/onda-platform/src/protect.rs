@@ -22,12 +22,12 @@ pub fn unprotect_for(purpose: &[u8], bytes: &[u8]) -> Result<Vec<u8>, PlatformEr
     crypt(bytes, true, purpose)
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn crypt(_bytes: &[u8], _decrypt: bool, _purpose: &[u8]) -> Result<Vec<u8>, PlatformError> {
     Err(PlatformError::UnsupportedPlatform)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn crypt(bytes: &[u8], decrypt: bool, purpose: &[u8]) -> Result<Vec<u8>, PlatformError> {
     if decrypt {
         keyring_seal::open(purpose, bytes)
@@ -38,7 +38,7 @@ fn crypt(bytes: &[u8], decrypt: bool, purpose: &[u8]) -> Result<Vec<u8>, Platfor
 
 /// ChaCha20-Poly1305 under one random key that the desktop keyring keeps for this user, the
 /// counterpart of DPAPI's per-user key. Reading it can prompt to unlock the keyring.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod keyring_seal {
     use crate::PlatformError;
     use ring::{
@@ -233,7 +233,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod linux_tests {
     use super::keyring_seal::{aead_key, load_or_create, open_with, seal_with, KEY_BYTES};
     use super::ENTROPY as HISTORY;

@@ -1,8 +1,10 @@
 //! Bounded shortcut protocol and restartable supervisor for the isolated hook process.
 
+mod accelerator;
 mod matcher;
 mod supervisor;
 
+pub use accelerator::accelerator;
 pub use matcher::ShortcutMatcher;
 use serde::{Deserialize, Serialize};
 pub use supervisor::HelperSupervisor;

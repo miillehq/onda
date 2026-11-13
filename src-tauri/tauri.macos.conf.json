@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.icns", "icons/128x128.png", "icons/32x32.png"],
+    "externalBin": ["binaries/onda-input", "binaries/onda-asr-worker", "binaries/onda-asr-avx2-worker"],
+    "macOS": { "minimumSystemVersion": "12.0" }
+  }
+}

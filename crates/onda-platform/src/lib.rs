@@ -12,6 +12,8 @@ mod linux_clipboard;
 mod linux_target;
 #[cfg(target_os = "linux")]
 mod linux_typing;
+#[cfg(target_os = "macos")]
+mod macos_clipboard;
 #[cfg(target_os = "linux")]
 pub mod portal;
 mod processes;

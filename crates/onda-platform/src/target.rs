@@ -121,7 +121,11 @@ impl WindowsTargetService {
         {
             crate::linux_clipboard::copy_text(text)
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(target_os = "macos")]
+        {
+            crate::macos_clipboard::copy_text(text)
+        }
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             Err(PlatformError::UnsupportedPlatform)
         }

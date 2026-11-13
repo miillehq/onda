@@ -9,6 +9,8 @@ description = "Isolated local speech recognition and verified model assets for O
 default = []
 native-asr = ["dep:whisper-rs"]
 vulkan = ["native-asr", "whisper-rs/vulkan"]
+# macOS: one worker that runs whisper.cpp on Metal and falls back to the CPU by itself.
+metal = ["native-asr", "whisper-rs/metal"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

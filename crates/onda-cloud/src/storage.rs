@@ -378,19 +378,19 @@ fn protect(bytes: &[u8]) -> Result<Vec<u8>> {
 fn unprotect(bytes: &[u8]) -> Result<Vec<u8>> {
     crypt_bytes(bytes, true, PROTECTION_ENTROPY)
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn protect(bytes: &[u8]) -> Result<Vec<u8>> {
     onda_platform::protect_for(PROTECTION_ENTROPY, bytes).map_err(|_| CloudError::Storage)
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn unprotect(bytes: &[u8]) -> Result<Vec<u8>> {
     onda_platform::unprotect_for(PROTECTION_ENTROPY, bytes).map_err(|_| CloudError::Storage)
 }
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn protect(_bytes: &[u8]) -> Result<Vec<u8>> {
     Err(CloudError::UnsupportedPlatform)
 }
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn unprotect(_bytes: &[u8]) -> Result<Vec<u8>> {
     Err(CloudError::UnsupportedPlatform)
 }

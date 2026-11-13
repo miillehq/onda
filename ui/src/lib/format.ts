@@ -74,6 +74,11 @@ export function routeLabel(route: DataRoute): string | null {
   }
 }
 
+/** The paste chord to press when the words wait on the clipboard: Command-V on a Mac. */
+export function pasteKeys(mac: boolean): string {
+  return mac ? "\u2318V" : "Ctrl+V";
+}
+
 /** "Good afternoon, Daniel" with the first word of the profile name, or just the greeting. */
 export function greetingFor(name: string | null | undefined, now = new Date()): string {
   const first = name?.trim().split(/\s+/)[0];
