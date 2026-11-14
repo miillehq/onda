@@ -30,15 +30,45 @@ $machinePattern = @{ x64 = '\b8664 machine \(x64\)'; arm64 = '\bAA64 machine \(A
 # vcruntime140_1.dll carries x64's exception handling; the dependency closure below adds any
 # other runtime DLL a worker imports.
 $mandatoryRuntimeNames = @{ x64 = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'); arm64 = @('msvcp140.dll', 'vcruntime140.dll') }[$architecture]
-$redistributionReference = 'https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution'
+# Visual Studio 2022 where it is installed: the x64 runners and most developer machines. Since
+# September 2026 GitHub's Windows on ARM runners have only Visual Studio 2026, whose release runtime
+# folder is Microsoft.VC145.CRT; its DLLs keep the 140 names.
+$visualStudioProducts = @(
+    [pscustomobject]@{ Year = '2022'; VersionRange = '[17.0,18.0)' },
+    [pscustomobject]@{ Year = '2026'; VersionRange = '[18.0,19.0)' }
+)
+$redistributionReferences = @{
+    '2022' = 'https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution'
+    '2026' = 'https://learn.microsoft.com/en-us/visualstudio/releases/2026/redistribution'
+}
+# Microsoft publishes the 2022 runtime terms as a document, carried below with a pinned hash, and
+# the 2026 terms only as a web page, which the manifest names.
+$runtimeLicenseTerms = @{
+    '2022' = 'licenses/Microsoft-Visual-Cpp-Runtime-2015-2022.docx'
+    '2026' = 'https://visualstudio.microsoft.com/license-terms/vs2026-ga-visualcpp-v14-redist-runtime/'
+}
 
 function Get-VisualStudioInstallation {
-    <# Resolve the installed C++ toolchain using Microsoft's discovery utility. #>
+    <# Resolve the installed C++ toolchain using Microsoft's discovery utility, 2022 before 2026. #>
     $locator = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     if (-not (Test-Path -LiteralPath $locator)) { throw 'vswhere.exe is required to locate licensed Visual Studio C++ redistributables.' }
-    $installation = & $locator -latest -version '[17.0,18.0)' -products '*' -requires $visualStudioComponent -property installationPath
-    if ($LASTEXITCODE -ne 0 -or -not $installation) { throw "Visual Studio 2022 $architecture C++ tools and redistributable component are required." }
-    return [System.IO.Path]::GetFullPath([string]$installation)
+    foreach ($product in $visualStudioProducts) {
+        $installation = & $locator -latest -version $product.VersionRange -products '*' -requires $visualStudioComponent -property installationPath
+        if ($LASTEXITCODE -eq 0 -and $installation) { return [pscustomobject]@{ Path = [System.IO.Path]::GetFullPath([string]$installation); Year = $product.Year } }
+    }
+    throw "Visual Studio 2022 or 2026 $architecture C++ tools and redistributable component are required."
+}
+
+function Find-VisualStudioNotice {
+    <# The installation's English notice; one found elsewhere under Licenses is used only if unique. #>
+    param([string]$Name)
+    $licenseDirectory = Join-Path $visualStudioDirectory 'Licenses'
+    $preferred = Join-Path $licenseDirectory "1033/$Name"
+    if (Test-Path -LiteralPath $preferred -PathType Leaf) { return $preferred }
+    $found = @(Get-ChildItem -LiteralPath $licenseDirectory -File -Recurse -Filter $Name -ErrorAction SilentlyContinue)
+    if ($found.Count -eq 1) { return $found[0].FullName }
+    $available = @(Get-ChildItem -LiteralPath $licenseDirectory -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Substring($licenseDirectory.Length + 1) })
+    throw "Visual Studio $visualStudioYear has no single Licenses notice $Name; it has: $($available -join ', ')"
 }
 
 function Get-LatestVersionDirectory {
@@ -177,10 +207,16 @@ SOFTWARE.
     $Resources[$mitPath] = 'licenses/Vulkan-Headers-MIT.txt'
 }
 
-$visualStudioDirectory = Get-VisualStudioInstallation
+$visualStudio = Get-VisualStudioInstallation
+$visualStudioDirectory = $visualStudio.Path
+$visualStudioYear = $visualStudio.Year
 $redistVersionDirectory = Get-LatestVersionDirectory -Directory (Join-Path $visualStudioDirectory 'VC/Redist/MSVC')
-$runtimeDirectory = Join-Path $redistVersionDirectory "$architecture/Microsoft.VC143.CRT"
-if (-not (Test-Path -LiteralPath $runtimeDirectory -PathType Container)) { throw "The $architecture Microsoft.VC143.CRT release redistributable component is missing." }
+$redistVersion = [System.IO.Path]::GetFileName($redistVersionDirectory)
+# The release runtime folder is named after the toolset: Microsoft.VC143.CRT in 2022, VC145 in 2026.
+$runtimeDirectories = @(Get-ChildItem -LiteralPath (Join-Path $redistVersionDirectory $architecture) -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^Microsoft\.VC\d+\.CRT$' })
+if ($runtimeDirectories.Count -ne 1) { throw "The $architecture Microsoft.VC*.CRT release redistributable component is missing or ambiguous in VC/Redist/MSVC/$redistVersion." }
+$runtimeDirectory = $runtimeDirectories[0].FullName
+$runtimeFolderName = $runtimeDirectories[0].Name
 $toolsetDirectory = Get-LatestVersionDirectory -Directory (Join-Path $visualStudioDirectory 'VC/Tools/MSVC')
 # dumpbin reads either architecture's images; on Windows on ARM prefer the native one.
 $dumpbinCandidates = if ($architecture -eq 'arm64') { @('bin/Hostarm64/arm64/dumpbin.exe', 'bin/Hostx64/x64/dumpbin.exe') } else { @('bin/Hostx64/x64/dumpbin.exe') }
@@ -206,13 +242,15 @@ foreach ($file in Get-ChildItem -LiteralPath $runtimeDirectory -File -Filter '*.
     if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -ne $sourceHash) { throw 'Copied runtime DLL failed integrity verification.' }
     $resources[$destination] = $file.Name
     $runtimeByName[$file.Name.ToLowerInvariant()] = $destination
-    $files.Add([ordered]@{ name = $file.Name; version = $version; sha256 = $sourceHash; source = "VC/Redist/MSVC/$([System.IO.Path]::GetFileName($redistVersionDirectory))/$architecture/Microsoft.VC143.CRT/$($file.Name)"; publisher = 'Microsoft Corporation' })
+    $files.Add([ordered]@{ name = $file.Name; version = $version; sha256 = $sourceHash; source = "VC/Redist/MSVC/$redistVersion/$architecture/$runtimeFolderName/$($file.Name)"; publisher = 'Microsoft Corporation' })
 }
 
-Copy-Notice -Source (Join-Path $visualStudioDirectory 'Licenses/1033/Redist.txt') -Name 'Microsoft-Visual-Studio-2022-Redist.txt' -Resources $resources -NoticeDirectory $noticeDirectory
-Copy-Notice -Source (Join-Path $visualStudioDirectory 'Licenses/1033/ThirdPartyNotices.txt') -Name 'Microsoft-Visual-Studio-2022-ThirdPartyNotices.txt' -Resources $resources -NoticeDirectory $noticeDirectory
-Get-VerifiedLicenseDocument -Url 'https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx' -Name 'Microsoft-Visual-Cpp-Runtime-2015-2022.docx' -ExpectedSha256 'f1e3d56ceb2ad68aae0711b910375009e651ac5530fa0760f0dea6e81e54fae1' -Resources $resources -NoticeDirectory $noticeDirectory
-Get-VerifiedLicenseDocument -Url 'https://visualstudio.microsoft.com/wp-content/uploads/2024/03/Visual-Studio-2022-Diagnostic-Build-Tools-Agent-License_Update-March-2024_EN.docx' -Name 'Microsoft-Build-Tools-2022.docx' -ExpectedSha256 '2f66b86a00e8d9833789897ce23d05a4a2dbea370cf39c8c1098dbc17d0e7bdc' -Resources $resources -NoticeDirectory $noticeDirectory
+Copy-Notice -Source (Find-VisualStudioNotice -Name 'Redist.txt') -Name "Microsoft-Visual-Studio-$visualStudioYear-Redist.txt" -Resources $resources -NoticeDirectory $noticeDirectory
+Copy-Notice -Source (Find-VisualStudioNotice -Name 'ThirdPartyNotices.txt') -Name "Microsoft-Visual-Studio-$visualStudioYear-ThirdPartyNotices.txt" -Resources $resources -NoticeDirectory $noticeDirectory
+if ($visualStudioYear -eq '2022') {
+    Get-VerifiedLicenseDocument -Url 'https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx' -Name 'Microsoft-Visual-Cpp-Runtime-2015-2022.docx' -ExpectedSha256 'f1e3d56ceb2ad68aae0711b910375009e651ac5530fa0760f0dea6e81e54fae1' -Resources $resources -NoticeDirectory $noticeDirectory
+    Get-VerifiedLicenseDocument -Url 'https://visualstudio.microsoft.com/wp-content/uploads/2024/03/Visual-Studio-2022-Diagnostic-Build-Tools-Agent-License_Update-March-2024_EN.docx' -Name 'Microsoft-Build-Tools-2022.docx' -ExpectedSha256 '2f66b86a00e8d9833789897ce23d05a4a2dbea370cf39c8c1098dbc17d0e7bdc' -Resources $resources -NoticeDirectory $noticeDirectory
+}
 
 if ($WithVulkan) {
     if (-not $env:VULKAN_SDK) { throw 'VULKAN_SDK is required to collect the optional Vulkan build license evidence.' }
@@ -229,13 +267,19 @@ if ($ExecutablePaths.Count -eq 0) {
 if ($ExecutablePaths.Count -eq 0) { throw 'Build the real release workers before collecting their runtime dependency closure.' }
 $inspections = Assert-DependencyClosure -Executables $ExecutablePaths -RuntimeByName $runtimeByName -Dumpbin $dumpbin
 $manifestPath = Join-Path $OutputDirectory 'Microsoft-runtime-manifest.json'
+# Every license file the package carries for the runtime; the installer test checks each is installed.
+$notices = @($resources.Values | Where-Object { $_ -like 'licenses/*' })
 $manifest = [ordered]@{
     formatVersion = 1
     architecture = $architecture
-    redistFolderVersion = [System.IO.Path]::GetFileName($redistVersionDirectory)
+    visualStudio = $visualStudioYear
+    runtimeFolder = $runtimeFolderName
+    redistFolderVersion = $redistVersion
     toolsetVersion = [System.IO.Path]::GetFileName($toolsetDirectory)
     license = 'Microsoft Visual Studio / Visual C++ Runtime software license terms; not Apache-2.0'
-    redistributionReference = $redistributionReference
+    runtimeLicenseTerms = $runtimeLicenseTerms[$visualStudioYear]
+    redistributionReference = $redistributionReferences[$visualStudioYear]
+    notices = $notices
     publisherEligibility = 'Redistribution requires applicable valid Visual Studio licensing; installed Build Tools alone does not prove publisher eligibility.'
     servicing = 'App-local DLLs must be updated and redistributed by the Onda publisher.'
     files = $files.ToArray()

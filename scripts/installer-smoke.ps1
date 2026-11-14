@@ -15,6 +15,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'installed-notices.ps1')
 $repositoryDirectory = Split-Path -Parent $PSScriptRoot
 $configuration = Get-Content -LiteralPath (Join-Path $repositoryDirectory 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
 $productName = [string]$configuration.productName
@@ -234,10 +235,8 @@ try {
     $binaryNames = @('onda.exe', 'onda-input.exe', 'onda-asr-worker.exe', 'onda-asr-avx2-worker.exe')
     if ($WithVulkan) { $binaryNames += 'onda-asr-vulkan-worker.exe' }
     foreach ($name in $binaryNames) { if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $name))) { throw "Installed candidate executable missing: $name" } }
-    foreach ($name in @('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.txt', 'licenses/MPL-source.zip', 'licenses/Microsoft-Visual-Cpp-Runtime-2015-2022.docx', 'licenses/Microsoft-Build-Tools-2022.docx')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $installDirectory $name))) { throw "Installed license/source resource missing: $name" }
-    }
     $manifest = Get-Content -LiteralPath (Join-Path $installDirectory 'licenses/Microsoft-runtime-manifest.json') -Raw | ConvertFrom-Json
+    Assert-InstalledNotices -InstallDirectory $installDirectory -Manifest $manifest
     foreach ($runtimeFile in $manifest.files) {
         $path = Join-Path $installDirectory $runtimeFile.name
         if (-not (Test-Path -LiteralPath $path)) { throw "Installed CRT DLL missing: $($runtimeFile.name)" }

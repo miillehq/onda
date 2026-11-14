@@ -60,7 +60,9 @@ Windows, SmartScreen asks once (**More info › Run anyway**); on a Mac, allow O
   #13, #15).
 - The WebView2 smoke check retries once after a timeout and reports where the time went (#21, #26).
 - On Windows on ARM, `npm run release` builds the installer: the speech worker now builds in a
-  process of its own, so its ARM64 compiler setup no longer breaks the build steps after it (#29).
+  process of its own, so its ARM64 compiler setup no longer breaks the build steps after it (#29),
+  and the installer carries Visual Studio 2026's C++ runtime where 2022 is not installed, as on
+  GitHub's ARM runners (#36).
 - A `v*` tag on `master` publishes a release from the installers that passed their tests on that
   commit, once the versions agree and all six installer jobs are green (#29).
 
