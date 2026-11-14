@@ -1,6 +1,6 @@
 # Windows on ARM: whisper.cpp refuses MSVC's own compiler for ARM64 ("use clang"), so the speech
-# worker builds with clang-cl and Ninja inside the ARM64 developer environment. Dot-source it;
-# prepare.ps1 does so on an ARM64 host and restores the environment afterwards.
+# worker builds with clang-cl and Ninja inside the ARM64 developer environment. Dot-source it in a
+# process of its own: arm64-worker.ps1 does, started by prepare.ps1 on an ARM64 host.
 $ErrorActionPreference = 'Stop'
 $visualStudioLocator = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 if (-not (Test-Path -LiteralPath $visualStudioLocator -PathType Leaf)) { throw 'Visual Studio Build Tools locator is missing.' }
