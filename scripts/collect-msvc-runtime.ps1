@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-Collect unmodified Microsoft x64 release CRT files and their license evidence for app-local deployment.
+Collect unmodified Microsoft release CRT files for the host architecture (x64 or ARM64) and their
+license evidence for app-local deployment.
 .DESCRIPTION
 Returns one object containing Resources (absolute source -> installer-relative path), Files,
 ManifestPath and AuditedExecutables. No DLLs are taken from System32 or debug_nonredist.
@@ -22,15 +23,21 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repositoryDirectory = Split-Path -Parent $PSScriptRoot
-$mandatoryRuntimeNames = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
+# The installer carries the runtime of the machine that builds it: x64 on x64, ARM64 on Windows on ARM.
+$architecture = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+$visualStudioComponent = @{ x64 = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'; arm64 = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' }[$architecture]
+$machinePattern = @{ x64 = '\b8664 machine \(x64\)'; arm64 = '\bAA64 machine \(ARM64\)' }[$architecture]
+# vcruntime140_1.dll carries x64's exception handling; the dependency closure below adds any
+# other runtime DLL a worker imports.
+$mandatoryRuntimeNames = @{ x64 = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'); arm64 = @('msvcp140.dll', 'vcruntime140.dll') }[$architecture]
 $redistributionReference = 'https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution'
 
 function Get-VisualStudioInstallation {
     <# Resolve the installed C++ toolchain using Microsoft's discovery utility. #>
     $locator = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     if (-not (Test-Path -LiteralPath $locator)) { throw 'vswhere.exe is required to locate licensed Visual Studio C++ redistributables.' }
-    $installation = & $locator -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    if ($LASTEXITCODE -ne 0 -or -not $installation) { throw 'Visual Studio 2022 x64 C++ tools and redistributable component are required.' }
+    $installation = & $locator -latest -version '[17.0,18.0)' -products '*' -requires $visualStudioComponent -property installationPath
+    if ($LASTEXITCODE -ne 0 -or -not $installation) { throw "Visual Studio 2022 $architecture C++ tools and redistributable component are required." }
     return [System.IO.Path]::GetFullPath([string]$installation)
 }
 
@@ -50,7 +57,7 @@ function Assert-MicrosoftReleaseBinary {
         throw "Microsoft runtime signature verification failed: $([System.IO.Path]::GetFileName($Path))"
     }
     $headers = & $Dumpbin /nologo /headers $Path
-    if ($LASTEXITCODE -ne 0 -or -not ($headers -match '\b8664 machine \(x64\)')) { throw 'Microsoft runtime DLL is not a verified x64 PE image.' }
+    if ($LASTEXITCODE -ne 0 -or -not ($headers -match $machinePattern)) { throw "Microsoft runtime DLL is not a verified $architecture PE image." }
 }
 
 function Get-ImportedDllNames {
@@ -172,11 +179,13 @@ SOFTWARE.
 
 $visualStudioDirectory = Get-VisualStudioInstallation
 $redistVersionDirectory = Get-LatestVersionDirectory -Directory (Join-Path $visualStudioDirectory 'VC/Redist/MSVC')
-$runtimeDirectory = Join-Path $redistVersionDirectory 'x64/Microsoft.VC143.CRT'
-if (-not (Test-Path -LiteralPath $runtimeDirectory -PathType Container)) { throw 'The x64 Microsoft.VC143.CRT release redistributable component is missing.' }
+$runtimeDirectory = Join-Path $redistVersionDirectory "$architecture/Microsoft.VC143.CRT"
+if (-not (Test-Path -LiteralPath $runtimeDirectory -PathType Container)) { throw "The $architecture Microsoft.VC143.CRT release redistributable component is missing." }
 $toolsetDirectory = Get-LatestVersionDirectory -Directory (Join-Path $visualStudioDirectory 'VC/Tools/MSVC')
-$dumpbin = Join-Path $toolsetDirectory 'bin/Hostx64/x64/dumpbin.exe'
-if (-not (Test-Path -LiteralPath $dumpbin -PathType Leaf)) { throw 'The x64 Microsoft dumpbin.exe dependency inspector is required.' }
+# dumpbin reads either architecture's images; on Windows on ARM prefer the native one.
+$dumpbinCandidates = if ($architecture -eq 'arm64') { @('bin/Hostarm64/arm64/dumpbin.exe', 'bin/Hostx64/x64/dumpbin.exe') } else { @('bin/Hostx64/x64/dumpbin.exe') }
+$dumpbin = $dumpbinCandidates | ForEach-Object { Join-Path $toolsetDirectory $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if (-not $dumpbin) { throw 'The Microsoft dumpbin.exe dependency inspector is required.' }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repositoryDirectory '.artifacts/runtime' }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 $noticeDirectory = Join-Path $OutputDirectory 'licenses'
@@ -186,7 +195,7 @@ $files = [System.Collections.Generic.List[object]]::new()
 $runtimeByName = @{}
 
 foreach ($mandatoryName in $mandatoryRuntimeNames) {
-    if (-not (Test-Path -LiteralPath (Join-Path $runtimeDirectory $mandatoryName) -PathType Leaf)) { throw "Required x64 release runtime DLL missing: $mandatoryName" }
+    if (-not (Test-Path -LiteralPath (Join-Path $runtimeDirectory $mandatoryName) -PathType Leaf)) { throw "Required $architecture release runtime DLL missing: $mandatoryName" }
 }
 foreach ($file in Get-ChildItem -LiteralPath $runtimeDirectory -File -Filter '*.dll' | Sort-Object Name) {
     Assert-MicrosoftReleaseBinary -Path $file.FullName -Dumpbin $dumpbin
@@ -197,7 +206,7 @@ foreach ($file in Get-ChildItem -LiteralPath $runtimeDirectory -File -Filter '*.
     if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -ne $sourceHash) { throw 'Copied runtime DLL failed integrity verification.' }
     $resources[$destination] = $file.Name
     $runtimeByName[$file.Name.ToLowerInvariant()] = $destination
-    $files.Add([ordered]@{ name = $file.Name; version = $version; sha256 = $sourceHash; source = "VC/Redist/MSVC/$([System.IO.Path]::GetFileName($redistVersionDirectory))/x64/Microsoft.VC143.CRT/$($file.Name)"; publisher = 'Microsoft Corporation' })
+    $files.Add([ordered]@{ name = $file.Name; version = $version; sha256 = $sourceHash; source = "VC/Redist/MSVC/$([System.IO.Path]::GetFileName($redistVersionDirectory))/$architecture/Microsoft.VC143.CRT/$($file.Name)"; publisher = 'Microsoft Corporation' })
 }
 
 Copy-Notice -Source (Join-Path $visualStudioDirectory 'Licenses/1033/Redist.txt') -Name 'Microsoft-Visual-Studio-2022-Redist.txt' -Resources $resources -NoticeDirectory $noticeDirectory
@@ -222,7 +231,7 @@ $inspections = Assert-DependencyClosure -Executables $ExecutablePaths -RuntimeBy
 $manifestPath = Join-Path $OutputDirectory 'Microsoft-runtime-manifest.json'
 $manifest = [ordered]@{
     formatVersion = 1
-    architecture = 'x64'
+    architecture = $architecture
     redistFolderVersion = [System.IO.Path]::GetFileName($redistVersionDirectory)
     toolsetVersion = [System.IO.Path]::GetFileName($toolsetDirectory)
     license = 'Microsoft Visual Studio / Visual C++ Runtime software license terms; not Apache-2.0'

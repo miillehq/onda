@@ -2,6 +2,7 @@ param([switch]$Release, [switch]$WithVulkan)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'toolchain.ps1')
 $repositoryDirectory = Split-Path -Parent $PSScriptRoot
+
 Push-Location -LiteralPath $repositoryDirectory
 try {
     $buildMode = if ($Release) { 'release' } else { 'debug' }
@@ -12,37 +13,24 @@ try {
     cargo build --locked -p onda-input --bin onda-input @releaseArguments
     if ($LASTEXITCODE -ne 0) { throw 'Shortcut helper build failed.' }
     $avx2TargetDirectory = Join-Path $repositoryDirectory 'target/avx2'
-    $previousArmEnvironment = @{}
-    if (-not $x86) {
-        foreach ($name in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'CMAKE_GENERATOR', 'CMAKE_GENERATOR_INSTANCE', 'CMAKE_GENERATOR_PLATFORM', 'CMAKE_GENERATOR_TOOLSET', 'CMAKE_C_COMPILER', 'CMAKE_CXX_COMPILER', 'CMAKE_ASM_COMPILER', 'CMAKE_C_COMPILER_TARGET', 'CMAKE_CXX_COMPILER_TARGET', 'CXXFLAGS_aarch64_pc_windows_msvc')) { $previousArmEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
-        . (Join-Path $PSScriptRoot 'arm64-toolchain.ps1')
-        # A whisper.cpp CMake cache made with another compiler cannot be re-configured for clang-cl:
-        # CMake resets it mid-run and fails. Such a build directory (build output only) starts afresh.
-        $compilerLine = '^CMAKE_C_COMPILER:[A-Z]+=' + [regex]::Escape($env:CMAKE_C_COMPILER) + '$'
-        foreach ($cache in @(Get-Item -Path (Join-Path $repositoryDirectory "target/$buildMode/build/whisper-rs-sys-*/out/build/CMakeCache.txt") -ErrorAction SilentlyContinue)) {
-            if (-not (Select-String -LiteralPath $cache.FullName -Pattern $compilerLine -Quiet)) {
-                Write-Host "Removing a whisper.cpp CMake build made with another compiler: $($cache.Directory.FullName)"
-                Remove-Item -LiteralPath $cache.Directory.FullName -Recurse -Force
-            }
-        }
-    }
-    try {
+    if ($x86) {
         cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker @releaseArguments
         if ($LASTEXITCODE -ne 0) { throw 'CPU ASR worker build failed.' }
-        if ($x86) {
-            # .cargo/config.toml keeps the default worker SSE2-only so it runs on any x86-64 CPU. This
-            # second build targets AVX2/FMA/F16C CPUs (2013+) and is several times faster; Onda picks it at runtime.
-            [string[]]$avx2Flags = @('GGML_AVX', 'GGML_AVX2', 'GGML_FMA', 'GGML_F16C', 'GGML_SSE42', 'GGML_BMI2') | ForEach-Object { '--config'; "env.$_.value='ON'" }
-            cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker --target-dir $avx2TargetDirectory @avx2Flags @releaseArguments
-            if ($LASTEXITCODE -ne 0) { throw 'AVX2 ASR worker build failed.' }
-        } else {
-            # AVX2 is x86 only. Tauri's sidecar list still names the AVX2 worker, so ARM64 gets the
-            # generic worker under that name; the engine selects it only on an x86 CPU with AVX2.
-            [System.IO.Directory]::CreateDirectory((Join-Path $avx2TargetDirectory $buildMode)) | Out-Null
-            Copy-Item -LiteralPath (Join-Path $repositoryDirectory "target/$buildMode/onda-asr-worker.exe") -Destination (Join-Path $avx2TargetDirectory "$buildMode/onda-asr-worker.exe") -Force
-        }
-    } finally {
-        foreach ($entry in $previousArmEnvironment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process') }
+        # .cargo/config.toml keeps the default worker SSE2-only so it runs on any x86-64 CPU. This
+        # second build targets AVX2/FMA/F16C CPUs (2013+) and is several times faster; Onda picks it at runtime.
+        [string[]]$avx2Flags = @('GGML_AVX', 'GGML_AVX2', 'GGML_FMA', 'GGML_F16C', 'GGML_SSE42', 'GGML_BMI2') | ForEach-Object { '--config'; "env.$_.value='ON'" }
+        cargo build --locked -p onda-asr --features native-asr --bin onda-asr-worker --target-dir $avx2TargetDirectory @avx2Flags @releaseArguments
+        if ($LASTEXITCODE -ne 0) { throw 'AVX2 ASR worker build failed.' }
+    } else {
+        # The ARM64 developer environment changes many variables, so the worker builds in a
+        # separate process of the PowerShell running this script, and this shell's stays as it was.
+        $powerShell = (Get-Process -Id $PID).Path
+        & $powerShell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'arm64-worker.ps1') -BuildMode $buildMode
+        if ($LASTEXITCODE -ne 0) { throw 'CPU ASR worker build failed.' }
+        # AVX2 is x86 only. Tauri's sidecar list still names the AVX2 worker, so ARM64 gets the
+        # generic worker under that name; the engine selects it only on an x86 CPU with AVX2.
+        [System.IO.Directory]::CreateDirectory((Join-Path $avx2TargetDirectory $buildMode)) | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repositoryDirectory "target/$buildMode/onda-asr-worker.exe") -Destination (Join-Path $avx2TargetDirectory "$buildMode/onda-asr-worker.exe") -Force
     }
     $binaryDirectory = Join-Path $repositoryDirectory 'src-tauri/binaries'
     [System.IO.Directory]::CreateDirectory($binaryDirectory) | Out-Null
