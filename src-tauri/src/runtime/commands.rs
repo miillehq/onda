@@ -697,10 +697,7 @@ impl Runtime {
             vulkan_loader_present: hardware.vulkan_loader_present,
             cuda_driver_present: hardware.cuda_driver_present,
             directml_library_present: hardware.directml_library_present,
-            vulkan_worker_installed: self
-                .worker_directory
-                .join("onda-asr-vulkan-worker.exe")
-                .is_file(),
+            vulkan_worker_installed: self.asr.vulkan_worker_installed(),
         }
     }
 

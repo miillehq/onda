@@ -144,6 +144,13 @@ impl AsrEngine {
         &self.hardware
     }
 
+    /// Whether the separate Vulkan worker is installed, under the name this engine starts it by.
+    pub fn vulkan_worker_installed(&self) -> bool {
+        self.vulkan_worker
+            .as_ref()
+            .is_some_and(|path| path.is_file())
+    }
+
     /// Validate PCM, probe optional acceleration in isolation, and kill/reap on cancellation.
     /// Complexity: O(n) PCM transfer, O(1) additional transfer memory (native model memory excluded).
     pub async fn transcribe(
@@ -616,5 +623,16 @@ mod tests {
             validate_input(&[0.1], &options),
             Err(AsrError::InvalidOptions("unsupported language"))
         ));
+    }
+
+    #[test]
+    fn the_vulkan_worker_counts_as_installed_under_its_packaged_name() {
+        // Tauri installs a sidecar without its target triple, with `.exe` only on Windows.
+        let directory = tempfile::tempdir().unwrap();
+        let engine = AsrEngine::new(directory.path());
+        assert!(!engine.vulkan_worker_installed());
+        let packaged = format!("onda-asr-vulkan-worker{}", std::env::consts::EXE_SUFFIX);
+        std::fs::write(directory.path().join(packaged), b"test data: not a worker").unwrap();
+        assert!(engine.vulkan_worker_installed());
     }
 }

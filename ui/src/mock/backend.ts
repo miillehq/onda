@@ -313,9 +313,11 @@ async function dictate(handsFree = false): Promise<void> {
     }
   }
   const output = "Sure, I can send the summary by Friday.";
-  snapshot.result = { commandText: null, operationId: id, original: "sure i can send the summary by friday", output, inserted: true, fallbackUsed: false, diff: [{ kind: "removed", text: "sure i can send the summary by friday" }, { kind: "added", text: output }], suggestion: null };
+  // Like the native runtime: without permission to type, the words go to the clipboard instead.
+  const inserted = snapshot.typingAccess === "allowed";
+  snapshot.result = { commandText: null, operationId: id, original: "sure i can send the summary by friday", output, inserted, fallbackUsed: false, diff: [{ kind: "removed", text: "sure i can send the summary by friday" }, { kind: "added", text: output }], suggestion: null };
   domain({ type: "resultReady", payload: snapshot.result });
-  const entry = sample(id, 0, "slack.exe", output, { original: "sure i can send the summary by friday", route: snapshot.state.route });
+  const entry = sample(id, 0, "slack.exe", output, { original: "sure i can send the summary by friday", route: snapshot.state.route, inserted });
   history = [entry, ...history];
   emit({ type: "historyUpdated", payload: { entry } });
   setState({ phase: "inserting" });
