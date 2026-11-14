@@ -26,7 +26,9 @@ $repositoryDirectory = Split-Path -Parent $PSScriptRoot
 # The installer carries the runtime of the machine that builds it: x64 on x64, ARM64 on Windows on ARM.
 $architecture = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 $visualStudioComponent = @{ x64 = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'; arm64 = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' }[$architecture]
-$machinePattern = @{ x64 = '\b8664 machine \(x64\)'; arm64 = '\bAA64 machine \(ARM64\)' }[$architecture]
+# Microsoft's ARM64 runtime DLLs are ARM64X images, which also serve ARM64EC (emulated x64) code;
+# their vcruntime140_1.dll, the x64 exception helper, is ARM64X with an x64 primary header.
+$machinePattern = @{ x64 = '\b8664 machine \(x64\)'; arm64 = '\bAA64 machine \(ARM64\)|\b8664 machine \(x64\) \(ARM64X\)' }[$architecture]
 # vcruntime140_1.dll carries x64's exception handling; the dependency closure below adds any
 # other runtime DLL a worker imports.
 $mandatoryRuntimeNames = @{ x64 = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'); arm64 = @('msvcp140.dll', 'vcruntime140.dll') }[$architecture]
@@ -87,7 +89,9 @@ function Assert-MicrosoftReleaseBinary {
         throw "Microsoft runtime signature verification failed: $([System.IO.Path]::GetFileName($Path))"
     }
     $headers = & $Dumpbin /nologo /headers $Path
-    if ($LASTEXITCODE -ne 0 -or -not ($headers -match $machinePattern)) { throw "Microsoft runtime DLL is not a verified $architecture PE image." }
+    if ($LASTEXITCODE -ne 0 -or -not ($headers -match $machinePattern)) {
+        throw "Microsoft runtime DLL is not a verified $architecture PE image: $([System.IO.Path]::GetFileName($Path)) ($((@($headers) -match '\bmachine \(' | ForEach-Object { "$_".Trim() }) -join '; '))"
+    }
 }
 
 function Get-ImportedDllNames {
