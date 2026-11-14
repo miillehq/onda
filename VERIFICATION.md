@@ -75,6 +75,11 @@ with an identical tree.
 | 2026-11-13 | L1, L4 probe | nine planted bugs each fail a test: the frontmost-app check ignoring the window, a reused process ID, secure input or an unknown app; the Mac page keeping the old clipboard footnote, not looking again on focus, labelling its button Turn off, a Mac reporting that it cannot type, and a Mac turning typing on without System Settings | windows-x64, local | planted one at a time, restored; PR #28 |
 | 2026-11-13 | L1, L2, L4, L6 | Mac Accessibility paste (PR #28) on every CI platform: lint, Rust tests (the macOS unit tests included on macos-arm64 and macos-x64), contracts, the browser suite and the real-shell suite pass. The real app reports typing access as `allowed` on both macOS runners, which hold the Accessibility permission, and on Windows x64 and arm64, and `unavailable` on Linux, where CI has no remote desktop portal | windows-x64, linux-x64 CI (Tier 1); macos-arm64, macos-x64, windows-arm64, linux-arm64 CI (Tier 2) | [ci run 43520708136](https://github.com/miillehq/onda/actions/runs/43520708136), `f5d28ed` |
 | 2026-11-13 | L1, L6 probe | planted on the macOS runners: secure fields known by role only fails `password_fields_are_known_by_role_or_subrole` (`assertion failed: secure_role("AXTextField", "AXSecureTextField")`); a field identity without the hash's high half fails `a_field_identity_is_never_empty_and_keeps_its_process_and_hash` (`left: [4242, -1985229329]`, `right: [4242, 19088743, -1985229329]`); typing access reported as `unavailable` fails the real-shell check (`Expected value: "unavailable"`, `Received array: ["allowed", "notAllowed"]`). A bug in the unpermitted snapshot stayed green, because the runners hold the permission; that test is strengthened in the 0.3.0 release PR | macos-arm64, macos-x64 CI | [ci run 43520859461](https://github.com/miillehq/onda/actions/runs/43520859461) (branch `probe/mac-ax-unit-red`), [ci run 43520863991](https://github.com/miillehq/onda/actions/runs/43520863991) (branch `probe/mac-ax-l6-red`) |
+| 2026-11-13 | L4 | the Stats activity grid puts every month label on one row above the grid, and none overlaps the first row of days, in chromium and webkit | windows-x64, linux-x64, macos-arm64 CI | [ci run 43526229568](https://github.com/miillehq/onda/actions/runs/43526229568), `8f37cf7`, PR #30 |
+| 2026-11-13 | L4 probe | the old layout fails the new test (`labels on 2 rows: [["Nov",488],["Dec",507],["Jan",507],…]`), and so does the span fix without the 18 px line height (`Nov overlaps the grid, Expected: <= 506.625, Received: 507.125`) | windows-x64, local, chromium and webkit | `npx playwright test tests/ui/stats.spec.ts`; PR #30 |
+| 2026-11-13 | L1 | on macOS the speech engine reads installed memory (`hw.memsize`) and free memory, so the Balanced and Quality profiles keep their models: `macos_reports_installed_memory_so_profiles_do_not_step_down` passes | macos-arm64, macos-x64 CI | [ci run 43527998900](https://github.com/miillehq/onda/actions/runs/43527998900), `63e8be0`, PR #33 |
+| 2026-11-13 | L1 probe | planted on the macOS runners: skipping the memory check fails that test on both Macs (`installed memory must be reported in bytes, got 0`); typing that ignores the permission fails the strengthened `the_permission_decides_what_a_snapshot_names` on both Macs (`typing follows the permission`, `left: false`, `right: true`), the bug the first Accessibility probe could not catch | macos-arm64, macos-x64 CI | [ci run 43527986180](https://github.com/miillehq/onda/actions/runs/43527986180) (branch `probe/mac-memory-red`), [ci run 43527344066](https://github.com/miillehq/onda/actions/runs/43527344066) (branch `probe/mac-permission-red`) |
+| 2026-11-13 | L0 to L8 | `master` after merging PRs #30 to #34, the brand kit's `Onda.icns` included: every ci job passes on all six platforms; the Windows installed app, the Linux deb and AppImage, the Apple Silicon dmg and the three containers pass | windows-x64, linux-x64, macos-arm64, macos-x64, windows-arm64, linux-arm64 CI; Fedora, Debian and Arch containers | ci run 43529938416 and installers run 43529938589 (`f885ae3`) |
 
 ## Unverified
 
@@ -88,14 +93,17 @@ with an identical tree.
   allows Onda in System Settings once. That macOS and common apps leave the default dictation
   chord Control+Shift+Space free is not checked on a real Mac; Onda reports a chord it could not
   claim. The interface's Mac wording has been checked in a browser against the mock, not in
-  WKWebView on a Mac. macOS has no resource report (no process sampling).
+  WKWebView on a Mac. macOS has no resource report (no process sampling). The runners hold the
+  Accessibility permission, so the tests' path for a Mac without it never runs in CI.
 - Packages beyond Windows x64, Linux x64 and Apple Silicon: the Windows ARM64 installer, the
   Linux ARM64 deb and AppImage and the Intel Mac dmg are being added to CI for 0.3.0; none has a
   row above, so none is installer-tested (L7).
 - Upgrades: installing a new build over an older one on any OS has no run recorded; migrations
   are tested at L3 only.
-- Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 10 s is not
-  investigated.
+- Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 22 s on the
+  runners is not investigated. Once it missed the 30 s limit (installers run 43524749021,
+  windows-x64, branch `release/0.3.0-pipeline`) and passed in the next run; if it repeats, it gets
+  an issue and one retry (L7).
 - L5 tier 3 catches rendering breakage, not small changes (PLAN.md ruling).
 - Linux: the keyring seal round trip and Secret Service key storage are ignored tests; they need a
   desktop session. The real-model golden tests run in CI on Windows only, never on Linux or macOS

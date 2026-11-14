@@ -7,7 +7,7 @@ which platform and by which run is recorded in [VERIFICATION.md](VERIFICATION.md
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-11-13
+## [0.3.0] - 2026-11-14
 
 The first release with installers for every platform: Windows and Linux on x64 and ARM64, and
 macOS on Apple Silicon and Intel (experimental). The installers are not code-signed yet: on
@@ -45,8 +45,6 @@ Windows, SmartScreen asks once (**More info › Run anyway**); on a Mac, allow O
   instead of filling the whole tile (#34).
 - On a Mac, the Balanced and Quality speech profiles no longer fall back to the Fast models:
   Onda now reads how much memory the Mac has (#33).
-- On Windows on ARM, a build no longer fails after the speech worker by linking with the wrong
-  `link.exe` (#29).
 
 ### For contributors
 
@@ -61,6 +59,10 @@ Windows, SmartScreen asks once (**More info › Run anyway**); on a Mac, allow O
 - The test audit's gaps were closed with tests that were each shown to fail first (#7, #8, #10,
   #13, #15).
 - The WebView2 smoke check retries once after a timeout and reports where the time went (#21, #26).
+- On Windows on ARM, `npm run release` builds the installer: the speech worker now builds in a
+  process of its own, so its ARM64 compiler setup no longer breaks the build steps after it (#29).
+- A `v*` tag on `master` publishes a release from the installers that passed their tests on that
+  commit, once the versions agree and all six installer jobs are green (#29).
 
 ### Known issues
 
