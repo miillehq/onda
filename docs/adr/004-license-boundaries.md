@@ -14,4 +14,6 @@ The generated `THIRD_PARTY_NOTICES.txt` and `docs/dependency-inventory.json` inv
 
 Update (2026-11-13): Only the Windows NSIS installer bundles `licenses/MPL-source.zip`. The deb, AppImage and dmg carry `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.txt` but not the ZIP, and no workflow attaches it beside them. How those packages meet the MPL source obligation is open.
 
+Update (2026-11-14): The release workflow publishes this script's archive, taken from the Windows installers job, as `onda-mpl-source.zip` beside every package. 0.3.0's copy was built inline from the same five packages, without the README, the source manifest or the allowlist check. Whether a release-page download alone meets the obligation for the deb, AppImage and dmg is still open.
+
 References: [Mozilla MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/), [MPL 2.0 text](https://www.mozilla.org/en-US/MPL/2.0/), [cargo-deny license policy](https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html).

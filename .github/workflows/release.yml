@@ -91,7 +91,10 @@ jobs:
           count=$(ls assets | wc -l)
           [ "$count" -eq 8 ] || { ls -la assets; echo "::error::expected 8 bundles, found $count"; exit 1; }
           cp downloads/windows-x64/THIRD_PARTY_NOTICES.txt assets/
-          cp "$(find downloads/windows-x64 -name onda-mpl-source.zip | head -1)" assets/
+          # The reviewed, reproducible archive the Windows installer carries (scripts/collect-mpl-source.ps1).
+          mpl=$(find downloads/windows-x64 -name MPL-source.zip | head -1)
+          [ -n "$mpl" ] || { echo "::error::the windows-x64 artifact has no MPL-source.zip"; exit 1; }
+          cp "$mpl" assets/onda-mpl-source.zip
           (cd assets && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
       - name: Notes from the changelog
         env:
@@ -183,8 +186,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'cargo-deny installation failed' }
           cargo deny --locked check licenses advisories sources
           if ($LASTEXITCODE -ne 0) { throw 'Dependency policy failed' }
-          npm audit --audit-level=high
+          npm audit --omit=dev --audit-level=high
           if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency advisory failed' }
+          # Test tooling never ships, so its advisories are reported, not gated (PLAN.md, slice 3).
+          npm audit --audit-level=high
+          if ($LASTEXITCODE -ne 0) { '::warning::High advisories in test-only dependencies (PLAN.md slice 3)'; $global:LASTEXITCODE = 0 }
       - name: Build requested bundle without publishing
         env:
           BUILD_VULKAN: ${{ inputs.with_vulkan }}
@@ -196,16 +202,11 @@ jobs:
           $vulkan = $env:BUILD_VULKAN -eq 'true'
           $signed = $env:SIGNED_UPDATES -eq 'true'
           ./scripts/build.ps1 -WithVulkan:$vulkan -SignedUpdates:$signed
-      - name: Bundle exact MPL source and checksums
+      - name: Checksum the reviewed MPL source
         run: |
           Set-Location -LiteralPath 'R:\'
-          $metadata = (& cargo metadata --locked --format-version 1) | ConvertFrom-Json
-          $sourceRoot = Join-Path $PWD '.artifacts/mpl-source'
-          New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
-          foreach ($package in $metadata.packages | Where-Object license -EQ 'MPL-2.0') {
-            Copy-Item -LiteralPath (Split-Path -Parent $package.manifest_path) -Destination (Join-Path $sourceRoot "$($package.name)-$($package.version)") -Recurse
-          }
-          Compress-Archive -LiteralPath $sourceRoot -DestinationPath '.artifacts/onda-mpl-source.zip' -Force
+          # The archive scripts/collect-mpl-source.ps1 built for the installer, under its release name.
+          Copy-Item -LiteralPath '.artifacts/MPL-source.zip' -Destination '.artifacts/onda-mpl-source.zip' -Force
           $digest = (Get-FileHash -LiteralPath '.artifacts/onda-mpl-source.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
           "$digest  onda-mpl-source.zip" | Set-Content -LiteralPath '.artifacts/onda-mpl-source.zip.sha256' -Encoding ascii
       - name: Upload candidate for explicit release review
@@ -213,11 +214,12 @@ jobs:
         with:
           name: onda-windows-x64-candidate-${{ github.sha }}
           if-no-files-found: error
+          # .artifacts is a dot-folder, which the upload skips unless asked.
+          include-hidden-files: true
           path: |
             target/release/bundle/nsis/*
             THIRD_PARTY_NOTICES.txt
             docs/dependency-inventory.json
             .artifacts/onda-mpl-source.zip
             .artifacts/onda-mpl-source.zip.sha256
-            .artifacts/MPL-source.zip
             .artifacts/runtime/Microsoft-runtime-manifest.json
