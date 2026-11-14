@@ -92,6 +92,7 @@ with an identical tree.
 | 2026-11-14 | L7 | PR #37's branch before merging: all six installer jobs and the three containers pass; Windows ARM64 passes its installer test for the first time | windows-x64, windows-arm64, linux-x64, linux-arm64, macos-arm64, macos-x64 CI; Fedora, Debian and Arch containers | installers run [43605497220](https://github.com/miillehq/onda/actions/runs/43605497220) (`b1f6dcf`, manual run) |
 | 2026-11-14 | L7 | `master` after PR #37, the 0.3.0 release commit: all six installer jobs pass. Windows x64 installs and starts in 7.9 s. Windows ARM64 collects Visual Studio 2026's ARM64X runtime, installs silently, runs both speech workers, starts in 0.7 s, the shortcut helper exits with the app, the app's data survives, and the uninstaller exits 0. The Linux x64 and ARM64 deb and AppImage, both Mac dmgs and the three containers pass | windows-x64, windows-arm64, linux-x64, linux-arm64, macos-arm64, macos-x64 CI; Fedora, Debian and Arch containers | installers run [43605925048](https://github.com/miillehq/onda/actions/runs/43605925048) (`a147cba`) |
 | 2026-11-14 | L7 release | `v0.3.0` tagged on `a147cba`. The release gate passes: the tag, `package.json`, `tauri.conf.json` and the Cargo workspace all say 0.3.0, the commit is on `master`, and installers run 43605925048 has all six jobs green by name. The pre-release publishes that run's eight packages with `SHA256SUMS.txt`, `THIRD_PARTY_NOTICES.txt` and `onda-mpl-source.zip`, and the ten entries in `SHA256SUMS.txt` match GitHub's own digests of the published files | the six platforms above (CI); the digest check on windows-x64, local, 2026-11-14 15:51 UTC | release run [43612292375](https://github.com/miillehq/onda/actions/runs/43612292375); [release v0.3.0](https://github.com/miillehq/onda/releases/tag/v0.3.0); `gh release download v0.3.0 -p SHA256SUMS.txt` compared with the assets' `digest` from `gh release view v0.3.0 --json assets` |
+| 2026-11-14 | L7 tooling | the release's MPL source lines, run against installers run 43605925048's windows-x64 artifact, publish the archive `scripts/collect-mpl-source.ps1` built (its README, source manifest and the five approved packages). It is byte-identical to the archive the installed Windows app carries: SHA-256 `5da6938c…`, the `mplSourceSha256` in that run's installed-app report. 0.3.0's published `onda-mpl-source.zip` (`8294aa6d…`) was a separate inline copy of the same five packages. Without the archive the step stops: `::error::the windows-x64 artifact has no MPL-source.zip` | windows-x64, local, 2026-11-14 20:30 UTC | the MPL lines of `release.yml`'s publish step, extracted and run on the downloaded `onda-windows-x64-unsigned` and `installed-smoke-windows-x64` artifacts |
 
 ## Unverified
 
@@ -111,6 +112,9 @@ with an identical tree.
   has been installed on a Windows on ARM laptop, a Linux ARM64 machine or a real Mac. Nobody has
   yet installed a file downloaded from the release page. The release publishes the installers
   run's own artifacts, and their checksums match, but there is no post-release install run.
+- The release workflow's publish step takes the reviewed MPL archive since 2026-11-14; it has run
+  only on a downloaded artifact and first runs for real at the next tag. 0.3.0's release page
+  still carries the inline copy.
 - Upgrades: installing a new build over an older one on any OS has no run recorded; migrations
   are tested at L3 only.
 - Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 22 s on the
