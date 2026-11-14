@@ -14,9 +14,8 @@ The tiers are in [ADR 007](adr/007-platform-support.md). Because nothing is sign
 SmartScreen warns on first launch, and on macOS the user allows Onda under System Settings ›
 Privacy & Security › Open Anyway. Which packages have passed the installer test (L7) is recorded
 in [VERIFICATION.md](../VERIFICATION.md). On `master`, the `installers` workflow builds and
-installer-tests the Windows x64, Linux x64 and Apple Silicon packages; the ARM64 and Intel Mac
-packages are being added to CI. Before a release, run the manual matrix in
-[testing.md](testing.md).
+installer-tests every package above on its own platform. Before a release, run the manual matrix
+in [testing.md](testing.md); what it does not cover goes under "Unverified" in the ledger.
 
 End users need no Node, Rust, SDK, API key or administrator account. The Windows installer
 includes the native helpers and approved app-local Microsoft C++ runtime DLLs; the OS supplies
@@ -40,8 +39,10 @@ $env:ONDA_VULKAN_TARGET_DIR = 'C:\evn'
 ./scripts/build.ps1 -WithVulkan      # CPU plus the isolated GPU worker
 ```
 
-On Windows on ARM, `prepare.ps1` loads `scripts/arm64-toolchain.ps1`, because whisper.cpp builds
-there only with clang-cl. Do not set `WHISPER_DONT_GENERATE_BINDINGS=1` on Windows: the bundled
+On Windows on ARM, `prepare.ps1` builds the speech worker with `scripts/arm64-worker.ps1` in a
+separate PowerShell process, which loads `scripts/arm64-toolchain.ps1`, because whisper.cpp builds
+there only with clang-cl; the ARM64 developer environment it sets up never reaches the caller's
+shell. Do not set `WHISPER_DONT_GENERATE_BINDINGS=1` on Windows: the bundled
 bindings do not match the Windows ABI. The Vulkan helper imports only build-relevant MSVC
 variables, selects Ninja and uses a short separate target, because MSBuild's shader subprojects
 exceed MAX_PATH; preparation builds the CPU workers first and restores the CMake generator.
@@ -74,7 +75,7 @@ migration.
 
 After final linking, or against installed executables, run
 `collect-msvc-runtime.ps1 -ExecutablePaths @(...) -WithVulkan` to audit the full import closure. It
-verifies Microsoft signatures, x64 architecture and hashes, never copies System32 or debug runtime
+verifies Microsoft signatures, the build machine's architecture (x64 or ARM64) and hashes, never copies System32 or debug runtime
 DLLs, and records relative provenance. The publisher's redistribution eligibility and app-local
 servicing obligation are in [third-party-licenses.md](third-party-licenses.md).
 
@@ -117,9 +118,27 @@ Update download and check requests have a ten-minute bound. Installation reserve
 `ci.yml` runs on every pull request ([TESTING.md](../TESTING.md)). `installers.yml` runs on
 `master` and on demand: it builds the packages and installs, launches and removes them, and checks
 that the deb and AppImage resolve their libraries in Fedora, Debian and Arch containers.
-`release.yml` runs on a `v*` tag or on demand and builds a Windows x64 candidate, with optional
-Vulkan and updater-signing inputs, for review. All of them use pinned action commits and
-read-only repository permissions, so none publishes a GitHub release.
+All of them use pinned action commits and read-only repository permissions; only the release
+job below may write.
+
+`release.yml` publishes a release from a `v*` tag. Its gate job checks that the tag,
+`package.json`, `tauri.conf.json` and the Cargo workspace carry one version, that the tagged
+commit is on `master`, and that one `installers` run passed on that commit with all six package
+jobs green; the Tier 2 jobs are checked by name, because they never fail their run. The publish
+job then downloads that run's packages (no rebuild), adds `SHA256SUMS.txt`, the third-party
+notices and the MPL source archive, takes the notes from the version's `CHANGELOG.md` section,
+and creates the GitHub release, as a pre-release for 0.x versions. To ship:
+
+1. Bump the version in `package.json` (`npm version --no-git-tag-version`), `Cargo.toml`
+   (`[workspace.package]`, then `cargo update --workspace`) and `src-tauri/tauri.conf.json`, and
+   write the `CHANGELOG.md` section, in one pull request.
+2. After it merges, wait for the `installers` run on that `master` commit to pass on all six
+   platforms, and record it in the ledger.
+3. Tag that commit `v<version>` and push the tag. If the gate fails, nothing is published: fix,
+   merge, and tag the new commit.
+
+Run on demand, `release.yml` instead builds a Windows x64 candidate for review, with optional
+Vulkan and updater-signing inputs, and publishes nothing.
 
 `scripts/smoke.ps1` runs a real hidden WebView2 window against an isolated debug profile;
 `-UnavailableCloudStorage` seeds an unusable account store and proves local controls still work.
