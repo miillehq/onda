@@ -405,7 +405,7 @@ function ResultCard() {
             <Chip icon={<Cpu size={14} />}>On this {isWindows.value ? "PC" : "computer"}</Chip>
           )}
           {result && !result.inserted && state?.phase === "error" && state.error?.code !== "invalidEnhancement" && <Chip tone="err">Not inserted</Chip>}
-          {result && !result.inserted && state?.phase === "completed" && <Chip tone="ok">On the clipboard · Ctrl+V</Chip>}
+          {result && !result.inserted && state?.phase === "completed" && <Chip tone="ok">On the clipboard · {pasteKeys(platform.value === "macos")}</Chip>}
         </div>
       </header>
       {result?.commandText && <p class="result-command">You asked: “{result.commandText}”</p>}

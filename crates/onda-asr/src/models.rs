@@ -278,7 +278,15 @@ impl ModelManager {
                 let Some(chunk) = chunk else {
                     break;
                 };
-                let chunk = chunk.map_err(AsrError::DownloadNetwork)?;
+                let chunk = match chunk {
+                    Ok(chunk) => chunk,
+                    Err(error) => {
+                        // A tokio file finishes writes in the background: flush, so the bytes
+                        // that arrived are in the partial file to resume from before this returns.
+                        file.flush().await?;
+                        return Err(AsrError::DownloadNetwork(error));
+                    }
+                };
                 if completed + chunk.len() as u64 > model.expected_size_bytes {
                     drop(file);
                     fs::remove_file(&partial).await?;

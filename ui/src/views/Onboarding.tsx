@@ -27,10 +27,11 @@ import {
   settings,
   snapshot,
   toastError,
-  isWindows,
+  platform,
   thisDevice,
   yourDevice,
 } from "../lib/store";
+import { micWording } from "../lib/microphone";
 import { ChatgptModelSelect, modelAdvice } from "./settings/AiPolish";
 import { MicTest } from "./settings/Microphone";
 
@@ -151,7 +152,7 @@ function MicrophoneStep() {
           wide
           value={value.microphoneId ?? ""}
           onChange={(id) => void saveSettings({ microphoneId: id || null })}
-          options={[{ value: "", label: isWindows.value ? "Windows default" : "System default" }, ...(devices.value ?? []).map((device) => ({ value: device.id, label: device.name }))]}
+          options={[{ value: "", label: micWording(platform.value).defaultLabel }, ...(devices.value ?? []).map((device) => ({ value: device.id, label: device.name }))]}
         />
       </div>
       <div class="card">

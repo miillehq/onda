@@ -193,3 +193,6 @@ Graphics explain things wherever a paragraph would otherwise go.
 - 2026-11-13: Typing into apps on a Mac offers Allow, then Open System Settings, and re-reads the
   permission when the window regains focus, because only System Settings can switch
   Accessibility, and after an unsigned update it can show as on without working.
+- 2026-11-14: The Microphone page names the user's own system: Windows' sound settings, System
+  Settings › Sound on a Mac, the desktop's sound settings on Linux, and "System default" off
+  Windows; Home's clipboard chip says ⌘V on a Mac. Mac wording on 2026-11-13 had missed both.

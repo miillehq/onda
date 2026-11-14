@@ -50,3 +50,20 @@ test("Updates and help on a Mac offers no resource report, which macOS cannot me
   await expect(content(page).getByRole("heading", { name: "Shortcuts at a glance" })).toBeVisible();
   await expect(content(page).getByRole("heading", { name: "What Onda is using" })).toHaveCount(0);
 });
+
+test("Microphone on a Mac follows macOS and points to System Settings for the input volume", async ({ page }) => {
+  await openMock(page, "/?platform=macos#settings/microphone");
+  const microphone = content(page);
+  await expect(microphone).toContainText("Follows macOS: currently Microphone Array");
+  await expect(microphone).toContainText("System default");
+  await expect(microphone).toContainText("Adjust it in System Settings › Sound › Input.");
+  await expect(microphone).not.toContainText("Windows");
+});
+
+test("Home on a Mac says ⌘V when a dictation waits on the clipboard", async ({ page }) => {
+  await openMock(page, "/?platform=macos#home");
+  // Without the Accessibility permission the words go to the clipboard instead of being typed.
+  await page.keyboard.press("Control+Shift+F9");
+  // The mock's dictation takes about 4.5 s: speech, transcription, polish and the paste step.
+  await expect(content(page).locator(".result-head")).toContainText("On the clipboard · ⌘V", { timeout: 15_000 });
+});
