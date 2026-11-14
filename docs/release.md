@@ -27,7 +27,7 @@ are not supported.
 
 ## Build
 
-Windows (Rust from `rust-toolchain.toml`, Node 24, Visual Studio 2022 C++ Build Tools with the
+Windows (Rust from `rust-toolchain.toml`, Node 24, Visual Studio 2022 or 2026 C++ Build Tools with the
 Windows SDK, CMake and Ninja, and LLVM's `libclang.dll`; `scripts/toolchain.ps1` finds CMake and
 LLVM or accepts `LIBCLANG_PATH`):
 

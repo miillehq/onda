@@ -102,6 +102,11 @@ Rulings:
 - Slice 18: Ruling: the release gate needs all six installer jobs green, Tier 2 included, although
   Tier 2 never blocks a merge — every package on the release page must have passed its own
   installer test — cost if wrong: a flaky ARM or Mac leg delays a release.
+- Slice 18: Ruling: the Windows ARM64 installer carries Visual Studio 2026's runtime
+  (`Microsoft.VC145.CRT`), the only Visual Studio on GitHub's ARM runners since September 2026,
+  with that installation's distributable list and notices and the 2026 runtime terms named in the
+  manifest; x64 keeps Visual Studio 2022 — Microsoft publishes no 2026 terms document to pin — cost
+  if wrong: a later release adds that document to the ARM64 package.
 - Slice 18: Ruling (the owner, 2026-11-13): 0.3.0 ships Mac typing into other apps as
   experimental, with installers for Windows and Linux ARM64 and for Intel Macs too — cost if
   wrong: Mac users meet the untested paste first.
