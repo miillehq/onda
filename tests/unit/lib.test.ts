@@ -9,7 +9,9 @@ import { appName, formatBytes, formatClock, formatDuration, greeting, greetingFo
 import { cancelChord, chordFrom, keyLabel, modifierLabels, orderedKeys, sameChord, shortcutText, virtualKey, VK } from "../../ui/src/lib/keys";
 import { languageName } from "../../ui/src/lib/languages";
 import { levelFromRms, Smoother } from "../../ui/src/lib/level";
+import { micVerdict, micWording } from "../../ui/src/lib/microphone";
 import { parseRoute } from "../../ui/src/lib/router";
+import type { MicrophoneReport } from "../../ui/src/generated/api";
 
 describe("wordDiff", () => {
   it("keeps unchanged words and marks only the replaced one", () => {
@@ -179,5 +181,29 @@ describe("error presentation", () => {
 
   it("falls back to the internal presentation for an unknown code", () => {
     expect(presentError({ code: "notACode" as ErrorCode, message: "", retryable: false }).title).toBe("Something went wrong");
+  });
+});
+
+describe("microphone wording", () => {
+  const loud: MicrophoneReport = { durationMs: 3000, peak: 1, rms: 0.2, clippedSamples: 40, discontinuities: 0, mostlySilent: false, sourceSampleRate: 48000, sourceChannels: 1 };
+  const quiet: MicrophoneReport = { ...loud, peak: 0.05, rms: 0.005, clippedSamples: 0 };
+
+  it("sends a Windows user to Windows' sound settings", () => {
+    expect(micVerdict(loud, "windows").body).toBe("Your voice is clipping. Move back from the mic or lower its input volume in Windows sound settings.");
+    expect(micWording("windows")).toEqual({ system: "Windows", defaultLabel: "Windows default", volumeHint: "Adjust it in Windows: Settings › System › Sound › Input." });
+  });
+
+  it("sends a Mac user to System Settings and a Linux user to the desktop's sound settings", () => {
+    expect(micVerdict(quiet, "macos").body).toBe("Move closer to the mic or raise its input volume in System Settings › Sound.");
+    expect(micWording("macos")).toEqual({ system: "macOS", defaultLabel: "System default", volumeHint: "Adjust it in System Settings › Sound › Input." });
+    expect(micVerdict(loud, "linux").body).toBe("Your voice is clipping. Move back from the mic or lower its input volume in your sound settings.");
+    expect(micWording("linux")).toEqual({ system: "the system", defaultLabel: "System default", volumeHint: "Adjust it in your desktop's sound settings, under Input." });
+  });
+
+  it("never names Windows on a Mac or on Linux", () => {
+    for (const platform of ["macos", "linux"]) {
+      for (const report of [loud, quiet]) expect(micVerdict(report, platform).body).not.toContain("Windows");
+      expect(Object.values(micWording(platform)).join(" ")).not.toContain("Windows");
+    }
   });
 });

@@ -4,7 +4,8 @@ import { Button, Select } from "../../components/controls";
 import { LevelBars } from "../../components/feedback";
 import { Callout, Page, Row, Rows, Section } from "../../components/layout";
 import type { MicrophoneReport } from "../../generated/api";
-import { devices, isBusy, loadDevices, micLevel, saveSettings, settings, testMicrophone, toastError } from "../../lib/store";
+import { micVerdict, micWording } from "../../lib/microphone";
+import { devices, isBusy, loadDevices, micLevel, platform, saveSettings, settings, testMicrophone, toastError } from "../../lib/store";
 
 const LIMITS = [
   { value: "60", label: "1 minute" },
@@ -12,13 +13,6 @@ const LIMITS = [
   { value: "300", label: "5 minutes" },
   { value: "600", label: "10 minutes" },
 ];
-
-export function verdict(report: MicrophoneReport): { tone: "ok" | "warn" | "error"; title: string; body: string } {
-  if (report.mostlySilent || report.peak < 0.02) return { tone: "error", title: "We couldn't hear you", body: "Check the mic isn't muted and that it's the one you're speaking into." };
-  if (report.clippedSamples > 0 || report.peak >= 0.99) return { tone: "warn", title: "A bit loud", body: "Your voice is clipping. Move back from the mic or lower its input volume in Windows." };
-  if (report.rms < 0.01) return { tone: "warn", title: "A bit quiet", body: "Move closer to the mic or raise its input volume in Windows sound settings." };
-  return { tone: "ok", title: "Sounds good", body: "Onda can hear you clearly." };
-}
 
 export function MicTest({ compact = false }: { compact?: boolean }) {
   const [testing, setTesting] = useState(false);
@@ -29,7 +23,7 @@ export function MicTest({ compact = false }: { compact?: boolean }) {
     setReport(await testMicrophone(3000));
     setTesting(false);
   };
-  const result = report ? verdict(report) : null;
+  const result = report ? micVerdict(report, platform.value) : null;
   return (
     <div class={`mic-test${compact ? " is-compact" : ""}`}>
       <LevelBars level={micLevel} active={testing} bars={compact ? 20 : 28} />
@@ -59,6 +53,7 @@ export function Microphone() {
   const list = devices.value ?? [];
   const selectedMissing = value.microphoneId !== null && devices.value !== null && !list.some((device) => device.id === value.microphoneId);
   const defaultName = list.find((device) => device.isDefault)?.name;
+  const wording = micWording(platform.value);
   return (
     <Page title="Microphone" lede="Choose the mic Onda listens to, and check that it hears you well.">
       {selectedMissing && (
@@ -71,7 +66,7 @@ export function Microphone() {
           <Row
             icon={<Mic size={18} />}
             title="Microphone"
-            description={value.microphoneId === null ? `Follows Windows${defaultName ? `: currently ${defaultName}` : ""}.` : "Onda always uses this mic."}
+            description={value.microphoneId === null ? `Follows ${wording.system}${defaultName ? `: currently ${defaultName}` : ""}.` : "Onda always uses this mic."}
             control={
               <Select
                 label="Microphone"
@@ -79,7 +74,7 @@ export function Microphone() {
                 value={value.microphoneId ?? ""}
                 onChange={(id) => void saveSettings({ microphoneId: id || null })}
                 options={[
-                  { value: "", label: "Windows default" },
+                  { value: "", label: wording.defaultLabel },
                   ...list.map((device) => ({ value: device.id, label: device.name })),
                   ...(selectedMissing && value.microphoneId ? [{ value: value.microphoneId, label: "Disconnected microphone" }] : []),
                 ]}
@@ -101,7 +96,7 @@ export function Microphone() {
             description="Onda stops listening after this and writes out what you said."
             control={<Select label="Longest recording" value={String(value.maxRecordingSeconds)} onChange={(seconds) => void saveSettings({ maxRecordingSeconds: Number(seconds) })} options={LIMITS.some((limit) => limit.value === String(value.maxRecordingSeconds)) ? LIMITS : [...LIMITS, { value: String(value.maxRecordingSeconds), label: `${value.maxRecordingSeconds} seconds` }]} />}
           />
-          <Row icon={<Volume1 size={18} />} title="Input volume" description="Adjust it in Windows: Settings › System › Sound › Input." />
+          <Row icon={<Volume1 size={18} />} title="Input volume" description={wording.volumeHint} />
         </Rows>
       </Section>
     </Page>
