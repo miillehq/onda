@@ -79,6 +79,7 @@ with an identical tree.
 | 2026-11-13 | L4 probe | the old layout fails the new test (`labels on 2 rows: [["Nov",488],["Dec",507],["Jan",507],…]`), and so does the span fix without the 18 px line height (`Nov overlaps the grid, Expected: <= 506.625, Received: 507.125`) | windows-x64, local, chromium and webkit | `npx playwright test tests/ui/stats.spec.ts`; PR #30 |
 | 2026-11-13 | L1 | on macOS the speech engine reads installed memory (`hw.memsize`) and free memory, so the Balanced and Quality profiles keep their models: `macos_reports_installed_memory_so_profiles_do_not_step_down` passes | macos-arm64, macos-x64 CI | [ci run 43527998900](https://github.com/miillehq/onda/actions/runs/43527998900), `63e8be0`, PR #33 |
 | 2026-11-13 | L1 probe | planted on the macOS runners: skipping the memory check fails that test on both Macs (`installed memory must be reported in bytes, got 0`); typing that ignores the permission fails the strengthened `the_permission_decides_what_a_snapshot_names` on both Macs (`typing follows the permission`, `left: false`, `right: true`), the bug the first Accessibility probe could not catch | macos-arm64, macos-x64 CI | [ci run 43527986180](https://github.com/miillehq/onda/actions/runs/43527986180) (branch `probe/mac-memory-red`), [ci run 43527344066](https://github.com/miillehq/onda/actions/runs/43527344066) (branch `probe/mac-permission-red`) |
+| 2026-11-13 | L7 | the new installer legs on their own runners: the Linux ARM64 deb and AppImage and the Intel Mac dmg build, install, launch and are removed, beside Windows x64 (installed-app start 21.6 s), Linux x64 and the Apple Silicon dmg; the three containers pass. Windows ARM64 fails to link after its speech worker (`LNK1181: cannot open input file 'kernel32.lib'`); PR #29 now builds that worker in a separate process | linux-arm64, macos-x64, windows-x64, linux-x64, macos-arm64 CI; Fedora, Debian and Arch containers | [installers run 43527123009](https://github.com/miillehq/onda/actions/runs/43527123009), `8e5843b`, branch `release/0.3.0-pipeline` |
 | 2026-11-13 | L0 to L8 | `master` after merging PRs #30 to #34, the brand kit's `Onda.icns` included: every ci job passes on all six platforms; the Windows installed app, the Linux deb and AppImage, the Apple Silicon dmg and the three containers pass | windows-x64, linux-x64, macos-arm64, macos-x64, windows-arm64, linux-arm64 CI; Fedora, Debian and Arch containers | ci run 43529938416 and installers run 43529938589 (`f885ae3`) |
 
 ## Unverified
@@ -95,9 +96,9 @@ with an identical tree.
   claim. The interface's Mac wording has been checked in a browser against the mock, not in
   WKWebView on a Mac. macOS has no resource report (no process sampling). The runners hold the
   Accessibility permission, so the tests' path for a Mac without it never runs in CI.
-- Packages beyond Windows x64, Linux x64 and Apple Silicon: the Windows ARM64 installer, the
-  Linux ARM64 deb and AppImage and the Intel Mac dmg are being added to CI for 0.3.0; none has a
-  row above, so none is installer-tested (L7).
+- The Windows ARM64 installer has not passed its installer test (L7) yet; its build fix is in
+  PR #29. Every package that has passed did so on a GitHub runner, a fresh virtual machine: none
+  has been installed on a Windows on ARM laptop, a Linux ARM64 machine or a real Mac.
 - Upgrades: installing a new build over an older one on any OS has no run recorded; migrations
   are tested at L3 only.
 - Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 22 s on the
