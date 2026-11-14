@@ -533,16 +533,25 @@ mod tests {
         assert_eq!(role_code("AXTextArea"), role_code("AXTextArea"));
     }
 
-    /// Runs on the macOS runners, which may or may not have the permission: either way the
-    /// questions are answered without hanging, and an unpermitted snapshot names nothing.
+    /// Runs on the macOS runners, which hold the Accessibility permission (they report typing as
+    /// allowed): whatever the permission, a snapshot answers without hanging, typing follows it,
+    /// and without it a snapshot names nothing.
     #[test]
     fn the_permission_decides_what_a_snapshot_names() {
         let snapshot = snapshot().expect("snapshot");
-        if macos_typing::trusted() {
-            assert!(snapshot.process_id > 0 || snapshot.focused_runtime_id.is_empty());
-        } else {
+        let trusted = macos_typing::trusted();
+        assert_eq!(
+            can_type(&snapshot),
+            trusted,
+            "typing follows the permission"
+        );
+        assert_eq!(
+            macos_typing::typing_access() == macos_typing::TypingAccess::Allowed,
+            trusted,
+            "typing access reports the permission"
+        );
+        if !trusted {
             assert_eq!(snapshot, TargetSnapshot::unidentified());
-            assert!(!can_type(&snapshot));
         }
     }
 }

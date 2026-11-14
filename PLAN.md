@@ -22,9 +22,10 @@ test has been seen red with its probe.
 | 12 | macOS storage and desktop | Keychain for API keys, accounts and the history key; launch at login; menu-bar icon; microphone usage text | L1, L3 on macOS | done (PR #11); the Keychain round trip is an ignored test |
 | 13 | macOS input | event-tap shortcut helper; Accessibility focused-field identity, password refusal and Cmd+V paste; matcher tests shared with Windows and Linux | L1, L3; real typing unverified | partly: system hotkeys, no event tap (PR #11); Control+Shift+Space dictates by default (PR #22); Mac names and wording (PR #23); Accessibility focused-field identity, password and secure-input refusal, ⌘V paste that puts the pasteboard back, and selected text for rewrites, behind the user's Accessibility switch (PR #28), built and checked on the runners but not run on a real Mac; no span selection for undo |
 | 14 | macOS speech | Metal worker beside the CPU worker; golden real-model test on `macos-latest` | L3 | partly (PR #11): the Metal worker builds; no golden run on macOS |
-| 15 | macOS packaging | dmg built and installer-tested on `macos-latest`; signing and notarization hooks that stay off without an Apple account | L7 | done for now (PR #11): dmg built and installer-tested; signing and notarization deferred (ruling), the steps stay in `docs/release.md` |
-| 16 | ARM | sidecars per target triple, no AVX2 worker on ARM, L1 to L6 green on `windows-11-arm` and `ubuntu-24.04-arm`, packages built | L1 to L7 | partly (PR #11): L1 to L6 green on both ARM runners; no ARM packages |
+| 15 | macOS packaging | dmg built and installer-tested on `macos-latest`; signing and notarization hooks that stay off without an Apple account | L7 | done for now: the Apple Silicon dmg (PR #11) and the Intel dmg (PR #29) built and installer-tested; signing and notarization deferred (ruling), the steps stay in `docs/release.md` |
+| 16 | ARM | sidecars per target triple, no AVX2 worker on ARM, L1 to L6 green on `windows-11-arm` and `ubuntu-24.04-arm`, packages built | L1 to L7 | partly (PRs #11, #29): L1 to L6 green on both ARM runners; the Linux ARM64 deb and AppImage built and installer-tested; the Windows ARM64 installer's build fix is in PR #29, not yet green |
 | 17 | Distributions | deb and AppImage install checks in Fedora, Debian and Arch containers, advisory | L8 | done (PR #15): first run green on `master` |
+| 18 | First release (0.3.0) | one version in `package.json`, Cargo and `tauri.conf.json`; `CHANGELOG.md`; a `v*` tag publishes a GitHub pre-release with exactly the eight packages one green `installers` run built and tested on the tagged `master` commit, with checksums, notices and the MPL source | L7 | in progress: the release workflow (PR #29); version and changelog in the release PR |
 
 Rulings:
 
@@ -95,3 +96,12 @@ Rulings:
   allow an unsigned app in System Settings until signing is wired.
 - Slice 16: Ruling: ARM follows macOS — the sidecar naming work overlaps — cost if wrong: ARM
   users wait longer.
+- Slice 18: Ruling: a release publishes the packages that the `installers` run on the tagged
+  commit built and installer-tested, not a rebuild from the tag — what users download is exactly
+  what passed — cost if wrong: a release waits for a full green `installers` run on `master`.
+- Slice 18: Ruling: the release gate needs all six installer jobs green, Tier 2 included, although
+  Tier 2 never blocks a merge — every package on the release page must have passed its own
+  installer test — cost if wrong: a flaky ARM or Mac leg delays a release.
+- Slice 18: Ruling (the owner, 2026-11-13): 0.3.0 ships Mac typing into other apps as
+  experimental, with installers for Windows and Linux ARM64 and for Intel Macs too — cost if
+  wrong: Mac users meet the untested paste first.
