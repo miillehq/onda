@@ -499,9 +499,9 @@ async fn callback_rejects_csrf_client_swaps_duplicates_host_and_missing_registra
     ));
 }
 
-// Needs no protected storage, only a service, which macOS cannot create yet.
+// Signed fixture identities use a local issuer and need no protected account record.
 #[tokio::test]
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 async fn jwt_rejects_wrong_signature_issuer_audience_nonce_and_expiration() {
     let fixture = Fixture::start().await;
     let directory = tempfile::tempdir().unwrap();
@@ -574,9 +574,9 @@ async fn identity_only_grant_is_saved_but_never_used_for_inference() {
     ));
 }
 
-// Needs no protected storage, only a service, which macOS cannot create yet.
+// Signed fixture identities use a local issuer and need no protected account record.
 #[tokio::test]
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 async fn pre_cancelled_signin_does_not_request_discovery_or_open_the_browser() {
     let fixture = Fixture::start().await;
     let directory = tempfile::tempdir().unwrap();

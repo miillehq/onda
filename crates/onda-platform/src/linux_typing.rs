@@ -286,15 +286,9 @@ fn read_token(file: &Path) -> Option<String> {
 
 /// A token is good for one start; each start returns the next one.
 fn save_token(token: &str) {
+    use std::io::Write;
     let Some(file) = token_file() else { return };
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    if let Ok(mut handle) = options.open(&file) {
-        use std::io::Write;
-        let _ = handle.write_all(token.as_bytes());
+    if crate::private_file::replace(&file, |handle| handle.write_all(token.as_bytes())).is_err() {
+        tracing::warn!(subsystem = "typing", "typing permission could not be saved");
     }
 }
