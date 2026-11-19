@@ -17,7 +17,7 @@ impl Runtime {
         fallback: bool,
     ) -> AppResult<()> {
         if cfg!(not(windows)) {
-            let target = active.target.clone();
+            let target = active.insertion_target()?.clone();
             let typeable =
                 tokio::task::spawn_blocking(move || WindowsTargetService::new().can_type(&target))
                     .await
@@ -26,7 +26,7 @@ impl Runtime {
                 return self.hand_off_to_clipboard(active, output, fallback).await;
             }
         }
-        let target = active.target.clone();
+        let target = active.insertion_target()?.clone();
         let text = output.to_owned();
         let selection = active.selection.clone();
         let observe_document = selection.is_some() || active.settings.learning_enabled;

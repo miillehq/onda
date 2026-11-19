@@ -48,7 +48,7 @@ export async function runSmoke(): Promise<void> {
     check(retained.type === "snapshot" && retained.payload.result?.original === "PrivateCanaryTranscript" && retained.payload.state.phase === "error", "failed transform retains original and terminal state");
     check(await rejected({command:"retryTransformation"},cloudFailureCode),"transformation retry preserves unavailable cloud input");
     const previewHistory = await call({ command: "getHistory" });
-    check(previewHistory.type === "history" && previewHistory.payload.length === 0, "typed previews stay out of history");
+    check(previewHistory.type === "history" && previewHistory.payload.length === 0, "failed previews and their unsuccessful retries stay out of history");
     if (baseline) {
       check(baseline.historyDays === 3, "history defaults to three days");
       check(await rejected({ command: "updateSettings", args: { settings: { ...baseline, historyDays: 31 } } }, "invalidInput"), "history retention is capped at thirty days");

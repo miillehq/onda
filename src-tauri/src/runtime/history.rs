@@ -5,6 +5,12 @@ const MAX_HISTORY_ENTRIES: usize = 2_000;
 const DAY_MS: i64 = 86_400_000;
 const IDLE_EXPIRY_INTERVAL: Duration = Duration::from_secs(60);
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum HistoryStage {
+    Result,
+    CompletedPreview,
+}
+
 pub(super) struct History {
     pub(super) days: u32,
     entries: VecDeque<Arc<HistoryEntry>>,
@@ -167,13 +173,9 @@ impl Runtime {
         active: &ActiveOperation,
         result: &OperationResult,
         route: DataRoute,
+        stage: HistoryStage,
     ) {
-        if !recordable(
-            active.history,
-            &active.mode,
-            active.selection.is_some(),
-            result,
-        ) {
+        if !recordable(active.history, &active.mode, stage, result) {
             return;
         }
         let (entry, persist) = {
@@ -196,7 +198,10 @@ impl Runtime {
                     inserted: result.inserted,
                     fallback_used: result.fallback_used,
                     error_code: None,
-                    app: Some(active.target.executable_name.clone())
+                    app: active
+                        .target
+                        .as_ref()
+                        .map(|target| target.executable_name.clone())
                         .filter(|name| !name.is_empty()),
                     suggestion: result.suggestion.clone(),
                 },
@@ -321,12 +326,12 @@ impl Runtime {
 fn recordable(
     keep: bool,
     mode: &OperationMode,
-    has_selection: bool,
+    stage: HistoryStage,
     result: &OperationResult,
 ) -> bool {
     keep && !result.output.trim().is_empty()
         && (*mode != OperationMode::Transform
-            || !has_selection
+            || stage == HistoryStage::CompletedPreview
             || result.output != result.original
             || result.suggestion.is_some())
 }

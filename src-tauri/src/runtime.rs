@@ -28,7 +28,7 @@ mod dictation_usage;
 use dictation_usage::DictationReceipt;
 mod history;
 mod learning;
-use history::History;
+use history::{History, HistoryStage};
 mod profile;
 mod providers;
 mod stats_export;
@@ -64,7 +64,7 @@ fn lock<T>(mutex: &Mutex<T>) -> AppResult<MutexGuard<'_, T>> {
 #[derive(Clone)]
 struct ActiveOperation {
     id: String,
-    target: TargetSnapshot,
+    target: Option<TargetSnapshot>,
     mode: OperationMode,
     selection: Option<String>,
     context: String,
@@ -75,6 +75,20 @@ struct ActiveOperation {
     history: bool,
     usage: Option<DictationReceipt>,
 }
+impl ActiveOperation {
+    fn executable_name(&self) -> &str {
+        self.target
+            .as_ref()
+            .map_or("", |target| target.executable_name.as_str())
+    }
+
+    fn insertion_target(&self) -> AppResult<&TargetSnapshot> {
+        self.target
+            .as_ref()
+            .ok_or_else(|| AppError::invalid("Preview results have no insertion target."))
+    }
+}
+
 /// A speech worker started with the recording, loading its model while the user speaks.
 struct WarmWorker {
     id: String,
@@ -867,7 +881,7 @@ impl Runtime {
         }
         let operation = ActiveOperation {
             id: id.clone(),
-            target,
+            target: Some(target),
             mode,
             selection,
             context,
@@ -1171,7 +1185,7 @@ impl Runtime {
             self.save_result(&active, &source, &output, false, false, None)?;
         } else {
             self.save_result(&active, &local, &local, false, false, None)?;
-            let app_profile = active.settings.profile_for(&active.target.executable_name);
+            let app_profile = active.settings.profile_for(active.executable_name());
             let enhancement = active.settings.enhancement_enabled
                 && app_profile.is_none_or(|profile| profile.enhancement_enabled);
             if enhancement {
@@ -1334,14 +1348,14 @@ impl Runtime {
             diff: onda_core::transforms::diff(original, output),
             suggestion,
         };
-        let shortcut = paste_shortcut(&active.settings, &active.target.executable_name);
+        let shortcut = paste_shortcut(&active.settings, active.executable_name());
         *lock(&self.result)? = Some(SavedResult {
             usage: active.usage.clone(),
             copied,
             failed: false,
             retry: previous_retry,
             result: result.clone(),
-            target: Some(active.target.clone()),
+            target: active.target.clone(),
             selection: active.selection.clone(),
             after_document,
             shortcut,
@@ -1349,7 +1363,7 @@ impl Runtime {
         let route = state.snapshot().route;
         self.domain(AppEvent::ResultReady(result.clone()));
         drop(state);
-        self.record_history(active, &result, route);
+        self.record_history(active, &result, route, HistoryStage::Result);
         Ok(())
     }
 
@@ -1415,7 +1429,7 @@ impl Runtime {
             (saved.result.clone(), state.snapshot().route)
         };
         self.domain(AppEvent::ResultReady(result.clone()));
-        self.record_history(active, &result, route);
+        self.record_history(active, &result, route, HistoryStage::Result);
     }
 
     /// The account's models, fetched at most every half hour so polish can start at once.
@@ -1605,7 +1619,7 @@ impl Runtime {
         })?;
         let active = ActiveOperation {
             id: id.clone(),
-            target,
+            target: Some(target),
             mode: OperationMode::Transform,
             selection: Some(selection.clone()),
             context: String::new(),
@@ -1667,7 +1681,7 @@ impl Runtime {
         let id = self.begin_recovery_operation()?;
         let active = ActiveOperation {
             id: id.clone(),
-            target,
+            target: Some(target),
             mode: OperationMode::Transform,
             selection: saved.selection,
             context: String::new(),
@@ -1735,7 +1749,7 @@ impl Runtime {
         let cancellation = CancellationToken::new();
         let active = ActiveOperation {
             id: id.clone(),
-            target: target.clone(),
+            target: Some(target.clone()),
             mode: OperationMode::Transform,
             selection: None,
             context: String::new(),
