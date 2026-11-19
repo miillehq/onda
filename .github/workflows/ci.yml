@@ -313,11 +313,9 @@ jobs:
           cargo install cargo-deny --version 0.19.7 --locked
           cargo deny --locked check licenses advisories sources
       - name: Frontend advisories
-        # Shipped dependencies gate the build. Test tooling (WebdriverIO 9, pinned by the Tauri
-        # service) is reported, not gated, because it never ships: PLAN.md, slice 3 ruling.
         run: |
           npm audit --omit=dev --audit-level=high
-          npm audit --audit-level=high || echo "::warning::High advisories in test-only dependencies (PLAN.md slice 3)"
+          npm audit --audit-level=high
 
   tier2:
     name: tier2 ${{ matrix.platform }}

@@ -36,4 +36,6 @@ npm audit
 node scripts/generate-notices.mjs
 ```
 
-The `dependency policy` job runs `cargo deny` (licenses, advisories and sources, for every Windows, Linux and macOS target in `deny.toml`, all features) and `npm audit --omit=dev --audit-level=high` on every pull request; high advisories in test-only npm tooling are reported without failing (PLAN.md, slice 3 ruling). CI fetches the current RustSec advisory database on each run, so results change as advisories are published. The deny policy fails unmaintained direct workspace dependencies; a local `cargo audit` over the whole lock file also lists transitive ones.
+The `dependency policy` job checks Rust licenses, advisories and sources for the desktop targets in `deny.toml`. It runs `npm audit --omit=dev --audit-level=high` for shipped JavaScript and `npm audit --audit-level=high` for the complete tooling tree. High advisories in either set fail the job. CI fetches the current RustSec advisory database on each run, so results change as advisories are published. The deny policy fails unmaintained direct workspace dependencies; a local `cargo audit` over the whole lock file also lists transitive ones.
+
+The Tauri WebdriverIO service declares a WebdriverIO 9 peer. Onda retains that peer and pins four transitive dependency selections in `package.json` for its Node 24 tooling. Updating the browser manager removes the affected archive extractor from the lockfile. The real embedded WebDriver journeys and a clean `npm ls --all` check the resolved versions.
