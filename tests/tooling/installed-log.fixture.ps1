@@ -46,3 +46,17 @@ $terminal = $false
 try { Invoke-InstalledAppCheck { $attempts.count++; throw (New-InstalledStartupTimeout -ProcessId 52) } }
 catch { $terminal = $_.FullyQualifiedErrorId.Split(',')[0] -eq 'Onda.InstalledStartupTimeout' }
 if (-not $terminal -or $attempts.count -ne 2) { throw 'Two timeouts must fail the gate.' }
+
+$shellProcess = [Diagnostics.Process]::GetCurrentProcess()
+try {
+    $bound = Get-InstalledLogCheckpoint -Directory $Directory
+    foreach ($hasMarker in @($false, $true)) {
+        if ($hasMarker) { [IO.File]::AppendAllText($file, (New-Marker $shellProcess.Id '2026-01-01T00:00:00Z') + $newline) }
+        $terminal = $false
+        try { $null = Wait-InstalledStartupMarker -Directory $Directory -Checkpoint $bound -ShellProcess $shellProcess -Clock ([Diagnostics.Stopwatch]::StartNew()) -Limit ([TimeSpan]::Zero) }
+        catch { $terminal = $_.FullyQualifiedErrorId.Split(',')[0] -eq 'Onda.InstalledStartupTimeout' }
+        if (-not $terminal) { throw "An expired observation was accepted (marker present: $hasMarker)." }
+    }
+    $accepted = Wait-InstalledStartupMarker -Directory $Directory -Checkpoint $bound -ShellProcess $shellProcess -Clock ([Diagnostics.Stopwatch]::StartNew()) -Limit ([TimeSpan]::FromSeconds(30))
+    if ($accepted.processId -ne $shellProcess.Id) { throw 'The live in-budget marker was missed.' }
+} finally { $shellProcess.Dispose() }

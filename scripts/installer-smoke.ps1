@@ -245,15 +245,7 @@ try {
     Remember-OwnedDescendants -Parent $shell
     # Startup ends with the "application started" log entry, after the pill's WebView2 exists. A
     # first start on a fresh profile creates the WebView2 data folder; the time it took is recorded.
-    $startupEntry = $null
-    while (-not $startupEntry) {
-        if ($shell.HasExited) { throw 'Installed shell exited before it finished starting.' }
-        $startupEntry = Get-InstalledStartupMarker -Directory $logDirectory -Checkpoint $logCheckpoint -ProcessId $shell.Id
-        if (-not $startupEntry) {
-            if ($startupClock.Elapsed -ge $startupLimit) { throw (New-InstalledStartupTimeout -ProcessId $shell.Id) }
-            Start-Sleep -Milliseconds 250
-        }
-    }
+    $startupEntry = Wait-InstalledStartupMarker -Directory $logDirectory -Checkpoint $logCheckpoint -ShellProcess $shell -Clock $startupClock -Limit $startupLimit
     $startupClock.Stop()
     $report.startupSeconds = $startupClock.Elapsed.TotalSeconds
     $report.nativeSetupMs = $startupEntry.setupMs

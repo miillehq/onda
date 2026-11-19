@@ -71,6 +71,24 @@ function New-InstalledStartupTimeout {
         $ProcessId)
 }
 
+function Wait-InstalledStartupMarker {
+    <# A marker is accepted only while the original launch clock is inside its observation budget. #>
+    param(
+        [Parameter(Mandatory)][string]$Directory,
+        [Parameter(Mandatory)][hashtable]$Checkpoint,
+        [Parameter(Mandatory)][Diagnostics.Process]$ShellProcess,
+        [Parameter(Mandatory)][Diagnostics.Stopwatch]$Clock,
+        [Parameter(Mandatory)][TimeSpan]$Limit
+    )
+    while (-not $ShellProcess.HasExited) {
+        $marker = Get-InstalledStartupMarker -Directory $Directory -Checkpoint $Checkpoint -ProcessId $ShellProcess.Id
+        if ($Clock.Elapsed -ge $Limit) { throw (New-InstalledStartupTimeout -ProcessId $ShellProcess.Id) }
+        if ($marker) { return $marker }
+        Start-Sleep -Milliseconds 250
+    }
+    throw 'Installed shell exited before it finished starting.'
+}
+
 function Invoke-InstalledAppCheck {
     <# L7 permits one fresh install after this specific readiness timeout. Each attempt writes its own report. #>
     param([Parameter(Mandatory)][scriptblock]$Attempt)
