@@ -264,7 +264,7 @@ jobs:
   screenshots:
     name: real-shell contact sheet
     if: always() && !cancelled()
-    needs: [windows, linux, tier2]
+    needs: [windows, linux, tier2, intel-desktop]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -318,7 +318,7 @@ jobs:
           npm audit --audit-level=high
 
   tier2:
-    name: tier2 ${{ matrix.platform }}
+    name: ${{ matrix.platform == 'macos-x64' && 'native libraries macos-x64' || format('tier2 {0}', matrix.platform) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     continue-on-error: true
@@ -333,6 +333,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: matrix.platform != 'macos-x64'
         with:
           node-version: "24"
           cache: npm
@@ -372,20 +373,20 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a env ONDA_TEST_X11=isolated cargo test --locked -p onda-platform --lib isolated_x11_keeps_rich_content -- --ignored --test-threads=1
       - name: Frontend (L0)
-        if: always()
+        if: always() && matrix.platform != 'macos-x64'
         run: |
           npm ci
           npm run build
       - name: Speech and shortcut workers
-        if: always()
+        if: always() && matrix.platform != 'macos-x64'
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then pwsh -NoProfile -File scripts/prepare.ps1; else scripts/prepare.sh; fi
       - name: App shell (L1)
-        if: always()
+        if: always() && matrix.platform != 'macos-x64'
         run: cargo test --locked -p onda-app
       - name: Real-shell journeys (L6)
-        if: always()
+        if: always() && matrix.platform != 'macos-x64'
         shell: bash
         env:
           NO_AT_BRIDGE: "1"
@@ -393,7 +394,7 @@ jobs:
           npm run build:e2e
           if [ "$RUNNER_OS" = "Linux" ]; then dbus-run-session -- xvfb-run -a npm run test:e2e; else npm run test:e2e; fi
       - name: Upload real-shell screenshots and logs
-        if: always()
+        if: always() && matrix.platform != 'macos-x64'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: e2e-${{ matrix.platform }}
@@ -402,4 +403,83 @@ jobs:
             artifacts/e2e/*.html
             artifacts/e2e/logs
           if-no-files-found: ignore
+          retention-days: 7
+
+  intel-workers:
+    name: debug workers macos-x64
+    runs-on: macos-15-intel
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with: { toolchain: "1.95.0" }
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          shared-key: macos-x64-workers
+          cache-bin: false
+          workspaces: |
+            . -> target
+            . -> target/avx2
+      - name: Build the native workers
+        run: |
+          scripts/prepare.sh
+          tar -czf "$RUNNER_TEMP/intel-workers.tar.gz" src-tauri/binaries
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: intel-debug-workers
+          path: ${{ runner.temp }}/intel-workers.tar.gz
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  intel-desktop:
+    name: ${{ matrix.name }}
+    needs: intel-workers
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: app tests macos-x64, lane: app }
+          - { name: tier2 macos-x64, lane: webview }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with: { node-version: "24", cache: npm }
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with: { toolchain: "1.95.0" }
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          shared-key: macos-x64-${{ matrix.lane }}
+          cache-bin: false
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with: { name: intel-debug-workers, path: "${{ runner.temp }}" }
+      - name: Prepare the matching commit's desktop dependencies
+        run: |
+          tar -xzf "$RUNNER_TEMP/intel-workers.tar.gz"
+          npm ci
+      - name: Frontend (L0)
+        if: matrix.lane == 'app'
+        run: npm run build
+      - name: App shell (L1)
+        if: matrix.lane == 'app'
+        run: cargo test --locked -p onda-app
+      - name: Real-shell journeys (L6)
+        if: matrix.lane == 'webview'
+        run: |
+          npm run build:e2e
+          npm run test:e2e
+      - name: Upload real-shell screenshots and logs
+        if: always() && matrix.lane == 'webview'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: e2e-macos-x64
+          path: |
+            artifacts/e2e/*.png
+            artifacts/e2e/*.html
+            artifacts/e2e/logs
+          if-no-files-found: error
           retention-days: 7

@@ -6,6 +6,14 @@ const installerSteps = {
   macos: "Mount, copy, launch and remove the app (L7)",
 };
 
+function requireSteps(run, name, steps) {
+  const job = run.jobs.find((candidate) => candidate.name === name);
+  const passed = new Set(job?.steps.filter((step) => step.conclusion === "success").map((step) => step.name));
+  if (job?.conclusion !== "success" || !steps.every((step) => passed.has(step))) {
+    throw new Error(`${name} did not pass its required steps in run ${run.databaseId}.`);
+  }
+}
+
 /** Check the named native step as well as its job, including advisory jobs and fresh attempts. */
 export function requireReleaseEvidence(kind, sha, run, platforms) {
   if (kind !== "ci" && kind !== "installers") throw new Error("Unknown release evidence type.");
@@ -17,11 +25,13 @@ export function requireReleaseEvidence(kind, sha, run, platforms) {
       const jobName = `${kind === "ci" ? tier : "installers"} ${platform}`;
       const stepName = kind === "installers" ? installerSteps[platform.split("-")[0]]
         : tier === "tier1" ? "L6 real-shell journeys" : "Real-shell journeys (L6)";
-      const job = run.jobs.find((candidate) => candidate.name === jobName);
-      if (job?.conclusion !== "success" || !job.steps.some((step) => step.name === stepName && step.conclusion === "success")) {
-        throw new Error(`${jobName} did not pass its native ${kind === "ci" ? "L6" : "L7"} step in run ${run.databaseId}.`);
-      }
+      requireSteps(run, jobName, [stepName]);
     }
+  }
+  if (kind === "ci" && platforms.tier2.includes("macos-x64")) {
+    requireSteps(run, "debug workers macos-x64", ["Build the native workers"]);
+    requireSteps(run, "native libraries macos-x64", ["Crates without the app shell (L1, L3)", "Synthetic account and key storage round trips (L3)"]);
+    requireSteps(run, "app tests macos-x64", ["App shell (L1)"]);
   }
   return run.databaseId;
 }
