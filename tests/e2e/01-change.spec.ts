@@ -1,7 +1,8 @@
 // L6, journey "dictionary, snippets and settings survive a restart", part 1: in the real app on a
 // fresh profile, add a dictionary word and choose the dark theme through the interface.
 // 02-restart.spec.ts launches the app again on the same profile and checks both survived.
-import { $, expect } from "@wdio/globals";
+import { $, browser, expect } from "@wdio/globals";
+import { unusedPreviewWidths } from "../shared/preview-widths.js";
 import { call, open, saveSettings, screenshot, snapshot } from "./app.js";
 
 describe("a fresh profile in the real app", () => {
@@ -42,6 +43,9 @@ describe("a fresh profile in the real app", () => {
     await dark.click();
     await expect(dark).toHaveAttribute("aria-pressed", "true");
     await expect($("html")).toHaveAttribute("data-theme", "dark");
+    const missingWidth = await browser.execute(unusedPreviewWidths);
+    expect(missingWidth).toHaveLength(6);
+    expect(missingWidth.every((width) => Math.abs(width) <= 1)).toBe(true);
     await screenshot("settings-dark");
   });
 

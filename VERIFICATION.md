@@ -124,6 +124,8 @@ with an identical tree.
 | 2026-11-19 | L3 | The release worker used Metal for the pinned public-domain speech fixture, and the CPU-only path explicitly disabled GPU use. | macOS Intel and Apple Silicon | Both [native worker jobs](https://github.com/miillehq/onda/actions/runs/44575355243) reported Metal with CPU recovery false. |
 | 2026-11-19 | L0 | Every target-conditioned Rust module and the renderer fit the documented source limits. A planted orphan Rust module and unused TypeScript file were detected. | windows-x64, local | `npm run lint` and `npm run test:tooling`. The initial structural read counted 3,566 lines for Runtime. The extracted root measures 371. |
 
+| 2026-11-19 | L4, L6 | Appearance and tray samples fill each card at compact desktop widths. Native screenshots wait for fonts and finite animations and return the content to its top. | windows-x64, local; prior six-platform screenshot review | The [six-platform run](https://github.com/miillehq/onda/actions/runs/44604289499) showed narrow samples on Intel macOS and Windows x64. A simulated 20 px sample failed the new geometry assertion. Chromium, WebKit and the real Windows WebView2 suite passed with explicit card widths. |
+
 ## Unverified
 
 - macOS physical sessions still cover third-party target identity and secure fields, non-US keyboard layouts, the Accessibility consent dialog, grant reset after an unsigned upgrade and shortcut conflicts. Span selection for Undo and native process resource reporting remain unavailable on macOS. Signing and notarization remain deferred by the owner. Hosted Keychain, Metal and WKWebView checks have separate evidence above.

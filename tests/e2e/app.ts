@@ -54,6 +54,13 @@ export async function open(route: string): Promise<void> {
 /** One screenshot per platform, so runs on different runners never overwrite each other. */
 export async function screenshot(name: string): Promise<void> {
   const { platform } = await snapshot();
+  await browser.executeAsync((done: () => void) => {
+    document.querySelector(".main-scroll")?.scrollTo({ top: 0, behavior: "instant" });
+    const finite = document.getAnimations().filter((animation) =>
+      animation.playState === "running" && animation.effect?.getTiming().iterations !== Infinity);
+    void Promise.allSettled([document.fonts.ready, ...finite.map((animation) => animation.finished)])
+      .then(() => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+  });
   const directory = join(process.cwd(), "artifacts", "e2e");
   mkdirSync(directory, { recursive: true });
   await browser.saveScreenshot(join(directory, `${name}-${platform}-${process.arch}.png`));
