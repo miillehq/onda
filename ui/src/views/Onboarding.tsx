@@ -32,7 +32,7 @@ import {
   yourDevice,
 } from "../lib/store";
 import { micWording } from "../lib/microphone";
-import { ChatgptModelSelect, modelAdvice } from "./settings/AiPolish";
+import { ChatgptModelSelect, modelAdvice } from "./settings/ChatgptAccount";
 import { MicTest } from "./settings/Microphone";
 
 type Step = "welcome" | "microphone" | "model" | "try" | "polish" | "done";

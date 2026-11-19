@@ -133,40 +133,8 @@ function ResourceReport() {
 export function About() {
   const value = settings.value;
   const info = snapshot.value;
-  const [update, setUpdate] = useState<UpdateInfo | null>(null);
-  const [diagnostics, setDiagnostics] = useState<string | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [installing, setInstalling] = useState(false);
+  const { update, diagnostics, checking, installing, check, install, copyDiagnostics } = useUpdateActions();
   if (!value || !info) return null;
-  const check = async () => {
-    setChecking(true);
-    try {
-      setUpdate(await ask({ command: "checkUpdate" }, "update"));
-    } catch (error) {
-      toastError(error, "Couldn't check for updates");
-    } finally {
-      setChecking(false);
-    }
-  };
-  const install = async () => {
-    setInstalling(true);
-    try {
-      await ask({ command: "installUpdate" }, "unit");
-    } catch (error) {
-      setInstalling(false);
-      toastError(error, "Update not installed");
-    }
-  };
-  const copyDiagnostics = async () => {
-    try {
-      const text = await ask({ command: "exportDiagnostics" }, "text");
-      setDiagnostics(text);
-      await navigator.clipboard.writeText(text);
-      toast({ tone: "ok", title: "Diagnostics copied", body: "They contain settings and timings only, never your words." });
-    } catch (error) {
-      toastError(error, "Couldn't copy diagnostics");
-    }
-  };
   const cheats: { keys: number[]; what: string }[] = [
     { keys: value.pushToTalk.keys, what: "Hold to dictate" },
     ...(value.toggleEnabled ? [{ keys: value.toggleShortcut.keys, what: "Hands-free on and off" }] : []),
@@ -175,6 +143,7 @@ export function About() {
     { keys: cancelKeys(value.pushToTalk.keys), what: "Cancel" },
     { keys: [0xa2, 0x4b], what: "Search Onda (in the app)" },
   ];
+
   return (
     <Page title="Updates and help">
       <div class="about">
@@ -262,4 +231,41 @@ export function About() {
       </Section>
     </Page>
   );
+}
+
+function useUpdateActions() {
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [diagnostics, setDiagnostics] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const check = async () => {
+    setChecking(true);
+    try {
+      setUpdate(await ask({ command: "checkUpdate" }, "update"));
+    } catch (error) {
+      toastError(error, "Couldn't check for updates");
+    } finally {
+      setChecking(false);
+    }
+  };
+  const install = async () => {
+    setInstalling(true);
+    try {
+      await ask({ command: "installUpdate" }, "unit");
+    } catch (error) {
+      setInstalling(false);
+      toastError(error, "Update not installed");
+    }
+  };
+  const copyDiagnostics = async () => {
+    try {
+      const text = await ask({ command: "exportDiagnostics" }, "text");
+      setDiagnostics(text);
+      await navigator.clipboard.writeText(text);
+      toast({ tone: "ok", title: "Diagnostics copied", body: "They contain settings and timings only, never your words." });
+    } catch (error) {
+      toastError(error, "Couldn't copy diagnostics");
+    }
+  };
+ return { update, diagnostics, checking, installing, check, install, copyDiagnostics };
 }

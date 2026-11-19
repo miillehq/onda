@@ -1,6 +1,6 @@
 // Helpers for the real-shell suite. Every request goes through the same `application_call`
 // command and generated `ApiRequest`/`ApiResponse` types that the UI and the mock use.
-import { browser, $ } from "@wdio/globals";
+import { browser } from "@wdio/globals";
 import "@wdio/native-types";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";

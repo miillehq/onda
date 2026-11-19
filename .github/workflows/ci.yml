@@ -97,14 +97,14 @@ jobs:
           cargo build --locked -p onda-app --bin onda
           if ($LASTEXITCODE -ne 0) { throw 'Debug desktop build failed' }
           try {
-            ./scripts/smoke.ps1 -SkipBuild
+            ./scripts/smoke.ps1 -SkipBuild -WithDictationFixture -FixtureModelDirectory .artifacts/ci-models
           } catch {
             $first = $_.Exception.Message
             if ($first -notlike 'Hidden desktop IPC smoke timed out.*') { throw }
             Write-Output $first
             $annotation = $first.Replace('%', '%25').Replace("`r", '').Replace("`n", '%0A')
             Write-Output "::warning title=WebView2 smoke timed out and was retried::Add this run to https://github.com/miillehq/onda/issues/25%0A$annotation"
-            ./scripts/smoke.ps1 -SkipBuild
+            ./scripts/smoke.ps1 -SkipBuild -WithDictationFixture -FixtureModelDirectory .artifacts/ci-models
           }
       - name: L6 real-shell journeys
         run: |
@@ -276,6 +276,22 @@ jobs:
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: always()
         with: { name: shell-contact-sheet, path: artifacts/contact-sheet.html, retention-days: 7 }
+
+  source:
+    name: source quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+        with: { toolchain: "1.95.0" }
+      - run: npm ci
+      - run: npm run lint:source
+      - run: npm run test:tooling
 
   policy:
     name: dependency policy

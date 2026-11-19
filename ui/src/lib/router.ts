@@ -1,6 +1,6 @@
 import { computed, signal } from "@preact/signals";
 
-export const SETTINGS_SECTIONS = [
+const SETTINGS_SECTIONS = [
   "general",
   "shortcuts",
   "microphone",
@@ -10,8 +10,8 @@ export const SETTINGS_SECTIONS = [
   "privacy",
   "about",
 ] as const;
-export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
-export type MainPage = "home" | "stats" | "history" | "dictionary" | "snippets" | "rewrites";
+type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+type MainPage = "home" | "stats" | "history" | "dictionary" | "snippets" | "rewrites";
 export type Route = MainPage | `settings/${SettingsSection}` | "onboarding";
 
 const MAIN_PAGES: MainPage[] = ["home", "stats", "history", "dictionary", "snippets", "rewrites"];

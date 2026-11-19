@@ -145,47 +145,7 @@ export function Dictionary() {
     if (consumeEditorIntent("dictionary")) setDraft({ id: null, phrase: "", replacement: "" });
   }, [editorIntent.value]);
 
-  const counts = useMemo(
-    () => ({
-      vocabulary: dictionary.value.filter((entry) => entry.kind === "vocabulary").length,
-      replacement: dictionary.value.filter((entry) => entry.kind === "replacement").length,
-    }),
-    [dictionary.value],
-  );
-  const visible = useMemo(() => {
-    const term = query.trim().toLocaleLowerCase();
-    return dictionary.value
-      .filter((entry) => entry.kind === kind)
-      .filter((entry) => !term || entry.phrase.toLocaleLowerCase().includes(term) || (entry.replacement ?? "").toLocaleLowerCase().includes(term))
-      .sort((a, b) => Number(b.starred) - Number(a.starred) || (a.replacement ?? a.phrase).localeCompare(b.replacement ?? b.phrase));
-  }, [dictionary.value, kind, query]);
-
-  const importFile = async (event: Event) => {
-    const input = event.currentTarget as HTMLInputElement;
-    const chosen = input.files?.[0];
-    input.value = "";
-    if (!chosen) return;
-    try {
-      const added = await ask({ command: "importDictionary", args: { json: await readDictionaryArchive(chosen) } }, "count");
-      dictionary.value = await ask({ command: "getDictionary" }, "dictionary");
-      toast({ tone: "ok", title: added ? `Imported ${plural(added, "entry", "entries")}` : "Nothing new to import" });
-    } catch (error) {
-      toastError(error, "Import didn't work");
-    }
-  };
-  const exportFile = async () => {
-    try {
-      const json = await ask({ command: "exportDictionary" }, "text");
-      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "onda-dictionary.json";
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      toastError(error, "Export didn't work");
-    }
-  };
+  const { counts, visible } = useDictionaryEntries(kind, query);
 
   return (
     <Page
@@ -301,4 +261,50 @@ export function Dictionary() {
       {teaching && <TeachWord entry={teaching} onClose={() => setTeaching(null)} />}
     </Page>
   );
+}
+
+async function importFile(event: Event): Promise<void> {
+  const input = event.currentTarget as HTMLInputElement;
+  const chosen = input.files?.[0];
+  input.value = "";
+  if (!chosen) return;
+  try {
+    const added = await ask({ command: "importDictionary", args: { json: await readDictionaryArchive(chosen) } }, "count");
+    dictionary.value = await ask({ command: "getDictionary" }, "dictionary");
+    toast({ tone: "ok", title: added ? `Imported ${plural(added, "entry", "entries")}` : "Nothing new to import" });
+  } catch (error) {
+    toastError(error, "Import didn't work");
+  }
+}
+async function exportFile(): Promise<void> {
+  try {
+    const json = await ask({ command: "exportDictionary" }, "text");
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "onda-dictionary.json";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    toastError(error, "Export didn't work");
+  }
+}
+
+function useDictionaryEntries(kind: DictionaryKind, query: string) {
+  const counts = useMemo(
+    () => ({
+      vocabulary: dictionary.value.filter((entry) => entry.kind === "vocabulary").length,
+      replacement: dictionary.value.filter((entry) => entry.kind === "replacement").length,
+    }),
+    [dictionary.value],
+  );
+  const visible = useMemo(() => {
+    const term = query.trim().toLocaleLowerCase();
+    return dictionary.value
+      .filter((entry) => entry.kind === kind)
+      .filter((entry) => !term || entry.phrase.toLocaleLowerCase().includes(term) || (entry.replacement ?? "").toLocaleLowerCase().includes(term))
+      .sort((a, b) => Number(b.starred) - Number(a.starred) || (a.replacement ?? a.phrase).localeCompare(b.replacement ?? b.phrase));
+  }, [dictionary.value, kind, query]);
+
+  return { counts, visible };
 }

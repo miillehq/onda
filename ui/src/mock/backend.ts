@@ -11,159 +11,41 @@
  *   ?provider=chatgpt|openaiCompatible|anthropic|local   AI polish provider
  */
 import type { Backend } from "../api";
-import type { AccountInfo, ApiRequest, ApiResponse, CloudModel, ModelInfo, ResourceUsage, RuntimeEvent, Snapshot } from "../generated/api";
-import type { AiProvider, AppError, DailyUsage, HistoryEntry, OperationResult, OperationState, Profile, Settings, Snippet, Transform, UsageSummary } from "../generated/core";
-import { DEFAULT_SETTINGS, MACOS_DEFAULT_SETTINGS } from "../generated/core";
+import type { ApiRequest, ApiResponse, RuntimeEvent } from "../generated/api";
+import type { AiProvider, AppError, OperationResult, OperationState, } from "../generated/core";
 import { normalizeName, validateSettings } from "./validate";
-import { createDictionary } from "./dictionary";
 import { requireRequestShape } from "./request-shape";
-
-const params = new URLSearchParams(window.location.search);
-const scenario = params.get("mock") ?? "default";
-const pillState = params.get("pill");
-const platform = params.get("platform") === "linux" ? "linux" : params.get("platform") === "macos" ? "macos" : "windows";
-/** What a fresh profile starts with on this platform. */
-const defaults = platform === "macos" ? MACOS_DEFAULT_SETTINGS : DEFAULT_SETTINGS;
-const provider = (params.get("provider") ?? "chatgpt") as AiProvider;
-
-const themeParam = params.get("theme") === "dark" ? "dark" : params.get("theme") === "light" ? "light" : null;
-const settings: Settings = scenario === "onboarding" ? { ...structuredClone(defaults), theme: themeParam ?? defaults.theme } : {
-  executionPreference: "auto",
-  qualityProfile: "fast",
-  modelId: null,
-  modelDirectory: null,
-  language: "en",
-  microphoneId: null,
-  maxRecordingSeconds: 180,
-  enhancementEnabled: scenario === "default",
-  contextEnabled: false,
-  learningEnabled: true,
-  pushToTalk: structuredClone(defaults.pushToTalk),
-  transformShortcut: { keys: [0xa2, 0xa4, 0x50] },
-  commandShortcut: { keys: [0xa2, 0xa4, 0x43] },
-  toggleShortcut: { keys: [0xa2, 0xa4, 0x44] },
-  toggleEnabled: true,
-  defaultTransformId: "polish",
-  appProfiles: scenario === "default" ? [{ executable: "slack.exe", contextEnabled: false, enhancementEnabled: true, cleanupInstruction: "Casual and brief. No sign-off.", pasteShortcut: "controlV" }] : [],
-  theme: params.get("theme") === "dark" ? "dark" : params.get("theme") === "light" ? "light" : "system",
-  launchAtLogin: true,
-  showPill: true,
-  playSounds: true,
-  onboardingCompleted: scenario !== "onboarding",
-  historyDays: 3,
-  trayIcon: "auto",
-  aiProvider: provider,
-  openaiBaseUrl: provider === "openaiCompatible" ? "https://api.example.com/v1" : null,
-  openaiModel: provider === "openaiCompatible" ? "example-small" : null,
-  anthropicModel: provider === "anthropic" ? "claude-opus-5-5" : null,
-  localBaseUrl: provider === "local" ? "http://127.0.0.1:11434/v1" : null,
-  localModel: provider === "local" ? "qwen3.5:0.8b" : null,
-};
-
-const catalog: ModelInfo[] = [
-  ["whisper-tiny-en", "Fast · English", 77_704_715, 400, true],
-  ["whisper-tiny", "Fast · Multilingual", 77_691_713, 400, false],
-  ["whisper-base-en-q5", "Balanced · English", 59_721_011, 600, true],
-  ["whisper-base-q5", "Balanced · Multilingual", 59_707_625, 600, false],
-  ["whisper-small-en-q5", "Quality · English", 190_098_681, 1200, true],
-  ["whisper-small-q5", "Quality · Multilingual", 190_085_487, 1200, false],
-].map(([id, name, size, memory, englishOnly]) => ({ id: id as string, name: name as string, version: "sample", downloadSizeBytes: size as number, memoryBytes: (memory as number) * 1024 * 1024, license: "MIT", englishOnly: englishOnly as boolean, sha256: "" }));
-
-const transforms: Transform[] = [
-  ["polish", "Polish", "Polish this text while preserving its meaning and voice."],
-  ["grammar", "Fix grammar", "Fix spelling, grammar and punctuation only."],
-  ["concise", "Make concise", "Make this text concise while retaining every material point."],
-  ["clearer", "Make clearer", "Improve clarity without inventing information."],
-  ["formal", "Make formal", "Rewrite in a professional formal tone with the same meaning."],
-  ["casual", "Make casual", "Rewrite in a natural casual tone with the same meaning."],
-  ["bullets", "Turn into bullets", "Format the existing points as bullet items without adding information."],
-  ["translate", "Translate", "Translate this text into English, preserving meaning, URLs, email addresses and numeric values."],
-  ["prompt", "Prompt engineer", "Improve this as an instruction prompt. Clarify requirements and organize existing information."],
-].map(([id, name, instruction]) => ({ id: id as string, name: name as string, instruction: instruction as string, shortcut: null, modelPreference: null, preserveProtectedTokens: true, builtIn: true }));
-
-const rich = scenario === "default" || scenario === "error" || scenario === "skipped";
-/** A rewrite whose ChatGPT version changed a number, so Onda kept the selection. */
-const SKIPPED_TEXT = "Send the invoice for 1,200 by Friday and copy finance.";
-const SKIPPED_SUGGESTION = "Please send the invoice for 1,500 by Friday and copy the finance team.";
-const SKIPPED_ERROR = { code: "invalidEnhancement", message: "The AI model changed a number, link, email or code, so Onda kept your original words.", retryable: true } as const;
-const dictionary = createDictionary(rich
-  ? [
-      { id: "d1", kind: "vocabulary", phrase: "Kubernetes", replacement: null, enabled: true, starred: true, source: "manual" },
-      { id: "d2", kind: "vocabulary", phrase: "miille", replacement: null, enabled: true, starred: false, source: "manual" },
-      { id: "d3", kind: "vocabulary", phrase: "Onda", replacement: null, enabled: true, starred: false, source: "manual" },
-      { id: "d4", kind: "vocabulary", phrase: "PostgreSQL", replacement: null, enabled: true, starred: false, source: "imported" },
-      { id: "d5", kind: "vocabulary", phrase: "Tauri", replacement: null, enabled: false, starred: false, source: "manual" },
-      { id: "d6", kind: "replacement", phrase: "cooper netties", replacement: "Kubernetes", enabled: true, starred: false, source: "autoLearned" },
-      { id: "d7", kind: "replacement", phrase: "my email", replacement: "name@example.com", enabled: true, starred: false, source: "manual" },
-    ]
-  : []);
-let snippets: Snippet[] = rich
-  ? [
-      { id: "s1", trigger: "my address", expansion: "221B Example Street\nLondon NW1 6XE", enabled: true },
-      { id: "s2", trigger: "calendar link", expansion: "https://example.com/book-a-call", enabled: true },
-      { id: "s3", trigger: "sign off", expansion: "Thanks,\nAlex", enabled: false },
-    ]
-  : [];
-
-const profiles: AccountInfo[] = scenario === "default" ? [{ id: "p1", label: "Personal", email: "you@example.com", signedIn: true, planUsageEnabled: true, active: true, preferredModel: null }] : [];
-
-const result: OperationResult | null =
-  scenario === "skipped"
-    ? { commandText: null, operationId: "op-sample", original: SKIPPED_TEXT, output: SKIPPED_TEXT, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: SKIPPED_TEXT }], suggestion: SKIPPED_SUGGESTION }
-    : rich
-  ? {
-      commandText: null,
-      operationId: "op-sample",
-      original: "lets move the design review to thursday at three and um send the notes after",
-      output: "Let's move the design review to Thursday at three and send the notes after.",
-      inserted: true,
-      fallbackUsed: false,
-      diff: [
-        { kind: "removed", text: "lets move the design review to thursday at three and um send the notes after" },
-        { kind: "added", text: "Let's move the design review to Thursday at three and send the notes after." },
-      ],
-      suggestion: null,
-    }
-  : null;
-
-const minutesAgo = (minutes: number) => Date.now() - minutes * 60_000;
-function sample(id: string, minutes: number, app: string, output: string, extra: Partial<HistoryEntry> = {}): HistoryEntry {
-  return { id, createdAt: minutesAgo(minutes), mode: "dictation", route: "local", original: output, output, commandText: null, inserted: true, fallbackUsed: false, errorCode: null, app, suggestion: null, ...extra };
-}
-let history: HistoryEntry[] = rich
-  ? [
-      sample("op-sample", 2, "slack.exe", "Let's move the design review to Thursday at three and send the notes after.", { route: "chatgptPlan", original: "lets move the design review to thursday at three and um send the notes after" }),
-      sample("h2", 18, "outlook.exe", "Hi Priya, thanks for the quick turnaround. The numbers look right to me, so let's send the deck to the client tomorrow morning.", { inserted: false, errorCode: "focusChanged" }),
-      sample("h3", 47, "code.exe", "Move standup to 9 tomorrow and invite the two new hires.", { route: "chatgptPlan", fallbackUsed: true, original: "move standup to 9 tomorrow and invite the two new hires", suggestion: "Move standup to 9:00 tomorrow and invite the two new hires." }),
-      sample("h4", 95, "winword.exe", "The pilot ran for six weeks across three teams. Adoption was strongest where managers used it first.", { mode: "spokenCommand", commandText: "make it more formal", original: "pilot went for six weeks, three teams, people used it more when their managers did", route: "chatgptPlan" }),
-      sample("h5", 60 * 26, "notion.exe", "Ideas for the offsite: a short retro, a demo hour, and dinner somewhere walkable."),
-      sample("h6", 60 * 27, "chrome.exe", "Order confirmation for the standing desk, delivery window Tuesday."),
-    ]
-  : [];
-
-function idle(): OperationState {
-  if (scenario === "skipped") return { operationId: "op-sample", phase: "error", mode: "transform", route: "chatgptPlan", error: SKIPPED_ERROR, fallbackUsed: false, handsFree: false };
-  return { operationId: rich ? "op-sample" : null, phase: scenario === "error" ? "error" : rich ? "completed" : "idle", mode: "dictation", route: rich ? "chatgptPlan" : "local", error: scenario === "error" ? { code: "noSpeech", message: "No speech was detected. Check microphone level and try again.", retryable: true } : null, fallbackUsed: false, handsFree: false };
-}
-
-const snapshot: Snapshot = {
-  appName: "Onda",
-  version: "0.2.0",
-  contractVersion: 1,
-  state: idle(),
-  settings,
-  selectedModelId: "whisper-tiny-en",
-  result,
-  hardware: { logicalCpus: 16, physicalCpus: 8, totalMemoryBytes: 32 * 1024 ** 3, availableMemoryBytes: 18 * 1024 ** 3, inferenceThreads: 8, simd: ["avx2"], gpus: [{ name: "Sample GPU", vendorId: 0, dedicatedMemoryBytes: 8 * 1024 ** 3, sharedMemoryBytes: 0 }], vulkanLoaderPresent: true, cudaDriverPresent: false, directmlLibraryPresent: true, vulkanWorkerInstalled: false },
-  installedModels: scenario === "empty" || scenario === "onboarding" ? [] : [{ modelId: "whisper-tiny-en", version: "sample", sizeBytes: 77_704_715 }],
-  profiles,
-  cloudError: null,
-  shortcutStatus: "ready",
-  updaterConfigured: false,
+import {
+  params,
+  scenario,
+  pillState,
   platform,
-  providerKeys: { openaiCompatible: provider === "openaiCompatible", anthropic: provider === "anthropic", local: false },
-  typingAccess: platform === "windows" ? "allowed" : "notAllowed",
-};
+  settings,
+  catalog,
+  transforms,
+  rich,
+  SKIPPED_TEXT,
+  SKIPPED_SUGGESTION,
+  SKIPPED_ERROR,
+  dictionary,
+  initialSnippets,
+  profiles,
+  sample,
+  initialHistory,
+  snapshot,
+  today,
+  key,
+  usageDays,
+  summarize,
+  initialProfile,
+  providerModels,
+  resources,
+  samplePicture,
+} from "./fixtures";
+
+let snippets = initialSnippets;
+let history = initialHistory;
+let profile = initialProfile;
 
 /* A Mac answers "allow typing" before the user flips Onda's switch in System Settings. The mock
  * flips it when the window gets focus back, as if the user had done it and returned. */
@@ -172,111 +54,6 @@ if (platform === "macos")
   window.addEventListener("focus", () => {
     if (macSwitchedOnInSettings) snapshot.typingAccess = "allowed";
   });
-
-function today(): Date {
-  return new Date();
-}
-function key(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-/** About four months of fictional, deterministic activity, the latest week matching Home. */
-const usageDays: DailyUsage[] = rich
-  ? Array.from({ length: 130 }, (_, offset) => {
-      const recent = [412, 655, 503, 820, 588, 0, 0][offset];
-      const wave = Math.sin(offset * 1.7) * Math.cos(offset * 0.43);
-      const words = recent ?? (wave > 0.15 ? Math.round(120 + wave * 900) : 0);
-      const date = today();
-      date.setDate(date.getDate() - offset);
-      return { day: key(date), dictations: Math.round(words / 22), words, audioMs: Math.round((words / 142) * 60_000) };
-    }).filter((day) => day.words > 0)
-  : [];
-
-/** The same rules as onda-core's stats::summarize, for the mock only. */
-function summarize(days: DailyUsage[]): UsageSummary {
-  const dayNumber = (value: string) => Math.round(Date.parse(`${value}T00:00:00Z`) / 86_400_000);
-  const active = [...new Set(days.filter((day) => day.dictations > 0).map((day) => dayNumber(day.day)))].sort((a, b) => a - b);
-  const todayNumber = dayNumber(key(today()));
-  const has = (value: number) => active.includes(value);
-  let current = 0;
-  let cursor = has(todayNumber) ? todayNumber : has(todayNumber - 1) ? todayNumber - 1 : null;
-  while (cursor !== null && has(cursor)) {
-    current += 1;
-    cursor -= 1;
-  }
-  let longest = 0;
-  let run = 0;
-  active.forEach((value, index) => {
-    run = index > 0 && active[index - 1] === value - 1 ? run + 1 : 1;
-    longest = Math.max(longest, run);
-  });
-  const words = days.reduce((sum, day) => sum + day.words, 0);
-  const audioMs = days.reduce((sum, day) => sum + day.audioMs, 0);
-  const since = days.length ? days.map((day) => day.day).sort()[0] ?? null : null;
-  return { dictations: days.reduce((sum, day) => sum + day.dictations, 0), words, audioMs, since, wordsPerMinute: audioMs >= 60_000 && words > 0 ? words / (audioMs / 60_000) : null, currentStreak: current, longestStreak: longest, activeDays: active.length };
-}
-
-let profile: Profile = { name: rich ? "Alex" : null, picture: null };
-
-const providerModels: Record<Exclude<AiProvider, "chatgpt">, CloudModel[]> = {
-  openaiCompatible: [
-    { slug: "example-small", name: "example-small", recommended: false },
-    { slug: "example-large", name: "example-large", recommended: false },
-  ],
-  anthropic: [
-    { slug: "claude-opus-5-5", name: "Claude Opus 5.5", recommended: false },
-    { slug: "claude-sonnet-5-5", name: "Claude Sonnet 5.5", recommended: false },
-    { slug: "claude-haiku-5-5", name: "Claude Haiku 5.5", recommended: false },
-  ],
-  local: [
-    { slug: "qwen3.5:0.8b", name: "qwen3.5:0.8b", recommended: false },
-    { slug: "qwen3.5:2b", name: "qwen3.5:2b", recommended: false },
-  ],
-};
-
-/** A fictional process tree shaped like Onda's on each platform. */
-function resources(): ResourceUsage {
-  const mb = 1024 * 1024;
-  const processes =
-    platform === "linux"
-      ? [
-          { pid: 4100, name: "onda", role: "app", memoryBytes: 61 * mb, cpuPercent: 0.2 },
-          { pid: 4122, name: "WebKitNetworkPr", role: "webview", memoryBytes: 14 * mb, cpuPercent: 0 },
-          { pid: 4131, name: "WebKitWebProces", role: "webview", memoryBytes: 96 * mb, cpuPercent: 0.4 },
-          { pid: 4132, name: "WebKitWebProces", role: "webview", memoryBytes: 41 * mb, cpuPercent: 0 },
-        ]
-      : [
-          { pid: 9120, name: "onda.exe", role: "app", memoryBytes: 8.8 * mb, cpuPercent: 0 },
-          { pid: 9144, name: "onda-input.exe", role: "helper", memoryBytes: 1.0 * mb, cpuPercent: 0 },
-          { pid: 9160, name: "msedgewebview2.exe", role: "webview", memoryBytes: 19.7 * mb, cpuPercent: 0 },
-          { pid: 9168, name: "msedgewebview2.exe", role: "webview", memoryBytes: 55.0 * mb, cpuPercent: 0.1 },
-          { pid: 9172, name: "msedgewebview2.exe", role: "webview", memoryBytes: 4.2 * mb, cpuPercent: 0 },
-          { pid: 9176, name: "msedgewebview2.exe", role: "webview", memoryBytes: 1.6 * mb, cpuPercent: 0 },
-          { pid: 9190, name: "msedgewebview2.exe", role: "webview", memoryBytes: 57.2 * mb, cpuPercent: 0.3 },
-          { pid: 9204, name: "msedgewebview2.exe", role: "webview", memoryBytes: 25.3 * mb, cpuPercent: 0 },
-        ];
-  return {
-    processes,
-    totalMemoryBytes: processes.reduce((sum, process) => sum + process.memoryBytes, 0),
-    totalCpuPercent: processes.reduce((sum, process) => sum + process.cpuPercent, 0),
-    memoryMeasure: platform === "linux" ? "privateResident" : "privateWorkingSet",
-    sampleMs: 500,
-  };
-}
-
-/** A small fictional avatar: a soft gradient square, drawn so no real picture is involved. */
-function samplePicture(): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 256;
-  const context = canvas.getContext("2d");
-  if (context) {
-    const gradient = context.createLinearGradient(0, 0, 256, 256);
-    gradient.addColorStop(0, "#8a8a92");
-    gradient.addColorStop(1, "#2c2c30");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 256, 256);
-  }
-  return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
-}
 
 let teachTakes = 0;
 const listeners = new Set<(event: RuntimeEvent) => void>();
@@ -394,40 +171,178 @@ async function cycle(): Promise<void> {
   }
 }
 
-function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
-  switch (request.command) {
-    case "getSnapshot":
-      return { type: "snapshot", payload: structuredClone(snapshot) };
-    case "getSettings":
-      return { type: "settings", payload: structuredClone(settings) };
-    case "updateSettings": {
-      const refusal = validateSettings(request.args.settings);
-      if (refusal) throw refusal;
+type Reply = ApiResponse | Promise<ApiResponse>;
+type Handlers = { [C in ApiRequest["command"]]: (request: Extract<ApiRequest, { command: C }>) => Reply };
+const unit = (): ApiResponse => ({ type: "unit" });
+
+function changeProviderKey(request: Extract<ApiRequest, { command: "saveProviderKey" | "removeProviderKey" }>): Reply {
+  const saved = request.command === "saveProviderKey";
+  const field = ({ openaiCompatible: "openaiCompatible", anthropic: "anthropic", local: "local" } as const)[request.args.provider as Exclude<AiProvider, "chatgpt">];
+  if (field) snapshot.providerKeys = { ...snapshot.providerKeys, [field]: saved };
+  return { type: "unit" };
+}
+
+const handlers: Handlers = {
+  getSnapshot: () => ({ type: "snapshot", payload: structuredClone(snapshot) }),
+  getSettings: () => ({ type: "settings", payload: structuredClone(settings) }),
+  updateSettings: (request) => {
+    const refusal = validateSettings(request.args.settings);
+    if (refusal) throw refusal;
       if (!transforms.some((item) => item.id === request.args.settings.defaultTransformId)) {
         throw { code: "invalidInput", message: "Choose an existing default rewrite.", retryable: false } satisfies AppError;
       }
-      Object.assign(settings, request.args.settings);
-      snapshot.settings = settings;
-      snapshot.selectedModelId = settings.qualityProfile === "custom" && settings.modelId ? settings.modelId : ({ fast: ["whisper-tiny-en", "whisper-tiny"], balanced: ["whisper-base-en-q5", "whisper-base-q5"], bestQuality: ["whisper-small-en-q5", "whisper-small-q5"], custom: ["whisper-tiny-en", "whisper-tiny"] } as const)[settings.qualityProfile][settings.language === "en" ? 0 : 1];
-      return { type: "settings", payload: structuredClone(settings) };
+    Object.assign(settings, request.args.settings);
+    snapshot.settings = settings;
+    snapshot.selectedModelId = settings.qualityProfile === "custom" && settings.modelId ? settings.modelId : ({ fast: ["whisper-tiny-en", "whisper-tiny"], balanced: ["whisper-base-en-q5", "whisper-base-q5"], bestQuality: ["whisper-small-en-q5", "whisper-small-q5"], custom: ["whisper-tiny-en", "whisper-tiny"] } as const)[settings.qualityProfile][settings.language === "en" ? 0 : 1];
+    return { type: "settings", payload: structuredClone(settings) };
+  },
+  getDictionary: dictionary,
+  saveDictionaryEntry: dictionary,
+  deleteDictionaryEntry: dictionary,
+  importDictionary: dictionary,
+  exportDictionary: dictionary,
+  getSnippets: () => ({ type: "snippets", payload: snippets }),
+  saveSnippet: (request) => {
+    snippets = [...snippets.filter((snippet) => snippet.id !== request.args.snippet.id), request.args.snippet];
+    return { type: "snippets", payload: snippets };
+  },
+  deleteSnippet: (request) => {
+    snippets = snippets.filter((snippet) => snippet.id !== request.args.id);
+    return { type: "unit" };
+  },
+  getTransforms: () => ({ type: "transforms", payload: transforms }),
+  saveTransform: (request) => {
+    const index = transforms.findIndex((transform) => transform.id === request.args.transform.id);
+    if (index >= 0) transforms[index] = request.args.transform;
+    else transforms.push(request.args.transform);
+    return { type: "transforms", payload: transforms };
+  },
+  listAudioDevices: () => ({ type: "audioDevices", payload: [{ id: "mic-1", name: "Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)", isDefault: true }, { id: "mic-2", name: "Headset Microphone (Sample)", isDefault: false }] }),
+  testMicrophone: (request) => speak(request.args.durationMs).then(() => ({ type: "microphone", payload: { durationMs: request.args.durationMs, peak: 0.42, rms: 0.05, clippedSamples: 0, discontinuities: 0, mostlySilent: false, sourceSampleRate: 48000, sourceChannels: 1 } })),
+  startDictation: () => {
+    void dictate(false);
+    return { type: "unit" };
+  },
+  getModelCatalog: () => ({ type: "modelCatalog", payload: catalog }),
+  getInstalledModels: () => ({ type: "installedModels", payload: snapshot.installedModels }),
+  startModelDownload: (request) => {
+    const model = catalog.find((item) => item.id === request.args.modelId);
+    void (async () => {
+      const total = model?.downloadSizeBytes ?? 1;
+      for (let step = 1; step <= 20; step += 1) {
+        await wait(150);
+        emit({ type: "downloadProgress", payload: { modelId: request.args.modelId, stage: "downloading", completedBytes: (total * step) / 20, totalBytes: total } });
+      }
+      emit({ type: "downloadProgress", payload: { modelId: request.args.modelId, stage: "verifying", completedBytes: total, totalBytes: total } });
+      await wait(600);
+      snapshot.installedModels = [...snapshot.installedModels, { modelId: request.args.modelId, version: "sample", sizeBytes: total }];
+      emit({ type: "downloadProgress", payload: { modelId: request.args.modelId, stage: "installed", completedBytes: total, totalBytes: total } });
+    })();
+    return { type: "unit" };
+  },
+  listChatgptProfiles: () => ({ type: "profiles", payload: profiles }),
+  listAvailableModels: () => ({ type: "cloudModels", payload: [{ slug: "thorough-sample", name: "Thorough (sample)", recommended: false }, { slug: "light-sample", name: "Light (sample)", recommended: true }] }),
+  previewTransform: (request) => {
+    const output = request.args.source.trim().replace(/^./, (c) => c.toUpperCase());
+    const id = `preview-${Date.now()}`;
+    // Like the native runtime, a rewrite tried in the app is kept in History.
+    if (output !== request.args.source) {
+      const entry = sample(id, 0, "", output, { mode: "transform", route: "chatgptPlan", original: request.args.source, inserted: false, app: null });
+      history = [entry, ...history];
+      emit({ type: "historyUpdated", payload: { entry } });
     }
-    case "getDictionary":
-    case "saveDictionaryEntry":
-    case "deleteDictionaryEntry":
-    case "importDictionary":
-    case "exportDictionary":
-      return dictionary(request);
-    case "getSnippets":
-      return { type: "snippets", payload: snippets };
-    case "saveSnippet":
-      snippets = [...snippets.filter((snippet) => snippet.id !== request.args.snippet.id), request.args.snippet];
-      return { type: "snippets", payload: snippets };
-    case "deleteSnippet":
-      snippets = snippets.filter((snippet) => snippet.id !== request.args.id);
+    return { type: "result", payload: { commandText: null, operationId: id, original: request.args.source, output, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: request.args.source }], suggestion: null } };
+  },
+  retryTransformation: () => ({ type: "result", payload: snapshot.result as OperationResult }),
+  exportDiagnostics: () => ({ type: "text", payload: JSON.stringify({ app: "Onda", version: "0.2.0", note: "Sample diagnostics from the development mock." }, null, 2) }),
+  checkUpdate: () => ({ type: "update", payload: { available: false, version: null } }),
+  getUsage: () => ({ type: "usage", payload: { today: key(today()), days: usageDays, summary: summarize(usageDays) } }),
+  getProfile: () => ({ type: "profile", payload: profile }),
+  setProfileName: (request) => {
+    const result = normalizeName(request.args.name);
+    if ("error" in result) throw result.error;
+    profile = { ...profile, name: result.name };
+    return { type: "profile", payload: profile };
+  },
+  chooseProfilePicture: () => {
+    profile = { ...profile, picture: samplePicture() };
+    return { type: "profile", payload: profile };
+  },
+  removeProfilePicture: () => {
+    profile = { ...profile, picture: null };
+    return { type: "profile", payload: profile };
+  },
+  saveStatsImage: (request) => {
+    // The mock offers the image as a browser download so its rendering can be inspected.
+    const link = document.createElement("a");
+    link.href = `data:image/png;base64,${request.args.pngBase64}`;
+    link.download = "Onda stats.png";
+    link.click();
+    return { type: "savedFile", payload: { path: "~/Pictures/Onda stats.png" } };
+  },
+  listProviderModels: (request) => {
+    if (request.args.provider === "chatgpt") return { type: "cloudModels", payload: [] };
+    if (scenario === "providerdown")
+      throw { code: "offline", message: request.args.provider === "local" ? "Nothing answered at 127.0.0.1:11434. Start your local model server (Ollama, LM Studio or llama.cpp) and try again." : "Couldn't reach api.example.com.", retryable: true } satisfies AppError;
+    return wait(300).then(() => ({ type: "cloudModels", payload: providerModels[request.args.provider as Exclude<AiProvider, "chatgpt">] }));
+  },
+  saveProviderKey: changeProviderKey,
+  removeProviderKey: changeProviderKey,
+  getResourceUsage: () => wait(500).then(() => ({ type: "resources", payload: resources() })),
+  allowTyping: () => {
+    return wait(600).then(() => {
+      if (platform === "macos") {
+        macSwitchedOnInSettings = true;
+        throw { code: "cancelled", message: "Turn on Onda in System Settings › Privacy & Security › Accessibility. Until then, dictation is copied for you to paste.", retryable: true } satisfies AppError;
+      }
+      snapshot.typingAccess = "allowed";
       return { type: "unit" };
-    case "getTransforms":
-      return { type: "transforms", payload: transforms };
-    case "deleteTransform": {
+    });
+  },
+  stopTyping: () => {
+    // A Mac opens System Settings; Onda stays on until the user switches it off there.
+    if (platform !== "macos") snapshot.typingAccess = "notAllowed";
+    return { type: "unit" };
+  },
+  restartShortcuts: () => {
+    snapshot.shortcutStatus = "ready";
+    return { type: "unit" };
+  },
+  signOutChatgptProfile: () => ({ type: "signOut", payload: { remoteRevocationConfirmed: true } }),
+  clearResult: () => {
+    snapshot.result = null;
+    return { type: "unit" };
+  },
+  dismissError: (request) => {
+    if (snapshot.state.phase === "error" && snapshot.state.operationId === request.args.operationId) setState({ phase: "idle", error: null });
+    return { type: "unit" };
+  },
+  teachWord: (request) => {
+    // Fictional takes of the brand name "Miille": two mishearings, then a correct one.
+    const heard = ["Miley", "Mealy", "Miille"][teachTakes++ % 3] ?? "Miley";
+    return speak(request.args.durationMs).then(() => wait(500)).then(() => ({ type: "teachTake", payload: { heard, written: heard } }));
+  },
+  getHistory: () => ({ type: "history", payload: history }),
+  deleteHistoryEntry: (request) => {
+    history = history.filter((entry) => entry.id !== request.args.id);
+    if (snapshot.result?.operationId === request.args.id) snapshot.result = null;
+    return { type: "unit" };
+  },
+  clearHistory: () => {
+    history = [];
+    snapshot.result = null;
+    return { type: "unit" };
+  },
+  acceptLearning: unit,
+  cancelChatgptSignIn: unit,
+  cancelModelDownload: unit,
+  cancelOperation: unit,
+  completeDebugSmoke: unit,
+  copyHistoryEntry: unit,
+  copyHistorySuggestion: unit,
+  copyResult: unit,
+  copySuggestion: unit,
+  deleteTransform: (request) => {
       const index = transforms.findIndex((item) => item.id === request.args.id);
       if (transforms[index]?.builtIn) {
         throw { code: "invalidInput", message: "Built-in rewrites can be edited but cannot be removed.", retryable: false } satisfies AppError;
@@ -435,170 +350,31 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       if (index >= 0) transforms.splice(index, 1);
       if (settings.defaultTransformId === request.args.id) settings.defaultTransformId = "polish";
       return { type: "unit" };
-    }
-    case "saveTransform": {
-      const index = transforms.findIndex((transform) => transform.id === request.args.transform.id);
-      if (index >= 0) transforms[index] = request.args.transform;
-      else transforms.push(request.args.transform);
-      return { type: "transforms", payload: transforms };
-    }
-    case "listAudioDevices":
-      return { type: "audioDevices", payload: [{ id: "mic-1", name: "Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)", isDefault: true }, { id: "mic-2", name: "Headset Microphone (Sample)", isDefault: false }] };
-    case "testMicrophone":
-      return speak(request.args.durationMs).then(() => ({ type: "microphone", payload: { durationMs: request.args.durationMs, peak: 0.42, rms: 0.05, clippedSamples: 0, discontinuities: 0, mostlySilent: false, sourceSampleRate: 48000, sourceChannels: 1 } }));
-    case "startDictation":
-      void dictate(false);
-      return { type: "unit" };
-    case "getModelCatalog":
-      return { type: "modelCatalog", payload: catalog };
-    case "getInstalledModels":
-      return { type: "installedModels", payload: snapshot.installedModels };
-    case "startModelDownload": {
-      const model = catalog.find((item) => item.id === request.args.modelId);
-      void (async () => {
-        const total = model?.downloadSizeBytes ?? 1;
-        for (let step = 1; step <= 20; step += 1) {
-          await wait(150);
-          emit({ type: "downloadProgress", payload: { modelId: request.args.modelId, stage: "downloading", completedBytes: (total * step) / 20, totalBytes: total } });
-        }
-        emit({ type: "downloadProgress", payload: { modelId: request.args.modelId, stage: "verifying", completedBytes: total, totalBytes: total } });
-        await wait(600);
-        snapshot.installedModels = [...snapshot.installedModels, { modelId: request.args.modelId, version: "sample", sizeBytes: total }];
-        emit({ type: "downloadProgress", payload: { modelId: request.args.modelId, stage: "installed", completedBytes: total, totalBytes: total } });
-      })();
-      return { type: "unit" };
-    }
-    case "listChatgptProfiles":
-      return { type: "profiles", payload: profiles };
-    case "listAvailableModels":
-      return { type: "cloudModels", payload: [{ slug: "thorough-sample", name: "Thorough (sample)", recommended: false }, { slug: "light-sample", name: "Light (sample)", recommended: true }] };
-    case "previewTransform": {
-      const output = request.args.source.trim().replace(/^./, (c) => c.toUpperCase());
-      const id = `preview-${Date.now()}`;
-      // Like the native runtime, a rewrite tried in the app is kept in History.
-      if (output !== request.args.source) {
-        const entry = sample(id, 0, "", output, { mode: "transform", route: "chatgptPlan", original: request.args.source, inserted: false, app: null });
-        history = [entry, ...history];
-        emit({ type: "historyUpdated", payload: { entry } });
-      }
-      return { type: "result", payload: { commandText: null, operationId: id, original: request.args.source, output, inserted: false, fallbackUsed: false, diff: [{ kind: "equal", text: request.args.source }], suggestion: null } };
-    }
-    case "retryTransformation":
-      return { type: "result", payload: snapshot.result as OperationResult };
-    case "exportDiagnostics":
-      return { type: "text", payload: JSON.stringify({ app: "Onda", version: "0.2.0", note: "Sample diagnostics from the development mock." }, null, 2) };
-    case "checkUpdate":
-      return { type: "update", payload: { available: false, version: null } };
-    case "getUsage":
-      return { type: "usage", payload: { today: key(today()), days: usageDays, summary: summarize(usageDays) } };
-    case "getProfile":
-      return { type: "profile", payload: profile };
-    case "setProfileName": {
-      const result = normalizeName(request.args.name);
-      if ("error" in result) throw result.error;
-      profile = { ...profile, name: result.name };
-      return { type: "profile", payload: profile };
-    }
-    case "chooseProfilePicture":
-      profile = { ...profile, picture: samplePicture() };
-      return { type: "profile", payload: profile };
-    case "removeProfilePicture":
-      profile = { ...profile, picture: null };
-      return { type: "profile", payload: profile };
-    case "saveStatsImage": {
-      // The mock offers the image as a browser download so its rendering can be inspected.
-      const link = document.createElement("a");
-      link.href = `data:image/png;base64,${request.args.pngBase64}`;
-      link.download = "Onda stats.png";
-      link.click();
-      return { type: "savedFile", payload: { path: "~/Pictures/Onda stats.png" } };
-    }
-    case "listProviderModels": {
-      if (request.args.provider === "chatgpt") return { type: "cloudModels", payload: [] };
-      if (scenario === "providerdown")
-        throw { code: "offline", message: request.args.provider === "local" ? "Nothing answered at 127.0.0.1:11434. Start your local model server (Ollama, LM Studio or llama.cpp) and try again." : "Couldn't reach api.example.com.", retryable: true } satisfies AppError;
-      return wait(300).then(() => ({ type: "cloudModels", payload: providerModels[request.args.provider as Exclude<AiProvider, "chatgpt">] }));
-    }
-    case "saveProviderKey":
-    case "removeProviderKey": {
-      const saved = request.command === "saveProviderKey";
-      const field = ({ openaiCompatible: "openaiCompatible", anthropic: "anthropic", local: "local" } as const)[request.args.provider as Exclude<AiProvider, "chatgpt">];
-      if (field) snapshot.providerKeys = { ...snapshot.providerKeys, [field]: saved };
-      return { type: "unit" };
-    }
-    case "getResourceUsage":
-      return wait(500).then(() => ({ type: "resources", payload: resources() }));
-    case "allowTyping":
-      return wait(600).then(() => {
-        if (platform === "macos") {
-          macSwitchedOnInSettings = true;
-          throw { code: "cancelled", message: "Turn on Onda in System Settings › Privacy & Security › Accessibility. Until then, dictation is copied for you to paste.", retryable: true } satisfies AppError;
-        }
-        snapshot.typingAccess = "allowed";
-        return { type: "unit" };
-      });
-    case "stopTyping":
-      // A Mac opens System Settings; Onda stays on until the user switches it off there.
-      if (platform !== "macos") snapshot.typingAccess = "notAllowed";
-      return { type: "unit" };
-    case "restartShortcuts":
-      snapshot.shortcutStatus = "ready";
-      return { type: "unit" };
-    case "signOutChatgptProfile":
-      return { type: "signOut", payload: { remoteRevocationConfirmed: true } };
-    case "clearResult":
-      snapshot.result = null;
-      return { type: "unit" };
-    case "dismissError":
-      if (snapshot.state.phase === "error" && snapshot.state.operationId === request.args.operationId) setState({ phase: "idle", error: null });
-      return { type: "unit" };
-    case "teachWord": {
-      // Fictional takes of the brand name "Miille": two mishearings, then a correct one.
-      const heard = ["Miley", "Mealy", "Miille"][teachTakes++ % 3] ?? "Miley";
-      return speak(request.args.durationMs).then(() => wait(500)).then(() => ({ type: "teachTake", payload: { heard, written: heard } }));
-    }
-    case "getHistory":
-      return { type: "history", payload: history };
-    case "deleteHistoryEntry":
-      history = history.filter((entry) => entry.id !== request.args.id);
-      if (snapshot.result?.operationId === request.args.id) snapshot.result = null;
-      return { type: "unit" };
-    case "clearHistory":
-      history = [];
-      snapshot.result = null;
-      return { type: "unit" };
-    // Commands the mock acknowledges without changing its sample data.
-    case "acceptLearning":
-    case "cancelChatgptSignIn":
-    case "cancelModelDownload":
-    case "cancelOperation":
-    case "completeDebugSmoke":
-    case "copyHistoryEntry":
-    case "copyHistorySuggestion":
-    case "copyResult":
-    case "copySuggestion":
-    case "dismissPill":
-    case "enableChatgptPlanUsage":
-    case "installUpdate":
-    case "openMainWindow":
-    case "removeChatgptProfile":
-    case "replayDebugFixture":
-    case "retryResult":
-    case "selectChatgptProfile":
-    case "setChatgptModel":
-    case "startChatgptSignIn":
-    case "stopDictation":
-    case "transformSelection":
-    case "undoLastTransform":
-    case "uninstallModel":
-      return { type: "unit" };
-    default: {
-      // Every command must be handled above: a new command fails to compile here until the mock
-      // answers it, instead of silently succeeding.
-      const unhandled: never = request;
-      throw { code: "internal", message: `The development mock does not handle ${(unhandled as ApiRequest).command}.`, retryable: false } satisfies AppError;
-    }
+    },
+  dismissPill: unit,
+  enableChatgptPlanUsage: unit,
+  installUpdate: unit,
+  openMainWindow: unit,
+  removeChatgptProfile: unit,
+  replayDebugFixture: unit,
+  retryResult: unit,
+  selectChatgptProfile: unit,
+  setChatgptModel: unit,
+  startChatgptSignIn: unit,
+  stopDictation: unit,
+  transformSelection: unit,
+  undoLastTransform: unit,
+  uninstallModel: unit,
+};
+
+function respond(request: ApiRequest): Reply {
+  if (!Object.hasOwn(handlers, request.command)) {
+    throw { code: "invalidInput", message: "Unknown desktop command.", retryable: false } satisfies AppError;
   }
+  // The mapped type checks every handler against its own discriminant. Indexing with
+  // the union loses that correlation in TypeScript.
+  const handler = handlers[request.command] as (value: ApiRequest) => Reply;
+  return handler(request);
 }
 
 export function createMockBackend(): Backend {
@@ -614,8 +390,9 @@ export function createMockBackend(): Backend {
       listeners.add(callback);
       if (!started) {
         started = true;
-        if (pillState === "cycle") void wait(400).then(cycle);
-        else if (pillState) void wait(200).then(() => freezePill(pillState));
+        const initialPill = pillState;
+        if (initialPill === "cycle") void wait(400).then(cycle);
+        else if (initialPill) void wait(200).then(() => freezePill(initialPill));
         else if (rich) window.setTimeout(() => domain({ type: "learningProposed", payload: { id: "lp1", original: "Cooper Netties", corrected: "Kubernetes" } }), 600);
       }
       return () => listeners.delete(callback);

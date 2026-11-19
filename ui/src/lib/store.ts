@@ -1,144 +1,37 @@
-import { batch, computed, signal } from "@preact/signals";
+import { batch, signal } from "@preact/signals";
 import { ask, onEvent, toAppError } from "../api";
-import type {
-  AccountInfo,
-  AudioDevice,
-  CloudModel,
-  DownloadReport,
-  MicrophoneReport,
-  ModelInfo,
-  ResourceUsage,
-  RuntimeEvent,
-  Snapshot,
-  UsageReport,
-} from "../generated/api";
-import type {
-  AiProvider,
-  AppError,
-  AppEvent,
-  DictionaryEntry,
-  HistoryEntry,
-  LearningProposal,
-  Profile,
-  Settings,
-  Snippet,
-  Transform,
-} from "../generated/core";
+import type { CloudModel, MicrophoneReport, ResourceUsage, RuntimeEvent } from "../generated/api";
+import type { AiProvider, AppError, AppEvent, HistoryEntry, LearningProposal, Settings } from "../generated/core";
 import { presentError } from "./errors";
-import { cancelChord } from "./keys";
 import { levelFromRms } from "./level";
 import { navigate, parseRoute } from "./router";
-
-/* ------------------------------------------------------------------ state */
-
-export const snapshot = signal<Snapshot | null>(null);
-export const startupError = signal<AppError | null>(null);
-export const dictionary = signal<DictionaryEntry[]>([]);
-export const snippets = signal<Snippet[]>([]);
-export const transforms = signal<Transform[]>([]);
-export const usage = signal<UsageReport | null>(null);
-/** Newest first; null until loaded. */
-export const history = signal<HistoryEntry[] | null>(null);
-export const catalog = signal<ModelInfo[]>([]);
-export const downloads = signal<Record<string, DownloadReport>>({});
-export const devices = signal<AudioDevice[] | null>(null);
-export const oauthStatus = signal<string | null>(null);
-export const learning = signal<LearningProposal | null>(null);
-/** Streaming AI text; provisional until `resultReady` validates it. */
-export const provisional = signal<{ operationId: string; text: string } | null>(null);
-/** 0–1 display level of the open microphone. */
-export const micLevel = signal(0);
-export const cloudModels = signal<CloudModel[] | null>(null);
-/** A quality profile to apply once its model finishes downloading. */
-export const pendingProfile = signal<{ modelId: string; patch: Partial<Settings> } | null>(null);
-/** The local profile (name and picture); loaded with the rest at start. */
-export const profile = signal<Profile | null>(null);
-
-export const settings = computed(() => snapshot.value?.settings ?? null);
-export const operation = computed(() => snapshot.value?.state ?? null);
-export const lastResult = computed(() => snapshot.value?.result ?? null);
-export const installedIds = computed(() => new Set(snapshot.value?.installedModels.map((model) => model.modelId) ?? []));
-export const selectedModel = computed(() => catalog.value.find((model) => model.id === snapshot.value?.selectedModelId) ?? null);
-export const modelReady = computed(() => {
-  const id = snapshot.value?.selectedModelId;
-  return id ? installedIds.value.has(id) : false;
-});
-/** The microphone Onda will use: the chosen one, else the Windows default. */
-export const micName = computed(() => {
-  const list = devices.value ?? [];
-  const id = snapshot.value?.settings.microphoneId ?? null;
-  const device = id ? list.find((item) => item.id === id) : list.find((item) => item.isDefault);
-  if (device) return device.name;
-  return id ? "Disconnected microphone" : isWindows.value ? "Windows default microphone" : "System default microphone";
-});
-/** "windows", "linux", …: where Onda can type into other apps and how shortcuts work. */
-export const platform = computed(() => snapshot.value?.platform ?? "windows");
-export const isWindows = computed(() => platform.value === "windows");
-export const isMac = computed(() => platform.value === "macos");
-/** "this PC" on Windows, "this computer" elsewhere; `yourDevice` likewise. */
-export const thisDevice = computed(() => (isWindows.value ? "this PC" : "this computer"));
-export const yourDevice = computed(() => (isWindows.value ? "your PC" : "your computer"));
-/** Linux desktops without a shortcuts portal start dictation through `onda --dictate` instead. */
-export const commandShortcutOnly = computed(() => !isWindows.value && snapshot.value?.shortcutStatus === "desktop");
-/** The chord that cancels on this platform (`cancelChord`). */
-export function cancelKeys(pushToTalk: readonly number[]): number[] {
-  return cancelChord(platform.value, pushToTalk);
-}
-export const activeProfile = computed<AccountInfo | null>(() => snapshot.value?.profiles.find((profile) => profile.active) ?? null);
-/** A ChatGPT account is connected and allowed to use its plan. */
-export const chatgptReady = computed(() => {
-  const profile = activeProfile.value;
-  return !!profile && profile.signedIn && profile.planUsageEnabled;
-});
-/** The chosen AI provider has what it needs: an account, or an address, model and key. */
-export const aiReady = computed(() => {
-  const value = settings.value;
-  const keys = snapshot.value?.providerKeys;
-  switch (value?.aiProvider) {
-    case "chatgpt":
-      return chatgptReady.value;
-    case "openaiCompatible":
-      return !!value.openaiBaseUrl && !!value.openaiModel;
-    case "anthropic":
-      return !!value.anthropicModel && !!keys?.anthropic;
-    case "local":
-      return !!value.localBaseUrl && !!value.localModel;
-    default:
-      return false;
-  }
-});
-export const isBusy = computed(() => {
-  const phase = operation.value?.phase;
-  return phase === "recording" || phase === "finalizingAudio" || phase === "transcribing" || phase === "enhancing" || phase === "inserting";
-});
-
-/* ------------------------------------------------------------------ toasts */
-
-export interface Toast {
-  id: number;
-  tone: "info" | "ok" | "error";
-  title: string;
-  body?: string;
-  action?: { label: string; run: () => void };
-}
-export const toasts = signal<Toast[]>([]);
-let toastId = 0;
-
-export function toast(value: Omit<Toast, "id">, ms = 5200): void {
-  const id = (toastId += 1);
-  toasts.value = [...toasts.value.slice(-2), { ...value, id }];
-  window.setTimeout(() => dismissToast(id), ms);
-}
-
-export function dismissToast(id: number): void {
-  toasts.value = toasts.value.filter((item) => item.id !== id);
-}
-
-export function toastError(error: unknown, title?: string): AppError {
-  const value = toAppError(error);
-  if (value.code !== "cancelled") toast({ tone: "error", title: title ?? presentError(value).title, body: value.message }, 7000);
-  return value;
-}
+import {
+  snapshot,
+  startupError,
+  history,
+  catalog,
+  downloads,
+  oauthStatus,
+  learning,
+  provisional,
+  micLevel,
+  cloudModels,
+  pendingProfile,
+  lastResult,
+} from "./appState";
+import { toast, toastError } from "./notifications";
+import {
+  loadCatalog,
+  loadDictionary,
+  loadSnippets,
+  loadTransforms,
+  loadUsage,
+  loadHistory,
+  loadProfile,
+} from "./dataQueries";
+export * from "./appState";
+export * from "./notifications";
+export * from "./dataQueries";
 
 /* ------------------------------------------------------------------ loading */
 
@@ -148,30 +41,6 @@ export async function refresh(): Promise<void> {
   snapshot.value = desiredSettings ? { ...fresh, settings: desiredSettings } : fresh;
 }
 
-export async function loadCatalog(): Promise<void> {
-  catalog.value = await ask({ command: "getModelCatalog" }, "modelCatalog");
-}
-export async function loadDictionary(): Promise<void> {
-  dictionary.value = await ask({ command: "getDictionary" }, "dictionary");
-}
-export async function loadSnippets(): Promise<void> {
-  snippets.value = await ask({ command: "getSnippets" }, "snippets");
-}
-export async function loadTransforms(): Promise<void> {
-  transforms.value = await ask({ command: "getTransforms" }, "transforms");
-}
-export async function loadUsage(): Promise<void> {
-  usage.value = await ask({ command: "getUsage" }, "usage");
-}
-export async function loadHistory(): Promise<void> {
-  history.value = await ask({ command: "getHistory" }, "history");
-}
-export async function loadProfile(): Promise<void> {
-  profile.value = await ask({ command: "getProfile" }, "profile");
-}
-export async function loadDevices(): Promise<void> {
-  devices.value = await ask({ command: "listAudioDevices" }, "audioDevices");
-}
 
 let usageTimer: number | undefined;
 function scheduleUsage(): void {
@@ -296,33 +165,7 @@ async function run(label: string, request: Parameters<typeof ask>[0]): Promise<b
 
 /* ------------------------------------------------------------------ profile */
 
-export async function setProfileName(name: string): Promise<boolean> {
-  try {
-    profile.value = await ask({ command: "setProfileName", args: { name: name.trim() || null } }, "profile");
-    return true;
-  } catch (error) {
-    toastError(error, "Couldn't save your name");
-    return false;
-  }
-}
-export async function chooseProfilePicture(): Promise<void> {
-  try {
-    profile.value = await ask({ command: "chooseProfilePicture" }, "profile");
-  } catch (error) {
-    toastError(error, "Couldn't use that picture");
-  }
-}
-export async function removeProfilePicture(): Promise<void> {
-  try {
-    profile.value = await ask({ command: "removeProfilePicture" }, "profile");
-  } catch (error) {
-    toastError(error, "Couldn't remove the picture");
-  }
-}
-/** Hands a rendered PNG to native code, which asks where to save it. Null when cancelled. */
-export async function saveStatsImage(pngBase64: string): Promise<string | null> {
-  return ask({ command: "saveStatsImage", args: { pngBase64 } }, "savedFile").then((saved) => saved.path);
-}
+export { setProfileName, chooseProfilePicture, removeProfilePicture, saveStatsImage } from "./profileActions";
 
 /* ------------------------------------------------------------------ AI providers */
 
