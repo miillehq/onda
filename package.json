@@ -55,6 +55,7 @@
     "happy-dom": "21.0.4",
     "jsonc-parser": "3.3.1",
     "knip": "6.46.1",
+    "parse5": "7.3.0",
     "postcss": "8.5.31",
     "typescript": "7.0.2",
     "vite": "8.3.5",

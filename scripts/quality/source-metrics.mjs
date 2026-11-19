@@ -74,7 +74,6 @@ export function measureSource(path, source, parser) {
     const excluded = path.endsWith(".rs") ? ignoredItems(tree.rootNode) : new Set();
     const entities = [];
     const imports = [];
-    const styles = [];
     const migrations = [];
     function visit(node, owner = "", inMarkup = false, module = []) {
       if (excluded.has(node.id) || comments.has(node.type)) return;
@@ -83,10 +82,6 @@ export function measureSource(path, source, parser) {
       let nextOwner = owner;
       let childModule = module;
       if (node.type === "mod_item" && node.childForFieldName("body")) childModule = [...module, field(node, "name")];
-      const importedFile = node.type === "import_statement" ? node.childForFieldName("source")
-        : node.type === "call_expression" && node.childForFieldName("function")?.text === "import"
-          ? node.childForFieldName("arguments")?.namedChildren[0] : undefined;
-      if (importedFile?.type === "string" && /\.css(?:[?#][^'"]*)?['"]$/i.test(importedFile.text)) styles.push(importedFile.text.slice(1, -1));
       if (node.type === "macro_invocation" && node.childForFieldName("macro")?.text === "include_str") {
         const literal = node.namedChildren.find((child) => child.type === "token_tree")?.namedChildren[0];
         const path = literal?.namedChildren.find((child) => child.type === "string_content")?.text;
@@ -129,7 +124,7 @@ export function measureSource(path, source, parser) {
     }
     const prefix = totals(code), executable = totals(logic), jsx = totals(markup);
     return {
-      path, lines: prefix.at(-1), imports, styles, migrations,
+      path, lines: prefix.at(-1), imports, migrations,
       entities: entities.map(({ start, end, ...entity }) => ({ ...entity, line: start + 1, lines: prefix[end + 1] - prefix[start],
         logic: executable[end + 1] - executable[start], markup: jsx[end + 1] - jsx[start] })),
     };

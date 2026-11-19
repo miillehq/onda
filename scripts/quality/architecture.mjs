@@ -1,10 +1,11 @@
 import { readFile, readdir } from "node:fs/promises";
 import { extname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfigFromFile } from "vite";
 import { aggregateTypes, createParsers, measureSource } from "./source-metrics.mjs";
 import { orphanRust } from "./rust-modules.mjs";
-import { measureDocument, measureStyles, orphanMigrations, orphanStyles } from "./styles.mjs";
+import { measureStyles, orphanMigrations, orphanStyles } from "./styles.mjs";
+import { measureDocument } from "./documents.mjs";
+import { rendererInputs } from "./renderer-inputs.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const limits = { file: 400, function: 80, type: 400, members: 25 };
@@ -63,9 +64,7 @@ if (import.meta.main) {
   const files = [];
   for (const directory of roots) files.push(...await filesUnder(join(root, directory), parsers));
   const migrations = "crates/onda-core/migrations";
-  const build = await loadConfigFromFile({ command: "build", mode: "production" }, join(root, "vite.config.ts"), root, "silent");
-  const inputs = build.config.build.rolldownOptions.input;
-  const pages = (typeof inputs === "string" ? [inputs] : Object.values(inputs)).map((input) => relative(root, input).split(sep).join("/"));
+  const { pages, styles } = await rendererInputs(root);
   const documents = [...pages, ...(await readdir(join(root, migrations)))
     .filter((name) => name.endsWith(".sql")).map((name) => migrations + "/" + name)];
   for (const path of documents) files.push(measureDocument(path, await readFile(join(root, path), "utf8")));
@@ -74,7 +73,7 @@ if (import.meta.main) {
   for (const path of unreachable) {
     findings.push({ kind: "unreachable Rust module", path, line: 1, name: "", actual: 1, limit: 0 });
   }
-  for (const path of orphanStyles(files)) findings.push({ kind: "unreachable stylesheet", path, line: 1, name: "", actual: 1, limit: 0 });
+  for (const path of orphanStyles(files, styles)) findings.push({ kind: "unreachable stylesheet", path, line: 1, name: "", actual: 1, limit: 0 });
   for (const path of orphanMigrations(files)) findings.push({ kind: "unreferenced migration", path, line: 1, name: "", actual: 1, limit: 0 });
   if (process.argv.includes("--stats")) {
     const types = aggregateTypes(files);
