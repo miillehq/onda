@@ -23,6 +23,7 @@ impl PreparedTranscription {
         cancellation: CancellationToken,
     ) -> Result<TranscriptionResult, AsrError> {
         validate_samples(samples)?;
+        let backend = self.backend();
         let Self {
             engine,
             options,
@@ -33,7 +34,6 @@ impl PreparedTranscription {
         } = self;
         let started = Instant::now();
         let timeout = Duration::from_secs(options.timeout_seconds);
-        let backend = worker.backend;
         let failed_path = worker.path.clone();
         let budget = if backend != ExecutionBackend::Cpu {
             // A hung driver must leave time for the mandatory CPU recovery path.
