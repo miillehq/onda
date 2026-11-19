@@ -1,59 +1,69 @@
 #!/usr/bin/env bash
-# L7 on Linux and macOS: install the release bundle the way a user would, launch the installed
-# app, check that it is still running after six seconds, quit it, and remove it.
-#   scripts/installer-test.sh        (after scripts/build.sh)
+# Install, launch and remove only the candidate supplied by this checkout.
 set -euo pipefail
 repository="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-bundle="$repository/target/release/bundle"
-log="${RUNNER_TEMP:-/tmp}/onda-installer-launch.log"
+bundle="${1:-$repository/target/release/bundle}"
+work="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/onda-installer.XXXXXXXX")"
+mounted=
+installed_by_test=0
 
-ok() { echo "ok: $*"; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-# $1: the command that starts the installed app. Only processes it started are stopped.
-launch() {
-  bash -c "$1" >"$log" 2>&1 &
-  local starter=$!
-  sleep 6
-  if pgrep -x onda >/dev/null; then
-    ok "the installed app is running after 6 s ($1)"
-    pkill -x onda || true
-    sleep 2
-  else
-    cat "$log" || true
-    fail "the installed app did not keep running ($1)"
-  fi
-  wait "$starter" 2>/dev/null || true
+cleanup() {
+  if [[ -n "$mounted" ]]; then hdiutil detach "$mounted" >/dev/null || return; fi
+  if [[ "$installed_by_test" == 1 ]]; then sudo apt-get remove -y onda >/dev/null || return; fi
+  rm -rf -- "$work"
+}
+trap cleanup EXIT
+
+one_bundle() {
+  local found= candidate
+  for candidate in "$@"; do
+    [[ -e "$candidate" ]] || continue
+    [[ -z "$found" ]] || fail "multiple matching bundles in $bundle"
+    found="$candidate"
+  done
+  [[ -n "$found" ]] || fail "missing bundle matching $1"
+  printf '%s\n' "$found"
 }
 
 case "$(uname -s)" in
   Linux)
     export DISPLAY="${DISPLAY:-:99}"
-    deb=$(ls "$bundle"/deb/*.deb 2>/dev/null | head -1); [ -f "$deb" ] || fail "no .deb in $bundle/deb"
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$deb" >/dev/null; ok "installed $(basename "$deb")"
-    command -v onda >/dev/null || fail "onda is not on PATH after installing the .deb"
-    for sidecar in onda-input onda-asr-worker onda-asr-avx2-worker; do
-      dpkg -L onda | grep -q "/$sidecar\$" || fail "the package does not install $sidecar"
+    export XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" XDG_CACHE_HOME="$work/cache"
+    deb="$(one_bundle "$bundle"/deb/*.deb)"
+    image="$(one_bundle "$bundle"/appimage/*.AppImage)"
+    if [[ "$(dpkg-query -W -f='${Status}' onda 2>/dev/null || true)" == "install ok installed" ]]; then
+      fail "a clean-install check requires a machine without an existing Onda package"
+    fi
+    installed_by_test=1
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$deb" >/dev/null
+    paths="$(dpkg-query -L onda)"
+    for component in onda onda-input onda-asr-worker onda-asr-avx2-worker; do
+      grep -Fxq "/usr/bin/$component" <<<"$paths" || fail "the package is missing $component"
     done
-    ok "the package installs the shortcut helper and both speech workers"
-    launch "dbus-run-session -- onda"
-    sudo apt-get remove -y onda >/dev/null; ok "removed the .deb"
-    if command -v onda >/dev/null; then fail "onda is still on PATH after removal"; fi
-    appimage=$(ls "$bundle"/appimage/*.AppImage 2>/dev/null | head -1); [ -f "$appimage" ] || fail "no AppImage in $bundle/appimage"
-    chmod +x "$appimage"
-    launch "dbus-run-session -- '$appimage' --appimage-extract-and-run"
+    bash "$repository/scripts/installer-launch-linux.sh" /usr/bin/onda
+    sudo apt-get remove -y onda >/dev/null
+    installed_by_test=0
+    [[ ! -e /usr/bin/onda ]] || fail "the installed binary survived removal"
+    chmod +x "$image"
+    bash "$repository/scripts/installer-launch-linux.sh" "$image" --appimage-extract-and-run
     ;;
   Darwin)
-    dmg=$(ls "$bundle"/dmg/*.dmg 2>/dev/null | head -1); [ -f "$dmg" ] || fail "no .dmg in $bundle/dmg"
-    mount=$(mktemp -d)
-    hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount" >/dev/null; ok "mounted $(basename "$dmg")"
-    app=$(ls -d "$mount"/*.app | head -1); [ -d "$app" ] || fail "no .app in the disk image"
-    destination="$HOME/Applications"; mkdir -p "$destination"; rm -rf "$destination/Onda.app"
-    cp -R "$app" "$destination/Onda.app"
-    hdiutil detach "$mount" >/dev/null; ok "copied Onda.app to $destination"
-    xattr -cr "$destination/Onda.app" || true
-    launch "open -W -n '$destination/Onda.app'"
-    rm -rf "$destination/Onda.app"; ok "removed Onda.app"
+    dmg="$(one_bundle "$bundle"/dmg/*.dmg)"
+    mount="$work/mount"
+    mkdir "$mount" "$work/Applications"
+    hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount" >/dev/null
+    mounted="$mount"
+    app="$(one_bundle "$mount"/*.app)"
+    installed="$work/Applications/Onda.app"
+    ditto "$app" "$installed"
+    hdiutil detach "$mount" >/dev/null
+    mounted=
+    swiftc -parse-as-library "$repository/scripts/installer-launch-macos.swift" -o "$work/launch-check"
+    "$work/launch-check" "$installed"
+    rm -rf -- "$installed"
+    [[ ! -e "$installed" ]] || fail "the copied application survived removal"
     ;;
   *) fail "unsupported OS: $(uname -s)" ;;
 esac

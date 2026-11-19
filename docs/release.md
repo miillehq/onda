@@ -165,3 +165,18 @@ updates. When signing is wanted, it needs an Apple Developer Program membership 
    set.
 3. Re-sign before recording evidence: Accessibility and Input Monitoring grants belong to the
    signing identity, so a grant made to an unsigned development build does not carry over.
+
+## Verify downloaded packages and upgrades
+
+The installers workflow accepts an optional `upgrade_from` release tag. On separate disposable
+hosted machines, `published-installers.yml` downloads that release, checks each package against
+the published checksum list and GitHub's asset digest, and launches the installed application.
+It then installs the candidate over the previous build at the same location and verifies its
+startup marker, SQLite schema and seeded multiline snippet. Linux checks both the deb and
+the AppImage. The report identifies the actual builds and schemas when their version labels
+match. A future tag also runs the download-and-install check after publication.
+
+The native command for the current OS is `npm run package:desktop` followed by
+`npm run test:installers`. Windows uses the owned NSIS smoke directory. Linux requires a
+clean package namespace. macOS copies the app to a private temporary Applications directory
+and identifies its process through Launch Services.

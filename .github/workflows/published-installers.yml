@@ -1,0 +1,83 @@
+name: published installer checks
+on:
+  workflow_call:
+    inputs:
+      release_tag: { type: string, required: true }
+      candidate_run: { type: string, default: "" }
+  workflow_dispatch:
+    inputs:
+      release_tag: { type: string, required: true, description: Published version to download and verify }
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  installed:
+    name: published ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: windows-x64, os: windows-2022 }
+          - { platform: windows-arm64, os: windows-11-arm }
+          - { platform: linux-x64, os: ubuntu-24.04 }
+          - { platform: linux-arm64, os: ubuntu-24.04-arm }
+          - { platform: macos-arm64, os: macos-latest }
+          - { platform: macos-x64, os: macos-15-intel }
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          path: release-reference
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - name: Download the published packages and verify both sets of digests
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-files.mjs fetch "$RELEASE_TAG" "$PLATFORM" "$RUNNER_TEMP/published"
+      - name: Linux desktop fixture
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y xvfb xauth dbus procps
+      - name: Install and launch the downloaded Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/published/nsis" -Filter '*.exe'
+          & ./release-reference/scripts/installer-smoke.ps1 -InstallerPath $package.FullName
+      - name: Install and launch the downloaded Linux packages
+        if: runner.os == 'Linux'
+        run: xvfb-run -a bash scripts/installer-test.sh "$RUNNER_TEMP/published"
+      - name: Install and launch the downloaded macOS bundle
+        if: runner.os == 'macOS'
+        run: bash scripts/installer-test.sh "$RUNNER_TEMP/published"
+      - name: Fetch this platform's candidate
+        if: inputs.candidate_run != ''
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: onda-${{ matrix.platform }}-unsigned
+          path: ${{ runner.temp }}/candidate
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run }}
+      - name: Upgrade the existing installation and keep its profile
+        if: inputs.candidate_run != ''
+        shell: bash
+        env:
+          DISPOSABLE_RUNNER: ${{ runner.environment }}
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            xvfb-run -a dbus-run-session -- node scripts/installer-upgrade.mjs
+          else
+            node scripts/installer-upgrade.mjs
+          fi
