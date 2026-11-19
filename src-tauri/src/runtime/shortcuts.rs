@@ -2,12 +2,14 @@
 use super::*;
 
 pub(super) struct ShortcutSupervisor {
+    #[cfg(not(target_os = "macos"))]
+    worker_directory: PathBuf,
     pub(super) helper_config: Mutex<onda_input::HelperConfig>,
     pub(super) helper_generation: AtomicU64,
     pub(super) shortcut_status: Mutex<String>,
     pub(super) helper_join: Mutex<Option<std::thread::JoinHandle<()>>>,
     /// macOS: each registered system hotkey's id and the action it stands for.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    #[cfg(target_os = "macos")]
     pub(super) hotkeys: Mutex<HashMap<u32, (onda_input::ShortcutAction, Option<String>)>>,
 }
 
@@ -50,7 +52,7 @@ impl ShortcutSupervisor {
                             "onda-input"
                         };
                         match onda_input::HelperSupervisor::start(
-                            service.recognition.worker_directory.join(helper),
+                            service.shortcuts.worker_directory.join(helper),
                             config,
                         ) {
                             Ok(value) => {
@@ -275,12 +277,18 @@ impl ShortcutSupervisor {
 }
 
 impl ShortcutSupervisor {
-    pub(super) fn new(config: onda_input::HelperConfig) -> Self {
+    pub(super) fn new(
+        config: onda_input::HelperConfig,
+        #[cfg(not(target_os = "macos"))] worker_directory: PathBuf,
+    ) -> Self {
         Self {
+            #[cfg(not(target_os = "macos"))]
+            worker_directory,
             helper_config: Mutex::new(config),
             helper_generation: AtomicU64::new(0),
             shortcut_status: Mutex::new("starting".into()),
             helper_join: Mutex::default(),
+            #[cfg(target_os = "macos")]
             hotkeys: Mutex::default(),
         }
     }
