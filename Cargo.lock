@@ -3279,6 +3279,7 @@ dependencies = [
  "onda-core",
  "onda-input",
  "onda-platform",
+ "png 0.18.1",
  "serde",
  "serde_json",
  "tauri",
