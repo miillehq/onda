@@ -46,6 +46,7 @@ test has been seen red with its probe.
 | 36 | Parallelize Intel macOS verification | A single worker archive feeds the ordinary app tests and real WKWebView. The package gate requires the separate library, credential, app and desktop results. | L0–L3, L6 | In review |
 | 37 | Cover the shipped renderer assets | Feature styles fit the file budget and retain their cascade. Every local stylesheet and SQL migration has a production reference. | L0, L4, L5 | In review |
 | 38 | Check the complete Rust dependency set | The six-target policy checks all workspace members, and the full lockfile audit catches advisories outside those targets. | L0 | In review |
+| 39 | Reuse Ubuntu package downloads | Desktop, browser and packaging jobs install the same dependencies with APT. Restored archives must match the current signed indexes. | L0, L4–L7 | In review |
 
 Rulings:
 

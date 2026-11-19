@@ -145,14 +145,8 @@ jobs:
           shared-key: linux-gnu
           cache-on-failure: true
       - name: Install Tauri, audio and test dependencies
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev \
-            libayatana-appindicator3-dev librsvg2-dev libssl-dev libasound2-dev libxdo-dev \
-            libdbus-1-dev cmake clang libclang-dev pkg-config xvfb dbus gnome-keyring libglib2.0-bin
+        uses: ./.github/actions/install-ubuntu-packages
+        with: { profile: desktop }
       - name: Install locked frontend and prepare Linux speech workers
         run: |
           npm ci
@@ -235,9 +229,8 @@ jobs:
         run: npx tsc -p tests/ui/tsconfig.json --noEmit
       - name: Linux browser system dependencies
         if: runner.os == 'Linux'
-        run: |
-          printf '%s\n' 'DPkg::Lock::Timeout "180";' > "$RUNNER_TEMP/browser-apt.conf"
-          sudo env PATH="$PATH" APT_CONFIG="$RUNNER_TEMP/browser-apt.conf" DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a node node_modules/playwright/cli.js install-deps chromium webkit
+        uses: ./.github/actions/install-ubuntu-packages
+        with: { profile: browser }
       - name: Playwright browsers
         if: runner.os == 'Linux'
         run: npx --no-install playwright install chromium webkit
@@ -352,14 +345,8 @@ jobs:
           cache-bin: false
       - name: Linux dependencies
         if: runner.os == 'Linux'
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev \
-            libayatana-appindicator3-dev librsvg2-dev libssl-dev libasound2-dev libxdo-dev \
-            libdbus-1-dev cmake clang libclang-dev pkg-config xvfb dbus gnome-keyring libglib2.0-bin
+        uses: ./.github/actions/install-ubuntu-packages
+        with: { profile: desktop }
       - name: Windows native toolchain
         if: runner.os == 'Windows'
         shell: pwsh
