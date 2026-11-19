@@ -26,6 +26,7 @@ test has been seen red with its probe.
 | 16 | ARM | sidecars per target triple, no AVX2 worker on ARM, L1 to L6 green on `windows-11-arm` and `ubuntu-24.04-arm`, packages built | L1 to L7 | done (PRs #11, #29, #36, #37): L1 to L6 green on both ARM runners; the Linux ARM64 deb and AppImage and the Windows ARM64 installer built and installer-tested (installers run 43605925048); ARM ships the generic worker under the AVX2 worker's name, never selected there |
 | 17 | Distributions | deb and AppImage install checks in Fedora, Debian and Arch containers, advisory | L8 | done (PR #15): first run green on `master` |
 | 18 | First release (0.3.0) | one version in `package.json`, Cargo and `tauri.conf.json`; `CHANGELOG.md`; a `v*` tag publishes a GitHub pre-release with exactly the eight packages one green `installers` run built and tested on the tagged `master` commit, with checksums, notices and the MPL source | L7 | done: `v0.3.0` published as a pre-release on 2026-11-14 from installers run 43605925048 (release run 43612292375; PRs #29, #35, #36, #37) |
+| 19 | Preserve settings on an incomplete update | The desktop bridge and development mock refuse malformed replacements. Stored preferences from earlier versions still acquire their defaults. | L1, L2, L6 | PR #41 |
 
 Rulings:
 
