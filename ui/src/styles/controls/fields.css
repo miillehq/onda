@@ -1,0 +1,144 @@
+/* ------------------------------------------------------------------ select */
+/* Native selects size to their longest option; a long device name would otherwise squeeze
+   the row's text into a narrow column. Long labels end in an ellipsis instead. */
+.select {
+  position: relative;
+  display: inline-flex;
+  min-width: 190px;
+  max-width: min(100%, 320px);
+}
+.select-wide {
+  width: 300px;
+}
+.select select {
+  appearance: none;
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 38px 0 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--fg);
+  font-size: var(--text-md);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.select select:hover {
+  border-color: color-mix(in srgb, var(--line-strong) 70%, var(--fg) 30%);
+}
+.select-chevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-2);
+  pointer-events: none;
+}
+.select option {
+  background: var(--panel);
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------ inputs */
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--fg);
+  font-size: var(--text-md);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.input {
+  height: var(--control-h);
+  padding: 0 12px;
+}
+.textarea {
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 72px;
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--fg-3);
+}
+.input:hover,
+.textarea:hover {
+  border-color: color-mix(in srgb, var(--line-strong) 70%, var(--fg) 30%);
+}
+.input:focus-visible,
+.textarea:focus-visible,
+.input:focus,
+.textarea:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 1px var(--fg);
+}
+.input[aria-invalid="true"],
+.textarea[aria-invalid="true"] {
+  border-color: var(--err);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+.field-hint {
+  font-size: var(--text-xs);
+  color: var(--fg-3);
+  line-height: 1.45;
+}
+.field-error {
+  font-size: var(--text-xs);
+  color: var(--err);
+  font-weight: 540;
+  line-height: 1.45;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--text-md);
+  color: var(--fg);
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--control-h);
+  min-width: 220px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--fg-3);
+}
+.search-field:focus-within {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 1px var(--fg);
+}
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font-size: var(--text-md);
+  outline: none;
+}
+.search-field input:focus-visible {
+  box-shadow: none;
+}

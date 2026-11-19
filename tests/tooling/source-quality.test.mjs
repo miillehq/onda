@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { violations } from "../../scripts/quality/architecture.mjs";
 import { productionRoots, reachableRust } from "../../scripts/quality/rust-modules.mjs";
 import { aggregateTypes, createParsers, measureSource } from "../../scripts/quality/source-metrics.mjs";
+import { measureDocument, measureStyles, orphanMigrations, orphanStyles } from "../../scripts/quality/styles.mjs";
 
 let parsers;
 before(async () => { parsers = await createParsers(); });
@@ -66,4 +67,27 @@ test("qualified implementations attach to the right same-named type and exclude 
   assert.equal(owners.find((item) => item.path.endsWith("/a.rs")).members, 26);
   assert.equal(owners.find((item) => item.path.endsWith("/b.rs")).members, 25);
   assert.deepEqual(violations(files).map((item) => item.path), ["crates/example/src/a.rs"]);
+});
+
+test("shipped entry styles reach nested imports, including modern selectors, while stray sheets fail", () => {
+  const files = [
+    measureSource("ui/src/main.tsx", 'import "./styles/main.css";', parsers.get(".tsx")),
+    measureDocument("ui/pill.html", '<link href="/src/styles/pill.css" rel="stylesheet">'),
+    measureStyles("ui/src/styles/pill.css", ".pill { color: black }"),
+    measureStyles("ui/src/styles/main.css", '@import url("./view.css") screen;'),
+    measureStyles("ui/src/styles/view.css", '/* description\ncontinues */\n.key:nth-of-type(n + 3) { content: "/*"; }'),
+    measureStyles("ui/src/styles/lost.css", ".unused { color: gray }"),
+  ];
+  assert.equal(files[4].lines, 1);
+  assert.deepEqual(orphanStyles(files), ["ui/src/styles/lost.css"]);
+  assert.throws(() => orphanStyles(files.filter((file) => !file.path.endsWith("/view.css"))), /Missing stylesheet/);
+  const over = measureStyles("ui/src/styles/over.css", Array(401).fill(".rule { color: red }").join("\n"));
+  assert.deepEqual(violations([over]).map((item) => [item.kind, item.actual]), [["file", 401]]);
+});
+
+test("a migration used only by a test is absent from the release migration table", () => {
+  const native = measureSource("crates/sample/src/lib.rs",
+    'const DEFINITION: &str = include_str!(r#"../migrations/live.sql"#);\n#[cfg(test)] const UNUSED: &str = include_str!("../migrations/lost.sql");', parsers.get(".rs"));
+  const files = [native, ...["live", "lost"].map((name) => measureDocument("crates/sample/migrations/" + name + ".sql", "SELECT 1;"))];
+  assert.deepEqual(orphanMigrations(files), ["crates/sample/migrations/lost.sql"]);
 });

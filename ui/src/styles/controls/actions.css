@@ -1,0 +1,248 @@
+/* ------------------------------------------------------------------ buttons */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--control-h);
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  font-weight: 560;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--panel) 100%, var(--fg) 4%);
+  border-color: color-mix(in srgb, var(--line-strong) 70%, var(--fg) 30%);
+}
+.button:active:not(:disabled) {
+  transform: translateY(0.5px);
+  background: var(--sunken);
+}
+.button:disabled {
+  color: var(--fg-disabled);
+  border-color: var(--line);
+}
+.button svg {
+  width: 16px;
+  height: 16px;
+}
+.button > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.button-sm {
+  height: var(--control-h-sm);
+  padding: 0 12px;
+}
+.button-primary {
+  background: var(--fg);
+  border-color: transparent;
+  color: var(--on-fg);
+}
+.button-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 86%, var(--panel));
+  border-color: transparent;
+}
+.button-primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 78%, var(--panel));
+}
+.button-primary:disabled {
+  background: var(--sunken);
+  color: var(--fg-disabled);
+  border-color: var(--line);
+}
+.button-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--fg-2);
+}
+.button-ghost:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: transparent;
+  color: var(--fg);
+}
+.button-ghost:active:not(:disabled) {
+  background: var(--pressed);
+}
+.button-danger {
+  color: var(--err);
+}
+.button-inverse {
+  background: #ffffff;
+  color: #0f0f10;
+  border-color: transparent;
+}
+.button-inverse:hover:not(:disabled) {
+  background: #ececee;
+  border-color: transparent;
+}
+.button-inverse-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.button-inverse-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.34);
+}
+.button-inverse:focus-visible,
+.button-inverse-ghost:focus-visible {
+  box-shadow: 0 0 0 2px #0f0f10, 0 0 0 4px #ffffff;
+}
+.button.is-busy {
+  cursor: progress;
+  position: relative;
+  color: transparent;
+}
+.button.is-busy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, currentColor 0 30%, transparent 30% 100%);
+  color: var(--fg-2);
+  animation: busy-slide 900ms var(--ease-in-out) infinite;
+}
+.button-primary.is-busy::after {
+  color: var(--on-fg);
+  background: linear-gradient(90deg, var(--on-fg) 0 30%, transparent 30% 100%);
+}
+@keyframes busy-slide {
+  from {
+    background-position: -22px 0;
+  }
+  to {
+    background-position: 22px 0;
+  }
+}
+
+.button-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.icon-button:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.icon-button:active {
+  background: var(--pressed);
+}
+.icon-button.is-on {
+  color: var(--fg);
+}
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--fg);
+  font-weight: 560;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+.link-button:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ------------------------------------------------------------------ switch */
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--sunken);
+  transition: background-color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
+}
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--fg-2);
+  transition: transform var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out);
+}
+.switch[aria-checked="true"] {
+  background: var(--fg);
+  border-color: var(--fg);
+}
+.switch[aria-checked="true"] .switch-thumb {
+  transform: translateX(18px);
+  background: var(--on-fg);
+}
+.switch:hover:not(:disabled) .switch-thumb {
+  transform: scale(1.08);
+}
+.switch[aria-checked="true"]:hover:not(:disabled) .switch-thumb {
+  transform: translateX(18px) scale(1.08);
+}
+.switch:disabled {
+  opacity: 0.45;
+}
+
+/* ------------------------------------------------------------------ segmented */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 12px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+  font-weight: 540;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.segment:hover {
+  color: var(--fg);
+}
+.segment[aria-checked="true"] {
+  background: var(--panel);
+  color: var(--fg);
+  font-weight: 620;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--line);
+}
