@@ -1,10 +1,12 @@
 //! Protected storage and cross-process locking for rotating account credentials: DPAPI on
-//! Windows, a key in the desktop keyring on Linux.
+//! Windows, Secret Service on Linux and Keychain on macOS.
 
 mod protection;
 use crate::{unix_time, AccountProfile, CloudError, Result};
 use fs2::FileExt;
-pub(crate) use protection::*;
+#[cfg(windows)]
+pub(crate) use protection::crypt_bytes;
+use protection::{protect, unprotect};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
