@@ -1,0 +1,71 @@
+name: Windows installer first-launch sample
+on:
+  workflow_call:
+    inputs:
+      candidate_run:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  confirm:
+    name: Confirm installer provenance
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require a native installer workflow from this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN: ${{ inputs.candidate_run }}
+        run: |
+          [[ "$CANDIDATE_RUN" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" |
+            jq -e --arg repo "$GITHUB_REPOSITORY" '.head_repository.full_name == $repo and .path == ".github/workflows/installers.yml"'
+
+  first-launch:
+    name: Windows first launch ${{ matrix.sample }}
+    needs: confirm
+    runs-on: windows-2022
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        sample: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: onda-windows-x64-unsigned
+          run-id: ${{ inputs.candidate_run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/onda-startup-candidate
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: installed-smoke-windows-x64
+          run-id: ${{ inputs.candidate_run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/onda-startup-reference
+      - name: Run one fresh installation and first launch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidates = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/onda-startup-candidate" -Recurse -File -Filter '*x64-setup.exe')
+          if ($candidates.Count -ne 1) { throw 'Expected one Windows x64 installer.' }
+          $digest = (Get-FileHash -LiteralPath $candidates[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $references = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/onda-startup-reference" -File -Filter '*.json' |
+            ForEach-Object { (Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).installerSha256 })
+          if ($digest -notin $references) { throw 'The candidate differs from the originally tested installer.' }
+          ./scripts/installer-smoke.ps1 -InstallerPath $candidates[0].FullName |
+            Select-Object status, startupSeconds, startupLogObserved | ConvertTo-Json
+      - name: Preserve this first attempt
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: startup-sample-${{ matrix.sample }}
+          path: .artifacts/installed-smoke/*.json
+          if-no-files-found: error
+          retention-days: 7

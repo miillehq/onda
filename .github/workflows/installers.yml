@@ -14,12 +14,16 @@ on:
         type: string
         default: ""
         description: Also verify a published release and upgrade it to these candidate artifacts
+      windows_startup_run:
+        type: string
+        default: ""
+        description: Diagnostic only. Sample the Windows x64 installer from this run on 30 fresh runners.
 
 permissions:
   contents: read
 
 concurrency:
-  group: installers-${{ github.ref }}
+  group: installers-${{ github.ref }}-${{ inputs.windows_startup_run != '' && 'startup' || 'packages' }}
   cancel-in-progress: false
 
 env:
@@ -28,8 +32,16 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: 4
 
 jobs:
+  startup-sample:
+    if: github.event_name == 'workflow_dispatch' && inputs.windows_startup_run != ''
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/windows-startup-sample.yml
+    with: { candidate_run: "${{ inputs.windows_startup_run }}" }
+
   published:
-    if: github.event_name == 'workflow_dispatch' && inputs.upgrade_from != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.upgrade_from != '' && inputs.windows_startup_run == ''
     needs: [windows, linux, macos]
     uses: ./.github/workflows/published-installers.yml
     permissions: { contents: read, actions: read }
@@ -38,6 +50,7 @@ jobs:
       candidate_run: ${{ format('{0}', github.run_id) }}
 
   windows:
+    if: inputs.windows_startup_run == ''
     name: installers ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -133,6 +146,7 @@ jobs:
             .artifacts/runtime/Microsoft-runtime-manifest.json
 
   linux:
+    if: inputs.windows_startup_run == ''
     name: installers ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -190,6 +204,7 @@ jobs:
             target/release/bundle/appimage/*.AppImage
 
   macos:
+    if: inputs.windows_startup_run == ''
     name: installers ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
