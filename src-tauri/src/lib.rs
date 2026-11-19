@@ -1,5 +1,7 @@
 //! Thin desktop host for Windows and Linux. Application policy lives in Rust services.
 
+mod desktop_window;
+pub(crate) use desktop_window::*;
 #[cfg(all(feature = "e2e", not(debug_assertions)))]
 compile_error!("The e2e feature adds a WebDriver server and is for debug builds only.");
 pub mod api;
@@ -66,117 +68,6 @@ async fn application_call(
         .inner()
         .dispatch(api::ApiRequest::decode(request)?)
         .await
-}
-
-pub(crate) fn show_main(app: &tauri::AppHandle) {
-    show_main_at(app, None);
-}
-
-/// Show the main window, creating it when it was closed. Returns true when it was created,
-/// in which case it opens at `section` itself and needs no navigate event.
-pub(crate) fn show_main_at(app: &tauri::AppHandle, section: Option<&str>) -> bool {
-    if let Some(window) = app.get_webview_window(MAIN_LABEL) {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-        return false;
-    }
-    match build_main_window(app, section, true) {
-        Ok(window) => {
-            let _ = window.set_focus();
-            true
-        }
-        Err(error) => {
-            tracing::warn!(subsystem = "window", error = %error, "main window could not be created");
-            false
-        }
-    }
-}
-
-/// The main window carries a full WebView renderer (about 100 MB). It exists only while open:
-/// built when shown and destroyed when closed, so Onda in the tray keeps just the pill loaded.
-fn build_main_window(
-    app: &tauri::AppHandle,
-    section: Option<&str>,
-    visible: bool,
-) -> Result<tauri::WebviewWindow, Box<dyn std::error::Error>> {
-    let configuration = app
-        .config()
-        .app
-        .windows
-        .first()
-        .ok_or("Main window configuration missing")?
-        .clone();
-    let theme = app
-        .try_state::<Arc<Runtime>>()
-        .and_then(|service| service.settings().ok())
-        .map_or(ThemePreference::System, |settings| settings.theme);
-    let mut window = navigation::restrict(
-        tauri::WebviewWindowBuilder::from_config(app, &configuration)?,
-        app.config().build.dev_url.as_ref(),
-    )
-    .title(onda_core::APP_NAME)
-    .theme(window_theme(theme))
-    .background_color(chrome_color(is_dark(theme)))
-    .visible(visible);
-    // Isolated profiles keep their own browser data, so they can run beside the real app.
-    if let Some(directory) = debug_smoke_directory().or_else(debug_dev_profile) {
-        window = window.data_directory(directory.join("EBWebView"));
-    }
-    if let Some(section) = section {
-        // The page reads its starting route from the hash before rendering.
-        let hash = serde_json::to_string(&format!("#{section}"))?;
-        window = window.initialization_script(format!(
-            "if (!location.hash) history.replaceState(null, '', {hash});"
-        ));
-    }
-    if debug_smoke_directory().is_some() {
-        window = window.initialization_script("window.__ONDA_SMOKE__ = true;");
-        if std::env::var("ONDA_SMOKE_REPLAY").as_deref() == Ok("1") {
-            window = window.initialization_script("window.__ONDA_REPLAY__ = true;");
-        }
-    }
-    let window = window.build()?;
-    apply_theme(app, theme);
-    Ok(window)
-}
-
-fn is_dark(theme: ThemePreference) -> bool {
-    match theme {
-        ThemePreference::Dark => true,
-        ThemePreference::Light => false,
-        ThemePreference::System => !onda_platform::apps_use_light_theme(),
-    }
-}
-
-fn chrome_color(dark: bool) -> Color {
-    let (rgb, _) = if dark { DARK_CHROME } else { LIGHT_CHROME };
-    Color((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8, 255)
-}
-
-fn window_theme(theme: ThemePreference) -> Option<tauri::Theme> {
-    match theme {
-        ThemePreference::System => None,
-        ThemePreference::Light => Some(tauri::Theme::Light),
-        ThemePreference::Dark => Some(tauri::Theme::Dark),
-    }
-}
-
-/// Window theme drives the webview's `prefers-color-scheme`; the caption is tinted to
-/// continue the sidebar so the native title bar reads as part of the app.
-pub(crate) fn apply_theme(app: &tauri::AppHandle, theme: ThemePreference) {
-    let Some(window) = app.get_webview_window(MAIN_LABEL) else {
-        return;
-    };
-    let dark = is_dark(theme);
-    let _ = window.set_theme(window_theme(theme));
-    let _ = window.set_background_color(Some(chrome_color(dark)));
-    // Elsewhere the title bar follows the desktop's theme.
-    #[cfg(windows)]
-    if let Ok(hwnd) = window.hwnd() {
-        let (caption, text) = if dark { DARK_CHROME } else { LIGHT_CHROME };
-        onda_platform::set_caption_colors(hwnd.0 as isize, caption, text);
-    }
 }
 
 pub(crate) fn apply_launch_at_login(enabled: bool) -> AppResult<()> {
@@ -303,107 +194,14 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     {
         build_main_window(app.handle(), None, true)?;
     }
-    let webview_data = smoke_directory
-        .clone()
-        .or_else(debug_dev_profile)
-        .map(|directory| directory.join("EBWebView"));
-    let mut pill_window = navigation::restrict(
-        tauri::WebviewWindowBuilder::new(
-            app,
-            pill::LABEL,
-            tauri::WebviewUrl::App("pill.html".into()),
-        ),
-        app.config().build.dev_url.as_ref(),
-    );
-    if let Some(directory) = webview_data {
-        pill_window = pill_window.data_directory(directory);
-    }
-    pill_window
-        .title(format!("{} dictation", onda_core::APP_NAME))
-        .inner_size(pill::WIDTH, pill::HEIGHT)
-        .decorations(false)
-        .transparent(true)
-        .background_color(Color(0, 0, 0, 0))
-        .shadow(false)
-        .resizable(false)
-        .maximizable(false)
-        .minimizable(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .focusable(false)
-        .focused(false)
-        // Windows: created visible (tao's only non-activating show), then hidden natively; see
-        // pill.rs. Linux: created hidden, so it is an overlay before it is first shown.
-        .position(-32000.0, -32000.0)
-        .visible(cfg!(windows))
-        .build()?;
-    #[cfg(target_os = "linux")]
-    pill::make_overlay(app.handle());
-    pill::hide(app.handle());
+    build_pill(app, smoke_directory)?;
     if settings.launch_at_login {
         // Re-register so the entry follows the executable after updates or moves.
         if let Err(error) = apply_launch_at_login(true) {
             tracing::warn!(subsystem = "startup", code = ?error.code, "login entry not refreshed");
         }
     }
-    let open = MenuItem::with_id(
-        app,
-        "open",
-        format!("Open {}", onda_core::APP_NAME),
-        true,
-        None::<&str>,
-    )?;
-    // On Linux the tray can start dictation too, for desktops without a shortcuts portal.
-    let dictate = MenuItem::with_id(
-        app,
-        "dictate",
-        "Start or finish dictation",
-        true,
-        None::<&str>,
-    )?;
-    let cancel = MenuItem::with_id(app, "cancel", "Cancel dictation", true, None::<&str>)?;
-    let quit = MenuItem::with_id(
-        app,
-        "quit",
-        format!("Quit {}", onda_core::APP_NAME),
-        true,
-        None::<&str>,
-    )?;
-    let menu = if cfg!(windows) {
-        Menu::with_items(app, &[&open, &cancel, &quit])?
-    } else {
-        Menu::with_items(app, &[&open, &dictate, &cancel, &quit])?
-    };
-    TrayIconBuilder::with_id("main")
-        .icon(tray_icon(settings.tray_icon)?)
-        .tooltip(format!("{} · Ready", onda_core::APP_NAME))
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" => show_main(app),
-            "dictate" => app.state::<Arc<Runtime>>().toggle_dictation(),
-            "cancel" => {
-                let service = app.state::<Arc<Runtime>>().inner().clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = service.dispatch(api::ApiRequest::CancelOperation).await;
-                });
-            }
-            "quit" => app.exit(0),
-            _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-            if matches!(
-                event,
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
-                }
-            ) {
-                show_main(tray.app_handle());
-            }
-        })
-        .build(app)?;
+    install_tray(app, settings.tray_icon)?;
     tracing::info!(
         subsystem = "application",
         version = onda_core::APP_VERSION,
@@ -445,37 +243,7 @@ pub fn run() {
     {
         std::env::set_var("GDK_BACKEND", "x11");
     }
-    let mut builder = tauri::Builder::default();
-    // An isolated profile must neither activate the user's app nor share its global shortcuts.
-    if !isolated() {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
-            second_instance(app, arguments)
-        }));
-    }
-    // macOS: dictation shortcuts are system hotkeys, routed to the runtime by their id.
-    #[cfg(target_os = "macos")]
-    {
-        builder = builder.plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, shortcut, event| {
-                    if let Some(service) = app.try_state::<Arc<Runtime>>() {
-                        service.hotkey(
-                            shortcut.id(),
-                            event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed,
-                        );
-                    }
-                })
-                .build(),
-        );
-    }
-    // Real-shell tests (L6): WebdriverIO's plugins exist only in debug builds made with
-    // `--features e2e` (`npm run build:e2e`), so no shipped binary has a WebDriver server.
-    #[cfg(all(debug_assertions, feature = "e2e"))]
-    {
-        builder = builder
-            .plugin(tauri_plugin_wdio::init())
-            .plugin(tauri_plugin_wdio_webdriver::init());
-    }
+    let builder = desktop_builder();
     let application = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         // Used only from native commands (profile picture, saving the stats image); the
@@ -543,4 +311,142 @@ pub fn run() {
             onda_platform::show_startup_error(&error.message);
         }
     }
+}
+
+fn build_pill(app: &tauri::App, smoke_directory: Option<PathBuf>) -> tauri::Result<()> {
+    let webview_data = smoke_directory
+        .or_else(debug_dev_profile)
+        .map(|directory| directory.join("EBWebView"));
+    let mut pill_window = navigation::restrict(
+        tauri::WebviewWindowBuilder::new(
+            app,
+            pill::LABEL,
+            tauri::WebviewUrl::App("pill.html".into()),
+        ),
+        app.config().build.dev_url.as_ref(),
+    );
+    if let Some(directory) = webview_data {
+        pill_window = pill_window.data_directory(directory);
+    }
+    pill_window
+        .title(format!("{} dictation", onda_core::APP_NAME))
+        .inner_size(pill::WIDTH, pill::HEIGHT)
+        .decorations(false)
+        .transparent(true)
+        .background_color(Color(0, 0, 0, 0))
+        .shadow(false)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focusable(false)
+        .focused(false)
+        // Windows: created visible (tao's only non-activating show), then hidden natively; see
+        // pill.rs. Linux: created hidden, so it is an overlay before it is first shown.
+        .position(-32000.0, -32000.0)
+        .visible(cfg!(windows))
+        .build()?;
+    #[cfg(target_os = "linux")]
+    pill::make_overlay(app.handle());
+    pill::hide(app.handle());
+    Ok(())
+}
+
+fn install_tray(app: &tauri::App, style: TrayIconStyle) -> tauri::Result<()> {
+    let open = MenuItem::with_id(
+        app,
+        "open",
+        format!("Open {}", onda_core::APP_NAME),
+        true,
+        None::<&str>,
+    )?;
+    // On Linux the tray can start dictation too, for desktops without a shortcuts portal.
+    let dictate = MenuItem::with_id(
+        app,
+        "dictate",
+        "Start or finish dictation",
+        true,
+        None::<&str>,
+    )?;
+    let cancel = MenuItem::with_id(app, "cancel", "Cancel dictation", true, None::<&str>)?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        format!("Quit {}", onda_core::APP_NAME),
+        true,
+        None::<&str>,
+    )?;
+    let menu = if cfg!(windows) {
+        Menu::with_items(app, &[&open, &cancel, &quit])?
+    } else {
+        Menu::with_items(app, &[&open, &dictate, &cancel, &quit])?
+    };
+    TrayIconBuilder::with_id("main")
+        .icon(tray_icon(style)?)
+        .tooltip(format!("{} · Ready", onda_core::APP_NAME))
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => show_main(app),
+            "dictate" => app.state::<Arc<Runtime>>().toggle_dictation(),
+            "cancel" => {
+                let service = app.state::<Arc<Runtime>>().inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = service.dispatch(api::ApiRequest::CancelOperation).await;
+                });
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                }
+            ) {
+                show_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+/// Register desktop and build-specific plugins before any webview is created.
+fn desktop_builder() -> tauri::Builder<tauri::Wry> {
+    let mut builder = tauri::Builder::default();
+    // An isolated profile must neither activate the user's app nor share its global shortcuts.
+    if !isolated() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
+            second_instance(app, arguments)
+        }));
+    }
+    // macOS: dictation shortcuts are system hotkeys, routed to the runtime by their id.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if let Some(service) = app.try_state::<Arc<Runtime>>() {
+                        service.hotkey(
+                            shortcut.id(),
+                            event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed,
+                        );
+                    }
+                })
+                .build(),
+        );
+    }
+    // Real-shell tests (L6): WebdriverIO's plugins exist only in debug builds made with
+    // `--features e2e` (`npm run build:e2e`), so no shipped binary has a WebDriver server.
+    #[cfg(all(debug_assertions, feature = "e2e"))]
+    {
+        builder = builder
+            .plugin(tauri_plugin_wdio::init())
+            .plugin(tauri_plugin_wdio_webdriver::init());
+    }
+    builder
 }

@@ -126,6 +126,8 @@ with an identical tree.
 
 | 2026-11-19 | L1–L3 characterization | Native library suites preserve audio capture, verified worker and model policy, OAuth, storage and shortcut behavior after their owners were separated. | windows-x64, local | `cargo test --locked --workspace --exclude onda-app` passed 182 active cases in the refactored libraries. Conditional Windows, Linux and macOS paths also remain in the hosted jobs. |
 
+| 2026-11-19 | L1–L3, L6 characterization | The operation actor coordinates recording, recognition, provider choice, safe delivery, History and retry through their owning services. A retry preserves the original recipient and previews remain targetless. | windows-x64, local | The app crate passed 37 active tests, strict workspace Clippy passed, and all three WebView2 specification files passed after extraction. |
+
 ## Unverified
 
 - macOS: dictation into other apps on a real Mac. Accessibility paste is built and checked on the
