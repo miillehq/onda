@@ -7,6 +7,18 @@ import { malformedRequests, shapeError } from "../../contracts/malformed-request
 import { outcome, saveSettings, snapshot } from "./app.js";
 
 describe("the real backend on a fresh profile", () => {
+  it("keeps a failed rewrite from switching its destination on retry", async () => {
+    const original = (await snapshot()).settings;
+    try {
+      // The synthetic destination has no model. Validation ends the attempt before any network I/O.
+      await saveSettings({ aiProvider: "local", localBaseUrl: "http://127.0.0.1:12419/v1", localModel: null });
+      expect(await outcome({ command: "previewTransform", args: { source: "Fixture sentence.", transformId: "polish" } })).toMatchObject({ error: { code: "invalidInput" } });
+      await saveSettings({ localBaseUrl: "http://127.0.0.1:12420/v1" });
+      expect(await outcome({ command: "retryTransformation" })).toMatchObject({ error: { code: "invalidInput", message: "The rewrite destination changed. Start a new rewrite to use it." } });
+    } finally {
+      await saveSettings(original);
+    }
+  });
   it("rejects malformed command envelopes through the real bridge", async () => {
     for (const request of malformedRequests) expect(await outcome(request)).toMatchObject({ error: shapeError });
   });

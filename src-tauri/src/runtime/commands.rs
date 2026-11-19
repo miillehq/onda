@@ -1010,6 +1010,7 @@ impl Runtime {
         self.set_retry(
             &id,
             TransformRetry {
+                route: RetryRoute::capture(&active.settings),
                 instructions: transform_instruction(&transform.instruction),
                 preferred_model: transform.model_preference.clone(),
                 preserve_tokens: transform.preserve_protected_tokens,
@@ -1089,7 +1090,7 @@ impl Runtime {
         let retry = saved.retry.ok_or_else(|| {
             AppError::invalid("This result has no cloud transformation to retry.")
         })?;
-        let settings = lock(&self.store)?.settings()?;
+        let settings = retry.route.apply(lock(&self.store)?.settings()?)?;
         let id = self.begin_operation(OperationMode::Transform)?;
         let target = saved.target.clone();
         let active = ActiveOperation {

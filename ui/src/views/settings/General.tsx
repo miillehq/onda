@@ -34,7 +34,7 @@ function ProfileEditor() {
           id="profile-name"
           class="input"
           type="text"
-          maxLength={80}
+          disabled={!person}
           autoComplete="given-name"
           placeholder="Optional"
           value={name}

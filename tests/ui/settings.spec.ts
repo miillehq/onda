@@ -4,6 +4,16 @@ import { openMock, tier1, tier2, tier3 } from "./visual";
 
 test.beforeEach(async ({ page }) => openMock(page, "/#settings/general"));
 
+test("a profile name can contain forty flag graphemes", async ({ page }) => {
+  const field = page.getByRole("textbox", { name: "Your name" });
+  const name = "🇬🇧".repeat(40);
+  await expect(field).toBeEnabled();
+  await field.fill("");
+  await page.keyboard.insertText(name);
+  await field.press("Tab");
+  await expect(field).toHaveValue(name);
+});
+
 test("choosing Dark applies it at once and Light switches back", async ({ page }) => {
   const dark = page.locator(".theme-option.theme-dark");
   await dark.click();

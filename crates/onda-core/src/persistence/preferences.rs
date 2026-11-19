@@ -26,6 +26,9 @@ impl Store {
             .connection
             .transaction()
             .map_err(|_| AppError::storage())?;
+        if !rewrite_defaults::exists(&transaction, &settings.default_transform_id)? {
+            return Err(AppError::invalid("Choose an existing default rewrite."));
+        }
         transaction.execute("INSERT INTO settings(key,value) VALUES('application',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[json]).map_err(|_|AppError::storage())?;
         // A crash must never leave the new retention preference beside the previous disk history.
         if settings.history_days == 0 {

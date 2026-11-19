@@ -9,7 +9,7 @@ import { ShortcutRecorder } from "../components/ShortcutRecorder";
 import type { OperationResult, Transform } from "../generated/core";
 import { navigate } from "../lib/router";
 import { useCloudModels } from "../lib/useCloudModels";
-import { aiReady, commandShortcutOnly, copyResult, isBusy, lastResult, saveSettings, settings, toast, toastError, transforms } from "../lib/store";
+import { aiReady, commandShortcutOnly, copyResult, isBusy, lastResult, refresh, saveSettings, settings, toast, toastError, transforms } from "../lib/store";
 
 function RewriteModel({ value, onChange }: { value: string; onChange: (slug: string) => void }) {
   const { models } = useCloudModels();
@@ -40,8 +40,8 @@ function RewriteDialog({ transform, onClose }: { transform: Transform | null; on
           args: {
             transform: {
               id: transform?.id ?? crypto.randomUUID(),
-              name: name.trim(),
-              instruction: instruction.trim(),
+              name,
+              instruction,
               shortcut: shortcut ? { keys: shortcut } : null,
               modelPreference: model || null,
               preserveProtectedTokens: preserve,
@@ -197,6 +197,8 @@ export function Rewrites() {
     try {
       await ask({ command: "deleteTransform", args: { id: transform.id } }, "unit");
       transforms.value = transforms.value.filter((item) => item.id !== transform.id);
+      await refresh();
+      if (tryId === transform.id) setTryId(settings.value?.defaultTransformId ?? "polish");
       toast({ tone: "info", title: `Removed “${transform.name}”` });
     } catch (error) {
       toastError(error, "Not removed");
