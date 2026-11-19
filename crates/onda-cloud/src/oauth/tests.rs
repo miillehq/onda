@@ -289,8 +289,16 @@ impl Fixture {
 }
 
 #[tokio::test]
-#[cfg(windows)]
+#[cfg_attr(
+    not(windows),
+    ignore = "requires a disposable desktop credential store"
+)]
 async fn full_registration_models_responses_signout_and_returning_identity() {
+    #[cfg(not(windows))]
+    assert_eq!(
+        std::env::var("ONDA_TEST_CREDENTIAL_STORE").as_deref(),
+        Ok("isolated")
+    );
     let fixture = Fixture::start().await;
     let directory = tempfile::tempdir().unwrap();
     let service = fixture.service(directory.path().to_owned());
@@ -378,8 +386,16 @@ async fn full_registration_models_responses_signout_and_returning_identity() {
 }
 
 #[tokio::test]
-#[cfg(windows)]
+#[cfg_attr(
+    not(windows),
+    ignore = "requires a disposable desktop credential store"
+)]
 async fn serializes_refresh_across_independent_service_instances_and_detects_crash() {
+    #[cfg(not(windows))]
+    assert_eq!(
+        std::env::var("ONDA_TEST_CREDENTIAL_STORE").as_deref(),
+        Ok("isolated")
+    );
     let fixture = Fixture::start().await;
     let directory = tempfile::tempdir().unwrap();
     let service = fixture.service(directory.path().to_owned());

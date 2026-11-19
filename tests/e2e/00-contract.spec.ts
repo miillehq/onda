@@ -1,6 +1,6 @@
 // L2 in the real app: the shared contract examples that tests/unit runs against the development
 // mock, run here against Rust on a fresh profile. Together they keep the mock from drifting.
-import { $, expect } from "@wdio/globals";
+import { $, browser, expect } from "@wdio/globals";
 import { examplesFor } from "../../contracts/examples.js";
 import { malformedSettingsRequests } from "../../contracts/settings-inputs.js";
 import { malformedRequests, shapeError } from "../../contracts/malformed-requests.js";
@@ -12,6 +12,26 @@ describe("the real backend on a fresh profile", () => {
   });
   it("is not the labelled development mock", async () => {
     await expect($('[data-testid="backend-badge"]')).not.toExist();
+  });
+
+  it("enforces the bundled image policy inside the real webview", async () => {
+    const observed = await browser.executeAsync((finish: (outcome: string) => void) => {
+      const image = new Image();
+      const end = (outcome: string) => {
+        document.removeEventListener("securitypolicyviolation", blocked);
+        window.clearTimeout(timer);
+        finish(outcome);
+      };
+      const blocked = (event: SecurityPolicyViolationEvent) => {
+        if (event.blockedURI === "data") end(event.effectiveDirective);
+      };
+      const timer = window.setTimeout(() => end("no policy event"), 3000);
+      document.addEventListener("securitypolicyviolation", blocked);
+      image.onload = () => end("image loaded");
+      // A one-pixel GIF performs no script execution or network access.
+      image.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    });
+    expect(observed).toBe("img-src");
   });
 
   // The app runs on the machine that runs this suite.

@@ -9,9 +9,6 @@ const root = dirname(fileURLToPath(import.meta.url));
 // The Cargo workspace builds into target/ at the root unless CARGO_TARGET_DIR moves it.
 const targetRoot = process.env.CARGO_TARGET_DIR ? path.resolve(process.env.CARGO_TARGET_DIR) : join(root, "target");
 const appBinaryPath = join(targetRoot, "debug", process.platform === "win32" ? "onda.exe" : "onda");
-if (!existsSync(appBinaryPath)) {
-  throw new Error(`Debug app not found at ${appBinaryPath}. Run: npm run build:e2e`);
-}
 
 // Every launch uses one isolated debug profile: its own data folder, no global shortcuts, no
 // single-instance lock and no registry changes, so the suite can run beside an installed Onda.
@@ -46,6 +43,7 @@ export const config = {
     ],
   ],
   onPrepare() {
+    if (!existsSync(appBinaryPath)) throw new Error(`Debug app not found at ${appBinaryPath}. Run npm run build:e2e.`);
     rmSync(profile, { recursive: true, force: true });
     mkdirSync(profile, { recursive: true });
   },
@@ -68,7 +66,7 @@ export const config = {
   bail: 0,
   waitforTimeout: 15_000,
   connectionRetryTimeout: 120_000,
-  connectionRetryCount: 3,
+  connectionRetryCount: 1,
   framework: "mocha",
   reporters: ["spec"],
   mochaOpts: { ui: "bdd", timeout: 90_000 },

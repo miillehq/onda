@@ -119,7 +119,10 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: e2e-windows-x64
-          path: artifacts/e2e
+          path: |
+            artifacts/e2e/*.png
+            artifacts/e2e/*.html
+            artifacts/e2e/logs
           if-no-files-found: ignore
           retention-days: 7
 
@@ -149,7 +152,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev libssl-dev libasound2-dev libxdo-dev \
-            libdbus-1-dev cmake clang libclang-dev pkg-config xvfb dbus
+            libdbus-1-dev cmake clang libclang-dev pkg-config xvfb dbus gnome-keyring libglib2.0-bin
       - name: Install locked frontend and prepare Linux speech workers
         run: |
           npm ci
@@ -165,6 +168,10 @@ jobs:
           npm run test:unit
       - name: L1 and L3 workspace tests
         run: cargo test --locked --workspace
+      - name: Synthetic account and key storage round trips (L3)
+        env:
+          DISPOSABLE_RUNNER: ${{ runner.environment }}
+        run: bash scripts/credential-fixtures.sh
       - name: Isolated X11 clipboard round trip
         run: xvfb-run -a env ONDA_TEST_X11=isolated cargo test --locked -p onda-platform --lib isolated_x11_keeps_rich_content -- --ignored --test-threads=1
       - name: Quality fixtures
@@ -172,11 +179,19 @@ jobs:
       - name: L6 native smoke in WebKitGTK
         run: |
           cargo build --locked -p onda-app --bin onda
-          npm run dev > "$RUNNER_TEMP/vite.log" 2>&1 &
-          for _ in $(seq 1 60); do curl -sf http://127.0.0.1:1420/ > /dev/null && break; sleep 1; done
-          mkdir -p "$RUNNER_TEMP/smoke"
-          timeout 300 dbus-run-session -- xvfb-run -a env ONDA_SMOKE_DIRECTORY="$RUNNER_TEMP/smoke" target/debug/onda
-          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print("\n".join(r["checks"])); sys.exit(0 if r["passed"] else 1)' "$RUNNER_TEMP/smoke/report.json"
+          export ONDA_SMOKE_DIRECTORY
+          ONDA_SMOKE_DIRECTORY=$(mktemp -d "$RUNNER_TEMP/onda-smoke.XXXXXXXX")
+          node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 1420 --strictPort > "$RUNNER_TEMP/vite.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 60); do
+            kill -0 "$server" || { cat "$RUNNER_TEMP/vite.log"; exit 1; }
+            if curl -fsSI http://127.0.0.1:1420/ | tr -d '\r' | grep -Fxiq "X-Onda-Smoke-Run: ${ONDA_SMOKE_DIRECTORY##*/}"; then break; fi
+            sleep 1
+          done
+          curl -fsSI http://127.0.0.1:1420/ | tr -d '\r' | grep -Fxiq "X-Onda-Smoke-Run: ${ONDA_SMOKE_DIRECTORY##*/}"
+          timeout 300 dbus-run-session -- xvfb-run -a target/debug/onda
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print("\n".join(r["checks"])); sys.exit(0 if r["passed"] else 1)' "$ONDA_SMOKE_DIRECTORY/report.json"
       - name: L6 real-shell journeys
         env:
           NO_AT_BRIDGE: "1"
@@ -189,7 +204,10 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: e2e-linux-x64
-          path: artifacts/e2e
+          path: |
+            artifacts/e2e/*.png
+            artifacts/e2e/*.html
+            artifacts/e2e/logs
           if-no-files-found: ignore
           retention-days: 7
 
@@ -215,25 +233,23 @@ jobs:
       - run: npm ci
       - name: Type-check the browser suite
         run: npx tsc -p tests/ui/tsconfig.json --noEmit
-      - name: Playwright browsers
-        # Ubuntu's apt can stall on a service-restart prompt during --with-deps; keep it
-        # non-interactive and bound each attempt (macOS has no timeout(1)).
-        timeout-minutes: 12
-        shell: bash
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
+      - name: Linux browser system dependencies
+        if: runner.os == 'Linux'
         run: |
-          bound=""; command -v timeout >/dev/null && bound="timeout 420"
-          for attempt in 1 2; do
-            $bound npx playwright install --with-deps chromium webkit && exit 0
-            echo "attempt $attempt failed or stalled; retrying"
-          done
-          exit 1
+          printf '%s\n' 'DPkg::Lock::Timeout "180";' > "$RUNNER_TEMP/browser-apt.conf"
+          sudo env PATH="$PATH" APT_CONFIG="$RUNNER_TEMP/browser-apt.conf" DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a node node_modules/playwright/cli.js install-deps chromium webkit
+      - name: Playwright browsers
+        if: runner.os == 'Linux'
+        run: npx --no-install playwright install chromium webkit
+      - name: Playwright browsers and host dependencies
+        if: runner.os != 'Linux'
+        run: npx --no-install playwright install --with-deps chromium webkit
       - name: L4 and L5 against the labelled mock (chromium and webkit)
         env:
           CI: "1"
         run: npm run test:ui
+      - name: Verify the distributable UI without a desktop bridge
+        run: npm run test:production-ui
       - name: Upload the report and any diffs
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -244,6 +260,22 @@ jobs:
             test-results
           if-no-files-found: ignore
           retention-days: 7
+
+  screenshots:
+    name: real-shell contact sheet
+    if: always() && !cancelled()
+    needs: [windows, linux, tier2]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with: { node-version: "24" }
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with: { pattern: "e2e-*", path: artifacts/platforms }
+      - run: node scripts/contact-sheet.mjs
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: always()
+        with: { name: shell-contact-sheet, path: artifacts/contact-sheet.html, retention-days: 7 }
 
   policy:
     name: dependency policy
@@ -308,7 +340,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev libssl-dev libasound2-dev libxdo-dev \
-            libdbus-1-dev cmake clang libclang-dev pkg-config xvfb dbus
+            libdbus-1-dev cmake clang libclang-dev pkg-config xvfb dbus gnome-keyring libglib2.0-bin
       - name: Windows native toolchain
         if: runner.os == 'Windows'
         shell: pwsh
@@ -317,6 +349,11 @@ jobs:
           "LIBCLANG_PATH=$env:LIBCLANG_PATH" >> $env:GITHUB_ENV
       - name: Crates without the app shell (L1, L3)
         run: cargo test --locked --workspace --exclude onda-app
+      - name: Synthetic account and key storage round trips (L3)
+        if: runner.os != 'Windows'
+        env:
+          DISPOSABLE_RUNNER: ${{ runner.environment }}
+        run: bash scripts/credential-fixtures.sh
       - name: Isolated X11 clipboard round trip
         if: runner.os == 'Linux'
         run: xvfb-run -a env ONDA_TEST_X11=isolated cargo test --locked -p onda-platform --lib isolated_x11_keeps_rich_content -- --ignored --test-threads=1
@@ -346,6 +383,9 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: e2e-${{ matrix.platform }}
-          path: artifacts/e2e
+          path: |
+            artifacts/e2e/*.png
+            artifacts/e2e/*.html
+            artifacts/e2e/logs
           if-no-files-found: ignore
           retention-days: 7

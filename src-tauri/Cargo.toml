@@ -50,6 +50,7 @@ uuid = { version = "1", features = ["v4"] }
 ts-rs = { version = "12", features = ["serde-compat", "no-serde-warnings"] }
 hound = "3.5"
 png = "0.18"
+webbrowser = "1.0"
 # Real-shell tests (L6): WebdriverIO's plugins, compiled only with `--features e2e` and
 # registered only in debug builds (see lib.rs). Release binaries never contain a WebDriver server.
 tauri-plugin-wdio = { version = "1", optional = true }

@@ -1,4 +1,4 @@
-import { isNative } from "../api";
+import { backendKind } from "../api";
 import "../styles/mock.css";
 
 /**
@@ -7,7 +7,7 @@ import "../styles/mock.css";
  * first; the real-shell suite asserts it is absent.
  */
 export function MockBadge() {
-  if (isNative) return null;
+  if (backendKind !== "mock") return null;
   return (
     <div class="mock-badge" data-testid="backend-badge" role="note">
       Development mock

@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const page = (name: string) => fileURLToPath(new URL(`./ui/${name}.html`, import.meta.url));
@@ -15,5 +16,8 @@ export default defineConfig({
     assetsInlineLimit: 0,
     rolldownOptions: { input: { main: page("index"), pill: page("pill") } },
   },
-  server: { host: "127.0.0.1", port: 1420, strictPort: true },
+  server: {
+    host: "127.0.0.1", port: 1420, strictPort: true,
+    headers: process.env.ONDA_SMOKE_DIRECTORY ? { "X-Onda-Smoke-Run": basename(process.env.ONDA_SMOKE_DIRECTORY) } : {},
+  },
 });

@@ -2,9 +2,13 @@
 // development mock answers. chromium stands in for WebView2 (Windows) and webkit for WebKitGTK
 // (Linux) and WKWebView (macOS); CI runs both engines on the three OS runners.
 import { defineConfig, devices } from "@playwright/test";
+import { fileURLToPath } from "node:url";
+import { browserTestPort } from "./tests/ui/server";
 
 // Onda's main window opens at 1120 x 780 (src-tauri/tauri.conf.json).
 const viewport = { width: 1120, height: 780 };
+const port = browserTestPort(fileURLToPath(new URL(".", import.meta.url)), process.env.UI_PORT);
+const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "tests/ui",
@@ -20,7 +24,7 @@ export default defineConfig({
     toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: "disabled", caret: "hide" },
   },
   use: {
-    baseURL: "http://127.0.0.1:1420",
+    baseURL,
     viewport,
     deviceScaleFactor: 1,
     colorScheme: "light",
@@ -34,9 +38,9 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"], viewport, deviceScaleFactor: 1 } },
   ],
   webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:1420",
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev -- --port ${port}`,
+    url: baseURL,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

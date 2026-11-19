@@ -86,9 +86,9 @@ function ProfileCard({ profile }: { profile: (typeof PROFILES)[number] }) {
   const inUse = modelInUse(value) === modelId;
   const downloading = !!downloads.value[modelId];
   const choose = () => {
-    if (selected) return;
+    if (downloading || (selected && installed)) return;
     if (installed) void saveSettings({ qualityProfile: profile.id });
-    else if (!downloading) void downloadModel(modelId, { qualityProfile: profile.id });
+    else void downloadModel(modelId, selected ? undefined : { qualityProfile: profile.id });
   };
   return (
     <div class={`model-card${selected ? " is-selected" : ""}`}>

@@ -4,6 +4,7 @@
 compile_error!("The e2e feature adds a WebDriver server and is for debug builds only.");
 pub mod api;
 mod errors;
+mod navigation;
 mod pill;
 mod runtime;
 use onda_core::{
@@ -110,11 +111,14 @@ fn build_main_window(
         .try_state::<Arc<Runtime>>()
         .and_then(|service| service.settings().ok())
         .map_or(ThemePreference::System, |settings| settings.theme);
-    let mut window = tauri::WebviewWindowBuilder::from_config(app, &configuration)?
-        .title(onda_core::APP_NAME)
-        .theme(window_theme(theme))
-        .background_color(chrome_color(is_dark(theme)))
-        .visible(visible);
+    let mut window = navigation::restrict(
+        tauri::WebviewWindowBuilder::from_config(app, &configuration)?,
+        app.config().build.dev_url.as_ref(),
+    )
+    .title(onda_core::APP_NAME)
+    .theme(window_theme(theme))
+    .background_color(chrome_color(is_dark(theme)))
+    .visible(visible);
     // Isolated profiles keep their own browser data, so they can run beside the real app.
     if let Some(directory) = debug_smoke_directory().or_else(debug_dev_profile) {
         window = window.data_directory(directory.join("EBWebView"));
@@ -303,10 +307,13 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .clone()
         .or_else(debug_dev_profile)
         .map(|directory| directory.join("EBWebView"));
-    let mut pill_window = tauri::WebviewWindowBuilder::new(
-        app,
-        pill::LABEL,
-        tauri::WebviewUrl::App("pill.html".into()),
+    let mut pill_window = navigation::restrict(
+        tauri::WebviewWindowBuilder::new(
+            app,
+            pill::LABEL,
+            tauri::WebviewUrl::App("pill.html".into()),
+        ),
+        app.config().build.dev_url.as_ref(),
     );
     if let Some(directory) = webview_data {
         pill_window = pill_window.data_directory(directory);
