@@ -2,7 +2,8 @@
 // mock, run here against Rust on a fresh profile. Together they keep the mock from drifting.
 import { $, expect } from "@wdio/globals";
 import { examplesFor } from "../../contracts/examples.js";
-import { outcome } from "./app.js";
+import { malformedSettingsRequests } from "../../contracts/settings-inputs.js";
+import { outcome, saveSettings, snapshot } from "./app.js";
 
 describe("the real backend on a fresh profile", () => {
   it("is not the labelled development mock", async () => {
@@ -15,4 +16,17 @@ describe("the real backend on a fresh profile", () => {
       expect(await outcome(example.request)).toMatchObject(example.expect);
     });
   }
+
+  it("refuses malformed replacements through IPC and keeps the user's preferences", async () => {
+    const original = (await snapshot()).settings;
+    try {
+      const saved = await saveSettings({ historyDays: 7 });
+      for (const { name, request } of malformedSettingsRequests(saved)) {
+        expect({ name, result: await outcome(request) }).toMatchObject({ name, result: { error: expect.anything() } });
+      }
+      expect((await snapshot()).settings).toEqual(saved);
+    } finally {
+      await saveSettings(original);
+    }
+  });
 });
