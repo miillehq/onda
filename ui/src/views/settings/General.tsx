@@ -1,5 +1,5 @@
 import { Bell, ImagePlus, LogIn, Monitor, Moon, PanelBottom, RotateCcw, Sun, Trash2, X } from "lucide-preact";
-import { useEffect, useState } from "preact/hooks";
+import { useLayoutEffect, useState } from "preact/hooks";
 import { Avatar } from "../../components/Avatar";
 import { Mark } from "../../components/Brand";
 import { Button, Switch } from "../../components/controls";
@@ -14,7 +14,8 @@ function ProfileEditor() {
   const person = profile.value;
   const [name, setName] = useState(person?.name ?? "");
   const [busy, setBusy] = useState(false);
-  useEffect(() => setName(person?.name ?? ""), [person?.name]);
+  // Hydrate before the newly enabled field can receive the first keystroke.
+  useLayoutEffect(() => setName(person?.name ?? ""), [person?.name]);
   const commit = () => {
     if ((person?.name ?? "") !== name.trim()) void setProfileName(name);
   };
