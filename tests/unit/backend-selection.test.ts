@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { chooseBackend } from "../../ui/src/api";
+import { chooseBackend } from "../../ui/src/lib/backendKind";
 
 it("uses the native bridge whenever present and the mock only on a development server", () => {
   expect(chooseBackend(true, false)).toBe("native");

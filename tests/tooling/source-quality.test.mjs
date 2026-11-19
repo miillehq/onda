@@ -4,8 +4,8 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { violations } from "../../scripts/quality/architecture.mjs";
-import { reachableRust } from "../../scripts/quality/rust-modules.mjs";
-import { createParsers, measureSource } from "../../scripts/quality/source-metrics.mjs";
+import { productionRoots, reachableRust } from "../../scripts/quality/rust-modules.mjs";
+import { aggregateTypes, createParsers, measureSource } from "../../scripts/quality/source-metrics.mjs";
 
 let parsers;
 before(async () => { parsers = await createParsers(); });
@@ -37,7 +37,7 @@ test("the Rust module graph follows an off-platform module and its explicit file
   try {
     await mkdir(join(root, "port"));
     const path = (name) => join(root, name);
-    await writeFile(path("lib.rs"), "#[cfg(target_os=\"macos\")]\nmod port;");
+    await writeFile(path("lib.rs"), "#[cfg(target_os=\"macos\")]\nmod port;\n#[cfg(all(windows,test))]\nmod lost;");
     await writeFile(path("port.rs"), "mod worker;\n#[path=\"identity.rs\"] mod named;");
     await writeFile(path("port/worker.rs"), "pub struct Worker;");
     await writeFile(path("identity.rs"), "pub struct Identity;");
@@ -46,4 +46,24 @@ test("the Rust module graph follows an off-platform module and its explicit file
     for (const name of ["port.rs", "identity.rs", "port/worker.rs"]) assert.ok(reached.has(path(name)));
     assert.equal(reached.has(path("lost.rs")), false);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("Cargo test, build, example and benchmark targets cannot make unused production code reachable", () => {
+  const kinds = ["lib", "bin", "test", "example", "bench", "custom-build"];
+  const targets = kinds.map((kind) => ({ kind: [kind], src_path: kind + ".rs" }));
+  assert.deepEqual(productionRoots([{ targets }]), ["lib.rs", "bin.rs"]);
+});
+
+test("qualified implementations attach to the right same-named type and exclude test-only members", () => {
+  const measure = (file, source) => measureSource("crates/example/src/" + file, source, parsers.get(".rs"));
+  const methods = (count) => Array.from({ length: count }, (_, i) => `pub fn f${i}(&self) {}`).join("\n");
+  const files = [
+    measure("a.rs", "pub struct Counter;"),
+    measure("b.rs", "pub struct Counter;"),
+    measure("extra.rs", `impl crate::a::Counter {\n${methods(26)}\n}\nimpl crate::b::Counter {\n${methods(25)}\n#[cfg(test)] pub fn fixture(&self) {}\n}`),
+  ];
+  const owners = aggregateTypes(files);
+  assert.equal(owners.find((item) => item.path.endsWith("/a.rs")).members, 26);
+  assert.equal(owners.find((item) => item.path.endsWith("/b.rs")).members, 25);
+  assert.deepEqual(violations(files).map((item) => item.path), ["crates/example/src/a.rs"]);
 });

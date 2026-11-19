@@ -1,3 +1,5 @@
+import { modifierLabels } from "../../ui/src/lib/modifierLabels";
+import { describeShortcut } from "../../ui/src/lib/shortcutPresentation";
 // L1: the interface's own logic in ui/src/lib, which every view relies on and no Rust test sees.
 import { describe, expect, it } from "vitest";
 import type { DailyUsage, ErrorCode, Settings } from "../../ui/src/generated/core";
@@ -5,8 +7,8 @@ import { DEFAULT_SETTINGS } from "../../ui/src/generated/core";
 import { activityGrid, dayKey, parseDay } from "../../ui/src/lib/activity";
 import { wordDiff } from "../../ui/src/lib/diff";
 import { presentError } from "../../ui/src/lib/errors";
-import { appName, formatBytes, formatClock, formatDuration, greeting, greetingFor, pasteKeys, providerName, routeLabel } from "../../ui/src/lib/format";
-import { cancelChord, chordFrom, keyLabel, modifierLabels, orderedKeys, sameChord, shortcutText, virtualKey, VK } from "../../ui/src/lib/keys";
+import { appName, formatBytes, formatClock, formatDuration, greetingFor, pasteKeys, providerName, routeLabel } from "../../ui/src/lib/format";
+import { cancelChord, chordFrom, keyLabel, orderedKeys, sameChord, virtualKey, VK } from "../../ui/src/lib/keys";
 import { languageName } from "../../ui/src/lib/languages";
 import { levelFromRms, Smoother } from "../../ui/src/lib/level";
 import { micVerdict, micWording } from "../../ui/src/lib/microphone";
@@ -54,7 +56,7 @@ describe("shortcut keys", () => {
 
   it("orders a chord Ctrl, Shift, Alt, Win, then the main key", () => {
     expect(orderedKeys([0x20, VK.leftWin, VK.rightControl])).toEqual([VK.leftControl, VK.leftWin, 0x20]);
-    expect(shortcutText([0x50, VK.leftAlt, VK.leftControl])).toBe("Ctrl + Alt + P");
+    expect(describeShortcut([0x50, VK.leftAlt, VK.leftControl]).text).toBe("Ctrl + Alt + P");
   });
 
   it("treats left and right modifiers as the same chord", () => {
@@ -129,7 +131,7 @@ describe("formatting", () => {
 
   it("greets by the time of day and the first word of the name", () => {
     const at = (hour: number) => new Date(2026, 10, 13, hour);
-    expect([at(3), at(9), at(13), at(20)].map((date) => greeting(date))).toEqual(["Working late", "Good morning", "Good afternoon", "Good evening"]);
+    expect([at(3), at(9), at(13), at(20)].map((date) => greetingFor(null, date))).toEqual(["Working late", "Good morning", "Good afternoon", "Good evening"]);
     expect(greetingFor("  Ada   Lovelace", at(9))).toBe("Good morning, Ada");
     expect(greetingFor("   ", at(9))).toBe("Good morning");
   });

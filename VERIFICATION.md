@@ -124,6 +124,8 @@ with an identical tree.
 | 2026-11-19 | L3 | The release worker used Metal for the pinned public-domain speech fixture, and the CPU-only path explicitly disabled GPU use. | macOS Intel and Apple Silicon | Both [native worker jobs](https://github.com/miillehq/onda/actions/runs/44575355243) reported Metal with CPU recovery false. |
 | 2026-11-19 | L0 | Every target-conditioned Rust module and the renderer fit the documented source limits. A planted orphan Rust module and unused TypeScript file were detected. | windows-x64, local | `npm run lint` and `npm run test:tooling`. The initial structural read counted 3,566 lines for Runtime. The extracted root measures 371. |
 
+| 2026-11-19 | L0 | Qualified implementations attach to the correct same-named Rust type. A test-only method does not increase its production member count, and a module accessible only from tests is reported. Normal and production Knip checks cover the renderer exports independently. | windows-x64, local | The original checker reported zero members for both homonyms and accepted a test-only module. The corrected checker and both Knip modes pass across 181 production files. Dedicated ownership, configuration and Cargo-root fixtures cover the regressions in `tests/tooling/source-quality.test.mjs`. |
+
 ## Unverified
 
 - macOS physical sessions still cover third-party target identity and secure fields, non-US keyboard layouts, the Accessibility consent dialog, grant reset after an unsigned upgrade and shortcut conflicts. Span selection for Undo and native process resource reporting remain unavailable on macOS. Signing and notarization remain deferred by the owner. Hosted Keychain, Metal and WKWebView checks have separate evidence above.

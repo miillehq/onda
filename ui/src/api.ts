@@ -1,3 +1,4 @@
+import { chooseBackend } from "./lib/backendKind";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { ApiRequest, ApiResponse, RuntimeEvent } from "./generated/api";
@@ -9,11 +10,6 @@ export interface Backend {
 }
 
 /** A missing bridge gets the labelled mock only under the development server. */
-export function chooseBackend(hasBridge: boolean, development: boolean): "native" | "mock" | "unavailable" {
-  if (hasBridge) return "native";
-  return development ? "mock" : "unavailable";
-}
-
 export const backendKind = chooseBackend(typeof window !== "undefined" && "__TAURI_INTERNALS__" in window, import.meta.env.DEV);
 const isNative = backendKind === "native";
 
