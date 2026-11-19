@@ -28,14 +28,18 @@ impl Runtime {
             retention: HistoryService {
                 history: Mutex::new(history),
             },
-            recognition: SpeechRecognition::new(worker_directory),
+            recognition: SpeechRecognition::new(&worker_directory),
             rewrites: RewriteEngine {
                 accounts,
                 provider_access: ProviderAccess::new(&data_directory),
             },
             model_library,
             performance: Performance::default(),
-            shortcuts: ShortcutSupervisor::new(helper_config),
+            shortcuts: ShortcutSupervisor::new(
+                helper_config,
+                #[cfg(not(target_os = "macos"))]
+                worker_directory,
+            ),
             updates: Updates::default(),
             pill: crate::pill::Pill::new(settings.show_pill, settings.play_sounds),
         });

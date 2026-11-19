@@ -4,7 +4,6 @@ use super::*;
 pub(super) struct SpeechRecognition {
     pub(super) warm: Mutex<Option<WarmWorker>>,
     pub(super) asr: AsrEngine,
-    pub(super) worker_directory: PathBuf,
 }
 
 impl SpeechRecognition {
@@ -162,10 +161,9 @@ impl SpeechRecognition {
 }
 
 impl SpeechRecognition {
-    pub(super) fn new(worker_directory: PathBuf) -> Self {
+    pub(super) fn new(worker_directory: &std::path::Path) -> Self {
         Self {
-            asr: AsrEngine::new(&worker_directory),
-            worker_directory,
+            asr: AsrEngine::new(worker_directory),
             warm: Mutex::default(),
         }
     }
