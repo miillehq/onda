@@ -5,7 +5,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
-/// The statistics card is drawn at 1200×630 (2× for sharp text), well under these limits.
+/// The statistics card is drawn at 1200×630, well under these limits.
 const MAX_EXPORT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_EXPORT_DIMENSION: u32 = 4096;
 /// Two samples this far apart give a CPU share without keeping the report waiting long.
