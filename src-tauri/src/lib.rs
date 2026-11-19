@@ -58,10 +58,13 @@ fn isolated() -> bool {
 
 #[tauri::command]
 async fn application_call(
-    request: api::ApiRequest,
+    request: serde_json::Value,
     service: tauri::State<'_, Arc<Runtime>>,
 ) -> AppResult<api::ApiResponse> {
-    service.inner().dispatch(request).await
+    service
+        .inner()
+        .dispatch(api::ApiRequest::decode(request)?)
+        .await
 }
 
 pub(crate) fn show_main(app: &tauri::AppHandle) {

@@ -24,6 +24,7 @@ path = "examples/api_contracts.rs"
 tauri-build = { version = "2.6", features = [] }
 
 [dependencies]
+schemars = { version = "1.2", optional = true }
 onda-core = { path = "../crates/onda-core" }
 onda-platform = { path = "../crates/onda-platform" }
 onda-input = { path = "../crates/onda-input" }
@@ -55,6 +56,7 @@ tauri-plugin-wdio = { version = "1", optional = true }
 tauri-plugin-wdio-webdriver = { version = "1", optional = true }
 
 [features]
+wire-schema = ["dep:schemars", "onda-core/wire-schema"]
 e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [target.'cfg(target_os = "linux")'.dependencies]

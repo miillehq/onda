@@ -9,6 +9,7 @@ pub const DEFAULT_HISTORY_DAYS: u32 = 3;
 pub const MAX_HISTORY_DAYS: u32 = 30;
 pub const MAX_PROVIDER_SETTING_BYTES: usize = 2048;
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ExecutionPreference {
@@ -17,6 +18,7 @@ pub enum ExecutionPreference {
     GpuPreferred,
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum QualityProfile {
@@ -27,6 +29,7 @@ pub enum QualityProfile {
 }
 
 /// Window appearance; `System` follows the Windows app theme.
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ThemePreference {
@@ -37,6 +40,7 @@ pub enum ThemePreference {
 
 /// Colour of the notification-area (tray) mark. `Auto` picks white on a dark taskbar and black on
 /// a light one; the fixed choices are for taskbars Onda cannot read, such as Linux panels.
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum TrayIconStyle {
@@ -47,6 +51,7 @@ pub enum TrayIconStyle {
 
 /// Where AI polish, rewrites and spoken edits send text. Only the chosen provider is ever used:
 /// a failure keeps the local text and never retries with another provider.
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum AiProvider {
@@ -60,6 +65,7 @@ pub enum AiProvider {
     Local,
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PasteShortcut {
@@ -69,12 +75,14 @@ pub enum PasteShortcut {
 }
 
 /// Virtual-key chord interpreted only by the native shortcut process.
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Shortcut {
     pub keys: Vec<u16>,
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AppProfile {
@@ -86,6 +94,7 @@ pub struct AppProfile {
 }
 
 /// Durable preferences contain no tokens, transcripts or microphone recordings.
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -296,6 +305,7 @@ impl Settings {
     }
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum EntrySource {
@@ -304,6 +314,7 @@ pub enum EntrySource {
     Imported,
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum DictionaryKind {
@@ -311,6 +322,7 @@ pub enum DictionaryKind {
     Replacement,
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DictionaryEntry {
@@ -323,6 +335,7 @@ pub struct DictionaryEntry {
     pub source: EntrySource,
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Snippet {
@@ -332,6 +345,7 @@ pub struct Snippet {
     pub enabled: bool,
 }
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Transform {

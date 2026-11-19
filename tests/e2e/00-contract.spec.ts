@@ -3,9 +3,13 @@
 import { $, expect } from "@wdio/globals";
 import { examplesFor } from "../../contracts/examples.js";
 import { malformedSettingsRequests } from "../../contracts/settings-inputs.js";
+import { malformedRequests, shapeError } from "../../contracts/malformed-requests.js";
 import { outcome, saveSettings, snapshot } from "./app.js";
 
 describe("the real backend on a fresh profile", () => {
+  it("rejects malformed command envelopes through the real bridge", async () => {
+    for (const request of malformedRequests) expect(await outcome(request)).toMatchObject({ error: shapeError });
+  });
   it("is not the labelled development mock", async () => {
     await expect($('[data-testid="backend-badge"]')).not.toExist();
   });
