@@ -216,8 +216,12 @@ export const MACOS_DEFAULT_SETTINGS: Settings = {
   "localModel": null
 };
 
-/** Limits enforced by `Settings::validate` and the profile. */
+/** Limits enforced by settings, profile and dictionary validation. */
 export const LIMITS = {
+  "maxDictionaryArchiveBytes": 51200256,
+  "maxDictionaryEntries": 20000,
+  "maxDictionaryIdBytes": 64,
+  "maxDictionaryTermCharacters": 160,
   "maxHistoryDays": 30,
   "maxNameCharacters": 40,
   "maxProviderSettingBytes": 2048,

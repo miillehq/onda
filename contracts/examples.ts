@@ -80,5 +80,19 @@ export const dictionaryEntries: Example[] = [
   { name: "the saved word is removed", request: { command: "deleteDictionaryEntry", args: { id: "contract-word" } }, expect: { response: { type: "unit" } } },
 ];
 
+const archivedWord = {
+  id: "archive-example", phrase: "Archive contract word", kind: "vocabulary",
+  replacement: null, enabled: true, starred: false, source: "manual",
+} as const;
+const importArchive = (entry: unknown): ApiRequest => ({
+  command: "importDictionary", args: { json: JSON.stringify({ version: 1, entries: [entry] }) },
+});
+
+const dictionaryArchives: Example[] = [
+  { name: "imports a new backup word", request: importArchive(archivedWord), expect: { response: { type: "count", payload: 1 } } },
+  { name: "reimporting a normalized word is idempotent", request: importArchive({ ...archivedWord, phrase: archivedWord.phrase.toUpperCase() }), expect: { response: { type: "count", payload: 0 } } },
+  { name: "an unexpected backup field identifies its record", request: importArchive({ ...archivedWord, extra: true }), expect: refused("Dictionary entry 1 is malformed at line 1.") },
+];
+
 /** Every example, in order, for a backend on macOS (`macos`) or on Windows and Linux. */
-export const examplesFor = (macos: boolean): Example[] => [...freshProfile(macos), ...settingsRefusals, ...profileNames, ...dictionaryEntries];
+export const examplesFor = (macos: boolean): Example[] => [...freshProfile(macos), ...settingsRefusals, ...profileNames, ...dictionaryEntries, ...dictionaryArchives];

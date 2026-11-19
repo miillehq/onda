@@ -1,4 +1,5 @@
 //! Parameterized SQLite transactions; migrations never erase unknown/newer data.
+mod archives;
 mod history;
 mod preferences;
 
@@ -33,7 +34,6 @@ const MAX_HISTORY_PAYLOAD_BYTES: usize = 1024 * 1024;
 const MAX_USAGE_DAYS: i64 = 400;
 const DATABASE_BUSY_TIMEOUT: Duration = Duration::from_secs(3);
 const MILLIS_PER_DAY: i64 = 86_400_000;
-const MAX_IMPORT_BYTES: usize = 4 * 1024 * 1024;
 const MAX_SNIPPETS: usize = 2000;
 const MAX_TRANSFORMS: usize = 256;
 
@@ -98,12 +98,14 @@ impl Store {
 
     pub fn save_dictionary_entry(&mut self, entry: &DictionaryEntry) -> AppResult<()> {
         validate_dictionary_entry(entry)?;
-        let count: i64 = self
+        let transaction = self
             .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(|_| AppError::storage())?;
+        let count: i64 = transaction
             .query_row("SELECT COUNT(*) FROM dictionary", [], |row| row.get(0))
             .map_err(|_| AppError::storage())?;
-        let exists: bool = self
-            .connection
+        let exists: bool = transaction
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM dictionary WHERE id=?1)",
                 [&entry.id],
@@ -113,10 +115,6 @@ impl Store {
         if count >= MAX_DICTIONARY_ENTRIES as i64 && !exists {
             return Err(AppError::invalid("Dictionary entry limit reached."));
         }
-        let transaction = self
-            .connection
-            .transaction()
-            .map_err(|_| AppError::storage())?;
         upsert_dictionary(&transaction, entry)?;
         transaction.commit().map_err(|_| AppError::storage())?;
         Ok(())
@@ -136,51 +134,6 @@ impl Store {
             entries: self.dictionary()?,
         })
         .map_err(|_| AppError::storage())
-    }
-
-    /// Entire import validates before a transaction; duplicates merge by normalized trigger.
-    pub fn import_dictionary(&mut self, source: &str) -> AppResult<usize> {
-        if source.len() > MAX_IMPORT_BYTES {
-            return Err(AppError::invalid("Dictionary import exceeds 4 MiB."));
-        }
-        let archive: DictionaryArchive = serde_json::from_str(source)
-            .map_err(|_| AppError::invalid("Dictionary archive is malformed."))?;
-        if archive.version != 1 || archive.entries.len() > MAX_DICTIONARY_ENTRIES {
-            return Err(AppError::invalid(
-                "Unsupported dictionary archive version or entry count.",
-            ));
-        }
-        let mut merged: std::collections::BTreeMap<String, DictionaryEntry> = self
-            .dictionary()?
-            .into_iter()
-            .map(|entry| (lookup_key(&entry.phrase), entry))
-            .collect();
-        let mut added = 0;
-        for mut entry in archive.entries {
-            validate_dictionary_entry(&entry)?;
-            let key = lookup_key(&entry.phrase);
-            if merged.contains_key(&key) {
-                continue;
-            }
-            entry.id = uuid::Uuid::new_v4().to_string();
-            entry.source = EntrySource::Imported;
-            merged.insert(key, entry);
-            added += 1;
-        }
-        if merged.len() > MAX_DICTIONARY_ENTRIES {
-            return Err(AppError::invalid(
-                "Import would exceed the dictionary entry limit.",
-            ));
-        }
-        let transaction = self
-            .connection
-            .transaction()
-            .map_err(|_| AppError::storage())?;
-        for entry in merged.values() {
-            upsert_dictionary(&transaction, entry)?;
-        }
-        transaction.commit().map_err(|_| AppError::storage())?;
-        Ok(added)
     }
 
     pub fn snippets(&self) -> AppResult<Vec<Snippet>> {
@@ -419,9 +372,9 @@ fn saturating_u32(value: i64) -> u32 {
 
 pub fn validate_dictionary_entry(entry: &DictionaryEntry) -> AppResult<()> {
     if entry.id.is_empty()
-        || entry.id.len() > 64
+        || entry.id.len() > crate::MAX_DICTIONARY_ID_BYTES
         || entry.phrase.trim().is_empty()
-        || entry.phrase.chars().count() > 160
+        || entry.phrase.chars().count() > crate::MAX_DICTIONARY_TERM_CHARS
         || !entry.phrase.chars().any(char::is_alphanumeric)
         || entry.phrase.contains('\0')
     {
@@ -433,7 +386,7 @@ pub fn validate_dictionary_entry(entry: &DictionaryEntry) -> AppResult<()> {
         (DictionaryKind::Vocabulary, None) => Ok(()),
         (DictionaryKind::Replacement, Some(replacement))
             if !replacement.trim().is_empty()
-                && replacement.chars().count() <= 160
+                && replacement.chars().count() <= crate::MAX_DICTIONARY_TERM_CHARS
                 && !replacement.contains('\0') =>
         {
             Ok(())

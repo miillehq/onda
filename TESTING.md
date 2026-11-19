@@ -35,6 +35,7 @@ dispatcher by the contract suite before any test depends on it.
 | Dictionary, snippets and settings survive a restart | L3 storage in `crates/onda-core/src/persistence.rs`. L6 settings and dictionary in `tests/e2e/01-change.spec.ts` and `02-restart.spec.ts`. L1 settings replacement in `src-tauri/tests/settings_requests.rs`. L2/L6 malformed inputs in `contracts/settings-inputs.ts`, exercised by `tests/unit/contract.test.ts` and `tests/e2e/00-contract.spec.ts`. |
 | History retention and statistics | L3 retention rollback and future schema refusal in `crates/onda-core/tests/profile_storage.rs`. Temporary unlock failures, expiry and delayed writes in `src-tauri/src/runtime/history/tests.rs`. Atomic PNG saves in `src-tauri/src/runtime/stats_export.rs`. Browser coverage in `tests/ui/history.spec.ts` and `tests/ui/stats.spec.ts`. |
 | Install, upgrade, uninstall | L3 migrations, L7 on each OS family |
+| Restore a dictionary backup | L3 large round trips, malformed rows and oversized inputs in `crates/onda-core/tests/dictionary_archives.rs`. L2/L6 import and duplicate handling in `contracts/examples.ts`, executed by `tests/unit/contract.test.ts` and `tests/e2e/00-contract.spec.ts`. |
 
 Coverage is tracked per journey in this table, never as a percentage. A change that removes a
 level from a journey needs a replacement that proves the same behaviour first.

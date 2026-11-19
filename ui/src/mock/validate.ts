@@ -75,9 +75,9 @@ export function validateDictionaryEntry(entry: DictionaryEntry): AppError | null
   const characters = (text: string) => [...text].length;
   if (
     entry.id.length === 0 ||
-    utf8Length(entry.id) > 64 ||
+    utf8Length(entry.id) > LIMITS.maxDictionaryIdBytes ||
     entry.phrase.trim().length === 0 ||
-    characters(entry.phrase) > 160 ||
+    characters(entry.phrase) > LIMITS.maxDictionaryTermCharacters ||
     !/[\p{L}\p{N}]/u.test(entry.phrase) ||
     entry.phrase.includes("\0")
   ) {
@@ -87,7 +87,7 @@ export function validateDictionaryEntry(entry: DictionaryEntry): AppError | null
   const valid =
     entry.kind === "vocabulary"
       ? replacement === null
-      : replacement !== null && replacement.trim().length > 0 && characters(replacement) <= 160 && !replacement.includes("\0");
+      : replacement !== null && replacement.trim().length > 0 && characters(replacement) <= LIMITS.maxDictionaryTermCharacters && !replacement.includes("\0");
   return valid ? null : invalid("Vocabulary has no replacement; a correction needs an output phrase.");
 }
 
