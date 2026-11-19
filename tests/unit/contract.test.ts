@@ -6,6 +6,8 @@
 // drift from the backend without a red on one side.
 import { describe, expect, it } from "vitest";
 import { examplesFor, type Example } from "../../contracts/examples";
+import { malformedSettingsRequests } from "../../contracts/settings-inputs";
+import { DEFAULT_SETTINGS } from "../../ui/src/generated/core";
 import { createMockBackend } from "../../ui/src/mock/backend";
 
 const backend = createMockBackend();
@@ -25,4 +27,13 @@ describe("the development mock on a fresh install", () => {
       expect(await outcome(example)).toMatchObject(example.expect);
     });
   }
+
+  it("refuses malformed replacements and keeps the user's preferences", async () => {
+    const saved = { ...structuredClone(DEFAULT_SETTINGS), historyDays: 7 };
+    await backend.call({ command: "updateSettings", args: { settings: saved } });
+    for (const { name, request } of malformedSettingsRequests(saved)) {
+      await expect(backend.call(request), name).rejects.toMatchObject({ code: "invalidInput" });
+    }
+    expect(await backend.call({ command: "getSettings" })).toEqual({ type: "settings", payload: saved });
+  });
 });
