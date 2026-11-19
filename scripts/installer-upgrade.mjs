@@ -121,8 +121,7 @@ async function install(packagePath, work, format, first) {
   if (format === "dmg") return installMac(packagePath, work);
   if (format === "nsis") {
     const directory = join(work, "install");
-    // NSIS consumes the remainder of the command line as its /D directory.
-    run(packagePath, ["/S", `/D=${directory}`], { windowsVerbatimArguments: true });
+    nsis("install", directory, packagePath);
     return [join(directory, "onda.exe"), []];
   }
   if (format === "deb") {
@@ -134,6 +133,13 @@ async function install(packagePath, work, format, first) {
   await copyFile(packagePath, installed);
   await chmod(installed, 0o755);
   return [installed, ["--appimage-extract-and-run"]];
+}
+
+function nsis(action, directory, installer) {
+  const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "scripts/upgrade-nsis.ps1",
+    "-Action", action, "-InstallDirectory", directory];
+  if (installer) args.push("-InstallerPath", installer);
+  run("powershell.exe", args);
 }
 
 async function upgradeFormat(previous, candidate, format, versions, runnerTemp) {
@@ -152,7 +158,7 @@ async function upgradeFormat(previous, candidate, format, versions, runnerTemp) 
     upgraded = true;
     console.log(`${format} retained its multiline snippet through profile schema ${versions.previous} → ${versions.candidate}.`);
   } finally {
-    if (installed && format === "nsis") run(join(work, "install/uninstall.exe"), ["/S"]);
+    if (installed && format === "nsis") nsis("uninstall", join(work, "install"));
     if (installed && format === "deb") run("sudo", ["apt-get", "remove", "-y", "onda"]);
     if (upgraded && (format === "deb" || format === "nsis")) checkDatabase(data, versions.candidate, false);
     const owned = await realpath(work);
