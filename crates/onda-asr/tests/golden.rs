@@ -2,6 +2,16 @@
 use onda_asr::{AsrEngine, CancellationToken, ExecutionPreference, TranscriptionOptions};
 use std::path::PathBuf;
 
+fn jfk_audio() -> Vec<f32> {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/asr/jfk.wav");
+    let mut reader = hound::WavReader::open(fixture).expect("fixture");
+    reader
+        .samples::<i16>()
+        .map(|sample| sample.expect("PCM16") as f32 / 32768.0)
+        .collect()
+}
+
 #[tokio::test]
 #[ignore = "requires ONDA_ASR_TEST_MODEL and ONDA_ASR_WORKER_DIR; downloads no assets implicitly"]
 async fn real_model_transcribes_public_domain_jfk_audio() {
@@ -9,13 +19,7 @@ async fn real_model_transcribes_public_domain_jfk_audio() {
         PathBuf::from(std::env::var_os("ONDA_ASR_TEST_MODEL").expect("set ONDA_ASR_TEST_MODEL"));
     let worker =
         PathBuf::from(std::env::var_os("ONDA_ASR_WORKER_DIR").expect("set ONDA_ASR_WORKER_DIR"));
-    let fixture =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/asr/jfk.wav");
-    let mut reader = hound::WavReader::open(fixture).expect("fixture");
-    let samples: Vec<f32> = reader
-        .samples::<i16>()
-        .map(|sample| sample.expect("PCM16") as f32 / 32768.0)
-        .collect();
+    let samples = jfk_audio();
     let mut options = TranscriptionOptions::new(model);
     options.preference = ExecutionPreference::CpuOnly;
     options.language = Some("en".into());
@@ -44,6 +48,8 @@ async fn real_model_transcribes_public_domain_jfk_audio() {
         result.text
     );
     assert!(result.inference_ms > 0);
+    assert_eq!(result.backend, onda_asr::ExecutionBackend::Cpu);
+    assert!(!result.accelerator_fallback);
 }
 
 #[tokio::test]
@@ -65,13 +71,7 @@ async fn gpu_probe_failure_falls_back_to_real_cpu_transcription() {
     }];
     // A CPU worker gives honest zero Vulkan device evidence, so the real CPU path must run.
     let engine = AsrEngine::with_workers(cpu_worker.clone(), Some(cpu_worker), hardware);
-    let fixture =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/asr/jfk.wav");
-    let mut reader = hound::WavReader::open(fixture).expect("fixture");
-    let samples: Vec<f32> = reader
-        .samples::<i16>()
-        .map(|sample| sample.expect("PCM16") as f32 / 32768.0)
-        .collect();
+    let samples = jfk_audio();
     let mut options = TranscriptionOptions::new(model);
     options.language = Some("en".into());
     options.preference = ExecutionPreference::GpuPreferred;
@@ -104,4 +104,31 @@ async fn cancelled_native_inference_kills_worker_without_losing_shell() {
         .transcribe(&samples, options, cancellation)
         .await;
     assert!(matches!(result, Err(onda_asr::AsrError::Cancelled)));
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+#[ignore = "requires the bundled Mac worker and the pinned model"]
+async fn macos_accelerated_request_transcribes_or_recovers_on_the_cpu() {
+    let model = PathBuf::from(std::env::var_os("ONDA_ASR_TEST_MODEL").expect("set model"));
+    let workers =
+        PathBuf::from(std::env::var_os("ONDA_ASR_WORKER_DIR").expect("set worker directory"));
+    let mut options = TranscriptionOptions::new(model);
+    options.preference = ExecutionPreference::GpuPreferred;
+    options.language = Some("en".into());
+    let result = AsrEngine::new(&workers)
+        .transcribe(&jfk_audio(), options, CancellationToken::new())
+        .await
+        .expect("Mac worker transcription");
+    assert!(result.text.to_lowercase().contains("your country"));
+    let expected = if result.accelerator_fallback {
+        onda_asr::ExecutionBackend::Cpu
+    } else {
+        onda_asr::ExecutionBackend::Metal
+    };
+    assert_eq!(result.backend, expected);
+    println!(
+        "Mac speech fixture used {:?}, CPU recovery={}",
+        result.backend, result.accelerator_fallback
+    );
 }

@@ -72,9 +72,9 @@ pub(crate) fn protected_ranges(source: &str) -> Vec<Range<usize>> {
 }
 
 /// Characters after which a new dictation continues without a space.
-const OPENING_CHARACTERS: &str = "([{<“‘«„¿¡";
+const OPENING_CHARACTERS: &str = "([{<“‘«„¿¡（［｛〈《「『【〔〖〘〚";
 /// Characters a dictation can start with that attach to the previous word.
-const ATTACHING_CHARACTERS: &str = ".,;:!?)]}>”’»%…";
+const ATTACHING_CHARACTERS: &str = ".,;:!?)]}>”’»%…。．、，；：！？）］｝〉》」』】〕〗〙〛％،؛؟۔";
 
 /// Text typed at the caret, with a separating space when it would otherwise run into the
 /// earlier text: after a sentence's final period, a word or a closing quote, but not after
@@ -419,6 +419,10 @@ mod tests {
             ("done", ", and more", ", and more"),
             ("50", "% off", "% off"),
             ("x.", " already spaced", " already spaced"),
+            ("台", "。", "。"),
+            ("語", "，接著", "，接著"),
+            ("「", "言葉", "言葉"),
+            ("語", "」", "」"),
         ] {
             assert_eq!(
                 space_after_previous_text(before, text),
