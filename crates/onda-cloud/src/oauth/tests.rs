@@ -513,6 +513,8 @@ async fn jwt_rejects_wrong_signature_issuer_audience_nonce_and_expiration() {
     let key = EncodingKey::from_rsa_pem(PRIVATE_KEY).unwrap();
     let token = encode(&header, &valid, &key).unwrap();
     assert!(service
+        .inner
+        .authority
         .verify_identity(&token, "oaiapp_test", Some("nonce"))
         .await
         .is_ok());
@@ -528,6 +530,8 @@ async fn jwt_rejects_wrong_signature_issuer_audience_nonce_and_expiration() {
         assert!(
             matches!(
                 service
+                    .inner
+                    .authority
                     .verify_identity(&token, "oaiapp_test", Some("nonce"))
                     .await,
                 Err(CloudError::InvalidIdentity)
@@ -548,6 +552,8 @@ async fn jwt_rejects_wrong_signature_issuer_audience_nonce_and_expiration() {
     };
     assert!(matches!(
         service
+            .inner
+            .authority
             .verify_identity(
                 std::str::from_utf8(&wrong_signature).unwrap(),
                 "oaiapp_test",

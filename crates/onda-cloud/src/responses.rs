@@ -60,8 +60,9 @@ impl ChatGptService {
         let token = self.access_token(profile_id).await?;
         let response = self
             .inner
+            .authority
             .http
-            .get(&self.inner.endpoints.models)
+            .get(&self.inner.authority.endpoints.models)
             .timeout(CATALOG_TIMEOUT)
             .bearer_auth(token.as_str())
             .send()
@@ -140,8 +141,9 @@ impl ChatGptService {
         };
         let response = self
             .inner
+            .authority
             .http
-            .post(&self.inner.endpoints.responses)
+            .post(&self.inner.authority.endpoints.responses)
             .bearer_auth(token.as_str())
             .json(&body)
             .header(reqwest::header::ACCEPT, "text/event-stream")
@@ -283,37 +285,7 @@ impl ResponseState {
                 }
             }
             "response.completed" => {
-                let response = value
-                    .get("response")
-                    .ok_or_else(|| malformed("completion has no response", event_type))?;
-                if response.get("status").and_then(|status| status.as_str()) != Some("completed") {
-                    return Err(malformed("completion status is not completed", event_type));
-                }
-                // The plan endpoint completes with an empty `output`; the finished items arrive
-                // as `response.output_item.done`. Whichever full text is present must equal the
-                // deltas, so a dropped delta is still caught.
-                let final_text = completed_text(response)?;
-                let reference = if final_text.is_empty() {
-                    std::mem::take(&mut self.item_text)
-                } else {
-                    final_text
-                };
-                if self.text.is_empty() {
-                    self.text = reference.clone();
-                }
-                if self.text.trim().is_empty() {
-                    return Err(malformed("no text was streamed", event_type));
-                }
-                if !reference.is_empty() && self.text != reference {
-                    return Err(malformed(
-                        "completed text differs from the stream",
-                        event_type,
-                    ));
-                }
-                self.response_id = response
-                    .get("id")
-                    .and_then(|value| value.as_str())
-                    .and_then(safe_identifier);
+                self.complete_response(&value, event_type)?;
                 return Ok(true);
             }
             "response.failed" => {
@@ -412,6 +384,44 @@ fn message_text(item: &serde_json::Value, event_type: &str) -> Result<String> {
         result.push_str(text);
     }
     Ok(result)
+}
+
+impl ResponseState {
+    /// Reconcile the terminal response with streamed items before accepting any output.
+    fn complete_response(&mut self, value: &serde_json::Value, event_type: &str) -> Result<()> {
+        let response = value
+            .get("response")
+            .ok_or_else(|| malformed("completion has no response", event_type))?;
+        if response.get("status").and_then(|status| status.as_str()) != Some("completed") {
+            return Err(malformed("completion status is not completed", event_type));
+        }
+        // The plan endpoint completes with an empty `output`; the finished items arrive
+        // as `response.output_item.done`. Whichever full text is present must equal the
+        // deltas, so a dropped delta is still caught.
+        let final_text = completed_text(response)?;
+        let reference = if final_text.is_empty() {
+            std::mem::take(&mut self.item_text)
+        } else {
+            final_text
+        };
+        if self.text.is_empty() {
+            self.text = reference.clone();
+        }
+        if self.text.trim().is_empty() {
+            return Err(malformed("no text was streamed", event_type));
+        }
+        if !reference.is_empty() && self.text != reference {
+            return Err(malformed(
+                "completed text differs from the stream",
+                event_type,
+            ));
+        }
+        self.response_id = response
+            .get("id")
+            .and_then(|value| value.as_str())
+            .and_then(safe_identifier);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

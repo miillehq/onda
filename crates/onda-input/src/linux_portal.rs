@@ -74,60 +74,7 @@ pub fn run() -> Result<(), InputError> {
         .name("onda-portal-commands".into())
         .spawn(move || read_commands(&active))?;
 
-    let portal = Portal::connect().map_err(unsupported)?;
-    if portal.version(GLOBAL_SHORTCUTS).is_none() {
-        return Err(InputError::Helper("unsupported".into()));
-    }
-    let token = portal.token();
-    let session_token = portal.token();
-    let created = portal
-        .request(
-            GLOBAL_SHORTCUTS,
-            "CreateSession",
-            &(Options::from([
-                ("handle_token", Value::from(token.as_str())),
-                ("session_handle_token", Value::from(session_token.as_str())),
-            ]),),
-            &token,
-        )
-        .map_err(unsupported)?;
-    let session = session_handle(&created).map_err(unsupported)?;
-    let session_path =
-        ObjectPath::try_from(session.as_str()).map_err(|_| InputError::Helper("failed".into()))?;
-
-    // Listen before binding, so a press right after approval is not lost.
-    let signals = |member: &str| -> Result<MessageIterator, InputError> {
-        let rule = MatchRule::builder()
-            .msg_type(MessageType::Signal)
-            .interface(GLOBAL_SHORTCUTS)
-            .and_then(|rule| rule.member(member.to_owned()))
-            .and_then(|rule| rule.path(PATH))
-            .map_err(|_| InputError::Helper("failed".into()))?
-            .build();
-        MessageIterator::for_match_rule(rule, portal.connection(), Some(64))
-            .map_err(|_| InputError::Helper("failed".into()))
-    };
-    let activated = signals("Activated")?;
-    let deactivated = signals("Deactivated")?;
-
-    let shortcuts = shortcuts(&config);
-    let token = portal.token();
-    portal
-        .request(
-            GLOBAL_SHORTCUTS,
-            "BindShortcuts",
-            &(
-                &session_path,
-                shortcuts,
-                "",
-                Options::from([("handle_token", Value::from(token.as_str()))]),
-            ),
-            &token,
-        )
-        .map_err(|error| match error {
-            PlatformError::Cancelled => InputError::Helper("declined".into()),
-            other => unsupported(other),
-        })?;
+    let (_portal, session, activated, deactivated) = bind_shortcuts(&config)?;
     emit(
         &output,
         &HelperEvent::Ready {
@@ -650,4 +597,65 @@ mod tests {
             [(true, ShortcutAction::Cancel)]
         );
     }
+}
+
+/// Retain the connection for the lifetime of the bound session and subscribe before approval.
+fn bind_shortcuts(
+    config: &HelperConfig,
+) -> Result<(Portal, String, MessageIterator, MessageIterator), InputError> {
+    let portal = Portal::connect().map_err(unsupported)?;
+    if portal.version(GLOBAL_SHORTCUTS).is_none() {
+        return Err(InputError::Helper("unsupported".into()));
+    }
+    let token = portal.token();
+    let session_token = portal.token();
+    let created = portal
+        .request(
+            GLOBAL_SHORTCUTS,
+            "CreateSession",
+            &(Options::from([
+                ("handle_token", Value::from(token.as_str())),
+                ("session_handle_token", Value::from(session_token.as_str())),
+            ]),),
+            &token,
+        )
+        .map_err(unsupported)?;
+    let session = session_handle(&created).map_err(unsupported)?;
+    let session_path =
+        ObjectPath::try_from(session.as_str()).map_err(|_| InputError::Helper("failed".into()))?;
+
+    // Listen before binding, so a press right after approval is not lost.
+    let signals = |member: &str| -> Result<MessageIterator, InputError> {
+        let rule = MatchRule::builder()
+            .msg_type(MessageType::Signal)
+            .interface(GLOBAL_SHORTCUTS)
+            .and_then(|rule| rule.member(member.to_owned()))
+            .and_then(|rule| rule.path(PATH))
+            .map_err(|_| InputError::Helper("failed".into()))?
+            .build();
+        MessageIterator::for_match_rule(rule, portal.connection(), Some(64))
+            .map_err(|_| InputError::Helper("failed".into()))
+    };
+    let activated = signals("Activated")?;
+    let deactivated = signals("Deactivated")?;
+
+    let shortcuts = shortcuts(config);
+    let token = portal.token();
+    portal
+        .request(
+            GLOBAL_SHORTCUTS,
+            "BindShortcuts",
+            &(
+                &session_path,
+                shortcuts,
+                "",
+                Options::from([("handle_token", Value::from(token.as_str()))]),
+            ),
+            &token,
+        )
+        .map_err(|error| match error {
+            PlatformError::Cancelled => InputError::Helper("declined".into()),
+            other => unsupported(other),
+        })?;
+    Ok((portal, session, activated, deactivated))
 }

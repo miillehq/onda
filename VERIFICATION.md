@@ -122,6 +122,8 @@ with an identical tree.
 
 | 2026-11-19 | L1, L3, L4, L6 | Deleting a custom default selects Polish in the same database transaction. Opening an older dangling default restores it and preserves edited built-ins. Editors preserve surrounding whitespace. The real bridge refuses a rewrite retry after its endpoint changes. | windows-x64, local | `cargo test --locked -p onda-core --test default_rewrite` originally returned the deleted ID and subsequently passed both SQLite cases. Chromium previously trimmed the saved trigger and instruction. The native retry test originally returned the new destination’s model error. All three native spec files subsequently passed. |
 
+| 2026-11-19 | L1–L3 characterization | Native library suites preserve audio capture, verified worker and model policy, OAuth, storage and shortcut behavior after their owners were separated. | windows-x64, local | `cargo test --locked --workspace --exclude onda-app` passed 182 active cases in the refactored libraries. Conditional Windows, Linux and macOS paths also remain in the hosted jobs. |
+
 ## Unverified
 
 - macOS: dictation into other apps on a real Mac. Accessibility paste is built and checked on the
