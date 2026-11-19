@@ -245,34 +245,11 @@ pub fn resample_to_16khz(input: &[f32], input_rate: u32) -> Result<Vec<f32>, Pla
     if input_rate == OUTPUT_SAMPLE_RATE {
         return Ok(input.to_vec());
     }
-    let mut resampler = FftFixedInOut::<f32>::new(
-        input_rate as usize,
-        OUTPUT_SAMPLE_RATE as usize,
-        RESAMPLE_CHUNK_SIZE,
-        1,
-    )
-    .map_err(|error| PlatformError::Audio(error.to_string()))?;
-    let delay = resampler.output_delay();
-    let wanted = (input.len() as u64 * OUTPUT_SAMPLE_RATE as u64 / input_rate as u64) as usize;
-    let mut output = Vec::with_capacity(wanted + delay + resampler.output_frames_max());
-    let mut position = 0;
-    while position < input.len() || output.len() < wanted + delay {
-        let frames = resampler.input_frames_next();
-        let end = (position + frames).min(input.len());
-        let mut block = vec![0.0; frames];
-        if position < input.len() {
-            block[..end - position].copy_from_slice(&input[position..end]);
-        }
-        let resampled = resampler
-            .process(&[block], None)
-            .map_err(|error| PlatformError::Audio(error.to_string()))?;
-        output.extend_from_slice(&resampled[0]);
-        position = end;
+    let mut recording = RecordingBuffer::with_frame_limit(input_rate, 1, input.len())?;
+    for &sample in input {
+        recording.push(sample)?;
     }
-    output.drain(..delay);
-    output.truncate(wanted);
-    clamp_overshoot(&mut output);
-    Ok(output)
+    Ok(recording.finish()?.samples)
 }
 
 /// Resampling a clipped recording rings slightly past full scale; the speech workers accept
@@ -324,6 +301,22 @@ struct RecordingBuffer {
 
 impl RecordingBuffer {
     fn new(source_rate: u32, channels: u16, seconds: u32) -> Result<Self, PlatformError> {
+        let frames = (source_rate as usize)
+            .checked_mul(seconds as usize)
+            .ok_or_else(|| {
+                PlatformError::Audio("recording length exceeds addressable memory".into())
+            })?;
+        Self::with_frame_limit(source_rate, channels, frames)
+    }
+
+    fn with_frame_limit(
+        source_rate: u32,
+        channels: u16,
+        source_limit: usize,
+    ) -> Result<Self, PlatformError> {
+        if source_rate == 0 {
+            return Err(PlatformError::Audio("invalid sample rate".into()));
+        }
         let resampler = if source_rate == OUTPUT_SAMPLE_RATE {
             None
         } else {
@@ -342,14 +335,23 @@ impl RecordingBuffer {
         let delay_remaining = resampler.as_ref().map_or(0, Resampler::output_delay);
         let mut output = Vec::new();
         output
-            .try_reserve_exact(OUTPUT_SAMPLE_RATE as usize * seconds as usize + output_size)
+            .try_reserve_exact(
+                usize::try_from(
+                    source_limit as u128 * u128::from(OUTPUT_SAMPLE_RATE) / u128::from(source_rate),
+                )
+                .ok()
+                .and_then(|count| count.checked_add(output_size))
+                .ok_or_else(|| {
+                    PlatformError::Audio("recording length exceeds addressable memory".into())
+                })?,
+            )
             .map_err(|_| PlatformError::Audio("recording memory unavailable".into()))?;
         Ok(Self {
             output,
             source_rate,
             channels,
             source_frames: 0,
-            source_limit: source_rate as usize * seconds as usize,
+            source_limit,
             peak: 0.0,
             energy: 0.0,
             clipped: 0,
@@ -433,6 +435,39 @@ impl RecordingBuffer {
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 mod native;
 
+/// Independent batch oracle for the streaming converter's delay and tail handling.
+#[cfg(test)]
+fn reference_resample(input: &[f32], input_rate: u32) -> Result<Vec<f32>, PlatformError> {
+    let mut resampler = FftFixedInOut::<f32>::new(
+        input_rate as usize,
+        OUTPUT_SAMPLE_RATE as usize,
+        RESAMPLE_CHUNK_SIZE,
+        1,
+    )
+    .map_err(|error| PlatformError::Audio(error.to_string()))?;
+    let delay = resampler.output_delay();
+    let wanted = (input.len() as u64 * OUTPUT_SAMPLE_RATE as u64 / input_rate as u64) as usize;
+    let mut output = Vec::with_capacity(wanted + delay + resampler.output_frames_max());
+    let mut position = 0;
+    while position < input.len() || output.len() < wanted + delay {
+        let frames = resampler.input_frames_next();
+        let end = (position + frames).min(input.len());
+        let mut block = vec![0.0; frames];
+        if position < input.len() {
+            block[..end - position].copy_from_slice(&input[position..end]);
+        }
+        let resampled = resampler
+            .process(&[block], None)
+            .map_err(|error| PlatformError::Audio(error.to_string()))?;
+        output.extend_from_slice(&resampled[0]);
+        position = end;
+    }
+    output.drain(..delay);
+    output.truncate(wanted);
+    clamp_overshoot(&mut output);
+    Ok(output)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,7 +498,8 @@ mod tests {
         let input: Vec<f32> = (0..44_100)
             .map(|index| if (index / 50) % 2 == 0 { 1.0 } else { -1.0 })
             .collect();
-        let batch = resample_to_16khz(&input, 44_100).unwrap();
+        let batch = reference_resample(&input, 44_100).unwrap();
+        assert_eq!(resample_to_16khz(&input, 44_100).unwrap(), batch);
         let mut recording = RecordingBuffer::new(44_100, 1, 2).unwrap();
         for &sample in &input {
             recording.push(sample).unwrap();
@@ -530,7 +566,7 @@ mod tests {
             recording.push(sample).unwrap();
         }
         let actual = recording.finish().unwrap();
-        let expected = resample_to_16khz(&input, 48_000).unwrap();
+        let expected = reference_resample(&input, 48_000).unwrap();
         assert_eq!(actual.samples.len(), expected.len());
         assert!(actual
             .samples
