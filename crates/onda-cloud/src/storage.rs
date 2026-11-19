@@ -87,7 +87,7 @@ pub(crate) struct AccountStore {
 
 impl AccountStore {
     pub fn new(root: PathBuf) -> Result<Self> {
-        if !cfg!(any(windows, target_os = "linux")) {
+        if !cfg!(any(windows, target_os = "linux", target_os = "macos")) {
             return Err(CloudError::UnsupportedPlatform);
         }
         fs::create_dir_all(root.join(PROFILE_DIRECTORY)).map_err(|_| CloudError::Storage)?;
