@@ -124,6 +124,8 @@ with an identical tree.
 
 | 2026-11-19 | L4 | Typing a forty-flag profile name preserves all forty graphemes even on the first edit after profile loading. | windows-x64, Chromium and WebKit | The previous editor truncated flags at twenty. The first repair still intermittently restored the old name before input on WebKit. Both engines passed 20 consecutive cases after hydration moved before paint. |
 
+| 2026-11-19 | L4 | The shared dialog assigns its initial focus before typing can begin in a second field. Escape uses the current close handler. | macos-arm64 diagnosis, Windows local | An [actual Mac Chromium run](https://github.com/miillehq/onda/actions/runs/44607484981/job/135857979835) saved the expansion at the end of the trigger. The focus lifecycle now runs before paint. |
+
 ## Unverified
 
 - macOS: dictation into other apps on a real Mac. Accessibility paste is built and checked on the
