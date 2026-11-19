@@ -118,6 +118,8 @@ with an identical tree.
 
 | 2026-11-19 | L3 diagnosis | Both Apple Silicon and Intel refused to initialize the account store before reaching the Keychain. The existing encryption backend already supported Keychain. The store constructor excluded macOS. | macos-arm64, macos-x64 | Both real account lifecycle jobs reported `UnsupportedPlatform` in the [first cross-platform credential run](https://github.com/miillehq/onda/actions/runs/44602049735). |
 
+| 2026-11-19 | L1, L3 | Native paste needs an observable field before a key event can be sent. A failed permission-file replacement preserves the old bytes and removes the temporary file. | windows-x64, local, synthetic field and temporary directory | `cargo test --locked -p onda-platform --lib` covers missing versus zero-length fields and interrupted writes. The hosted OS uses the same preflight and file writer. Physical target behavior stays in the manual matrix. |
+
 ## Unverified
 
 - macOS: dictation into other apps on a real Mac. Accessibility paste is built and checked on the

@@ -1,6 +1,11 @@
 //! Only borrow a clipboard whose entire content the native text writer can restore.
 use crate::PlatformError;
 
+/// An automatic paste needs an observable field before it takes the clipboard or sends keys.
+pub(super) fn paste_baseline<T>(state: Option<T>) -> Result<T, PlatformError> {
+    state.ok_or_else(|| PlatformError::TargetUnavailable("field cannot confirm a paste".into()))
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum Format {
     PlainText,
@@ -76,6 +81,11 @@ impl PreviousText {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn an_unobservable_field_never_authorizes_injection() {
+        assert!(paste_baseline::<i32>(None).is_err());
+        assert_eq!(paste_baseline(Some(0)).unwrap(), 0);
+    }
 
     #[test]
     fn rich_unreadable_and_multi_item_clipboards_are_left_to_their_owner() {
