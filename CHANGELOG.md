@@ -20,6 +20,7 @@ Dictionary imports retain one rule per normalized trigger. Repeated spellings in
 
 ### Known defects
 
+- An occasional hosted Windows x64 first launch has missed the installer check’s 30-second readiness marker. Startup diagnostics now record the process and distinguish desktop service, indicator and tray initialization. [Windows startup investigation](https://github.com/miillehq/onda/issues/63)
 - The Linux desktop uses GTK 3 and GLib 0.18.5. RustSec reports an upstream soundness warning for GLib’s string-array iterator. Onda’s source has no direct calls to that iterator. GTK 3 currently requires the older GLib series. [Dependency audit](docs/third-party-licenses.md)
 
 ## [0.3.0] - 2026-11-14

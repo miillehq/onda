@@ -16,6 +16,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'installed-notices.ps1')
+. (Join-Path $PSScriptRoot 'installed-log.ps1')
 $repositoryDirectory = Split-Path -Parent $PSScriptRoot
 $configuration = Get-Content -LiteralPath (Join-Path $repositoryDirectory 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
 $productName = [string]$configuration.productName
@@ -29,6 +30,12 @@ $testId = [guid]::NewGuid().ToString('N')
 $installDirectory = Join-Path $artifactRoot $testId
 $reportPath = Join-Path $artifactRoot "$testId.json"
 $applicationDataDirectory = Join-Path $env:LOCALAPPDATA $applicationId
+$logDirectory = Join-Path $applicationDataDirectory 'logs'
+$startupLimit = [TimeSpan]::FromSeconds(30)
+$helperStartupLimit = [TimeSpan]::FromSeconds(15)
+$uninstallExitLimit = [TimeSpan]::FromSeconds(10)
+$startupClock = $null
+$logCheckpoint = $null
 $ownedProcesses = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 $shell = $null
 $helper = $null
@@ -62,29 +69,6 @@ function Get-DataHashes {
         $hashes[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     return $hashes
-}
-
-function Get-LogEntries {
-    # The installed app's JSON log entries since a time: timestamp, level, subsystem and message only.
-    # Windows may defer LastWriteTime until the live writer closes; trust each entry's UTC time.
-    param([System.DateTime]$SinceUtc)
-    $directory = Join-Path $applicationDataDirectory 'logs'
-    if (-not (Test-Path -LiteralPath $directory -PathType Container)) { return @() }
-    return @(Get-ChildItem -LiteralPath $directory -File | ForEach-Object { Get-Content -LiteralPath $_.FullName } | ForEach-Object {
-        try {
-            $entry = $_ | ConvertFrom-Json
-            $timestampUtc = if ($entry.timestamp -is [System.DateTime]) { $entry.timestamp.ToUniversalTime() } else { [System.DateTimeOffset]::Parse([string]$entry.timestamp).UtcDateTime }
-            if ($timestampUtc -ge $SinceUtc) {
-                $fields = $entry.fields
-                [pscustomobject]@{
-                    timestampUtc = $timestampUtc
-                    level = [string]$entry.level
-                    subsystem = if ($fields.PSObject.Properties['subsystem']) { [string]$fields.subsystem } else { '' }
-                    message = if ($fields.PSObject.Properties['message']) { [string]$fields.message } else { '' }
-                }
-            }
-        } catch { }
-    })
 }
 
 function Start-OwnedProcess {
@@ -160,8 +144,8 @@ function Test-InstalledWorker {
 
 function Wait-OwnedHelper {
     param([System.Diagnostics.Process]$Parent)
-    $deadline = [System.DateTime]::UtcNow.AddSeconds(15)
-    while ([System.DateTime]::UtcNow -lt $deadline) {
+    $wait = [Diagnostics.Stopwatch]::StartNew()
+    while ($wait.Elapsed -lt $helperStartupLimit) {
         if ($Parent.HasExited) { throw 'Installed shell exited during startup.' }
         $candidate = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($Parent.Id)" | Where-Object { $_.Name -eq 'onda-input.exe' -and $_.ExecutablePath -eq (Join-Path $installDirectory 'onda-input.exe') } | Select-Object -First 1
         if ($candidate) {
@@ -195,8 +179,8 @@ function Invoke-OwnedUninstaller {
     if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) { throw 'Owned installation uninstaller is missing.' }
     $process = Start-Process -FilePath $uninstaller -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw 'Owned installer uninstallation failed.' }
-    $deadline = [System.DateTime]::UtcNow.AddSeconds(10)
-    while ((Test-Path -LiteralPath (Join-Path $installDirectory 'onda.exe')) -and [System.DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+    $wait = [Diagnostics.Stopwatch]::StartNew()
+    while ((Test-Path -LiteralPath (Join-Path $installDirectory 'onda.exe')) -and $wait.Elapsed -lt $uninstallExitLimit) { Start-Sleep -Milliseconds 100 }
     if (Test-Path -LiteralPath (Join-Path $installDirectory 'onda.exe')) { throw 'Owned installation executable survived uninstallation.' }
     return $process.ExitCode
 }
@@ -251,25 +235,30 @@ try {
     # Optional: a CPU without AVX2 cannot run it, and Onda then uses the baseline worker.
     $report.avx2Worker = Test-InstalledWorker -Name 'onda-asr-avx2-worker.exe' -Optional
     if ($WithVulkan) { $report.vulkanWorker = Test-InstalledWorker -Name 'onda-asr-vulkan-worker.exe' -Optional }
-    $launchUtc = [System.DateTime]::UtcNow
-    $report.launchUtc = $launchUtc.ToString('o')
+    $logCheckpoint = Get-InstalledLogCheckpoint -Directory $logDirectory
+    $report.launchUtc = [DateTime]::UtcNow.ToString('o')
+    $startupClock = [Diagnostics.Stopwatch]::StartNew()
     $shell = Start-OwnedProcess -Path (Join-Path $installDirectory 'onda.exe') -Arguments '--background'
     Remember-OwnedDescendants -Parent $shell
     $helper = Wait-OwnedHelper -Parent $shell
+    $report.helperObservedSeconds = $startupClock.Elapsed.TotalSeconds
     Remember-OwnedDescendants -Parent $shell
     # Startup ends with the "application started" log entry, after the pill's WebView2 exists. A
     # first start on a fresh profile creates the WebView2 data folder; the time it took is recorded.
-    $startupDeadline = $launchUtc.AddSeconds(30)
     $startupEntry = $null
     while (-not $startupEntry) {
         if ($shell.HasExited) { throw 'Installed shell exited before it finished starting.' }
-        $startupEntry = @(Get-LogEntries -SinceUtc $launchUtc | Where-Object message -EQ 'application started') | Select-Object -First 1
+        $startupEntry = Get-InstalledStartupMarker -Directory $logDirectory -Checkpoint $logCheckpoint -ProcessId $shell.Id
         if (-not $startupEntry) {
-            if ([System.DateTime]::UtcNow -ge $startupDeadline) { throw 'Installed application startup marker was not observed.' }
+            if ($startupClock.Elapsed -ge $startupLimit) { throw (New-InstalledStartupTimeout -ProcessId $shell.Id) }
             Start-Sleep -Milliseconds 250
         }
     }
-    $report.startupSeconds = ($startupEntry.timestampUtc - $launchUtc).TotalSeconds
+    $startupClock.Stop()
+    $report.startupSeconds = $startupClock.Elapsed.TotalSeconds
+    $report.nativeSetupMs = $startupEntry.setupMs
+    $entries = @(Read-InstalledLogEntries -Directory $logDirectory -Checkpoint $logCheckpoint)
+    $report.startupPhases = @(Select-InstalledStartupPhases -Entries $entries -ProcessId $shell.Id)
     $report.startupLogObserved = $true
     Remember-OwnedDescendants -Parent $shell
     Start-Sleep -Milliseconds 1000
@@ -302,11 +291,18 @@ try {
 } catch {
     $report.status = 'failed'
     $report.failure = $_.Exception.Message
+    $report.failureId = $_.FullyQualifiedErrorId
     # What the installed app logged since launch (levels, subsystems and messages; never text or
     # audio, which Onda does not log) and which processes it started, to diagnose the failure.
-    if ($report.Contains('launchUtc')) {
-        try { $report.logSinceLaunch = @(Get-LogEntries -SinceUtc $launchUtc | ForEach-Object { "$($_.timestampUtc.ToString('o')) $($_.level) $($_.subsystem): $($_.message)" }) } catch { $report.logInspectionFailure = $_.Exception.Message }
-        try { $report.processesStarted = @($ownedProcesses | ForEach-Object { try { $_.ProcessName } catch { 'exited' } }) } catch { }
+    if ($null -ne $startupClock) {
+        $report.observedSeconds = $startupClock.Elapsed.TotalSeconds
+        if ($shell) { try { Remember-OwnedDescendants -Parent $shell } catch { $report.descendantInspectionFailure = $_.Exception.Message } }
+        try {
+            $entries = @(Read-InstalledLogEntries -Directory $logDirectory -Checkpoint $logCheckpoint)
+            $report.logSinceLaunch = @($entries | ForEach-Object { "$($_.timestampUtc.ToString('o')) $($_.level) $($_.subsystem): $($_.message)" })
+            if ($shell) { $report.startupPhases = @(Select-InstalledStartupPhases -Entries $entries -ProcessId $shell.Id) }
+        } catch { $report.logInspectionFailure = $_.Exception.Message }
+        try { $report.processesStarted = @($ownedProcesses | ForEach-Object { try { if (-not $_.HasExited) { $_.ProcessName } } catch [InvalidOperationException] { } } | Sort-Object -Unique) } catch { }
     }
     throw
 } finally {

@@ -47,6 +47,7 @@ test has been seen red with its probe.
 | 37 | Cover the shipped renderer assets | Feature styles fit the file budget and retain their cascade. Every local stylesheet and SQL migration has a production reference. | L0, L4, L5 | In review |
 | 38 | Check the complete Rust dependency set | The six-target policy checks all workspace members, and the full lockfile audit catches advisories outside those targets. | L0 | In review |
 | 39 | Reuse Ubuntu package downloads | Desktop, browser and packaging jobs install the same dependencies with APT. Restored archives must match the current signed indexes. | L0, L4–L7 | In review |
+| 40 | Observe installed Windows startup accurately | The marker belongs to the current launch and a monotonic clock bounds the observer. Every cold-start sample and permitted L7 retry retains its evidence. | L1, L6, L7 | In review, #62 |
 
 Rulings:
 

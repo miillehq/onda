@@ -1,6 +1,7 @@
 //! Thin desktop host for Windows and Linux. Application policy lives in Rust services.
 
 mod desktop_window;
+mod startup_log;
 pub(crate) use desktop_window::*;
 #[cfg(all(feature = "e2e", not(debug_assertions)))]
 compile_error!("The e2e feature adds a WebDriver server and is for debug builds only.");
@@ -151,6 +152,7 @@ pub(crate) fn apply_tray_icon(app: &tauri::AppHandle, style: TrayIconStyle) {
 }
 
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let started = std::time::Instant::now();
     onda_platform::harden_dll_search()?;
     let smoke_directory = debug_smoke_directory();
     let data_directory = match smoke_directory.clone().or_else(debug_dev_profile) {
@@ -172,6 +174,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .finish();
     let _ = tracing::subscriber::set_global_default(subscriber);
     app.manage(LogGuard(Mutex::new(Some(guard))));
+    startup_log::stage(started, "startup logging ready");
     let executable = std::env::current_exe()?;
     let worker_directory = executable
         .parent()
@@ -185,6 +188,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let settings = runtime.settings()?;
     app.manage(runtime);
+    startup_log::stage(started, "desktop services ready");
     // Starting at login leaves the main window unbuilt until it is opened; the smoke test
     // needs it running but hidden.
     if smoke_directory.is_some() {
@@ -195,6 +199,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         build_main_window(app.handle(), None, true)?;
     }
     build_pill(app, smoke_directory)?;
+    startup_log::stage(started, "dictation indicator ready");
     if settings.launch_at_login {
         // Re-register so the entry follows the executable after updates or moves.
         if let Err(error) = apply_launch_at_login(true) {
@@ -202,11 +207,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     install_tray(app, settings.tray_icon)?;
-    tracing::info!(
-        subsystem = "application",
-        version = onda_core::APP_VERSION,
-        "application started"
-    );
+    startup_log::ready(started);
     if std::env::args().any(|argument| argument == DICTATE_ARGUMENT) {
         app.state::<Arc<Runtime>>().toggle_dictation();
     }

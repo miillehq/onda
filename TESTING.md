@@ -74,6 +74,8 @@ job. It returns only after a fix that is shown red without it. Retries are allow
 L7 jobs, once; below that a retry hides a bug. The WebView2 smoke uses its retry after a timeout
 only, and each retry is added to [issue #25](https://github.com/miillehq/onda/issues/25).
 
+The Windows installer check retains a 30-second monotonic startup deadline. It reads only log bytes appended by the launch and checks the emitting process when the package supplies a PID. Its first report is retained. One L7 retry is available for the specific startup observation timeout. A missing worker, installation error or second timeout fails. The separate first-launch sample uses one immutable installer on thirty fresh hosted Windows machines with one attempt each. [Windows L7 tracker](https://github.com/miillehq/onda/issues/63)
+
 ## Budgets
 
 - L0 to L3 on one runner: under 3 minutes with a warm cache (2 minutes on Windows on 2026-11-12).
