@@ -58,8 +58,9 @@ if (import.meta.main) {
   const roots = ["ui/src", "src-tauri/src", ...crates.map(({ name }) => `crates/${name}/src`)];
   const files = [];
   for (const directory of roots) files.push(...await filesUnder(join(root, directory), parsers));
+  const unreachable = await orphanRust(root, files, parsers.get(".rs"), tooling);
   const findings = violations(files);
-  for (const path of await orphanRust(root, files, parsers.get(".rs"))) {
+  for (const path of unreachable) {
     findings.push({ kind: "unreachable Rust module", path, line: 1, name: "", actual: 1, limit: 0 });
   }
   if (process.argv.includes("--stats")) {

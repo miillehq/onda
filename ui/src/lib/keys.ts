@@ -1,3 +1,4 @@
+import { modifierLabels, type ModifierKind } from "./modifierLabels";
 /** Windows virtual-key codes for shortcut display and recording. Policy (conflicts, reserved keys)
  *  stays native; this only translates between keyboard events and the stored chord. */
 
@@ -16,7 +17,7 @@ export const VK = {
   escape: 0x1b,
 } as const;
 
-export type ModifierKind = "ctrl" | "shift" | "alt" | "win";
+
 
 export function modifierKind(key: number): ModifierKind | null {
   if (key === VK.control || key === VK.leftControl || key === VK.rightControl) return "ctrl";
@@ -27,14 +28,6 @@ export function modifierKind(key: number): ModifierKind | null {
 }
 
 const MODIFIER_ORDER: ModifierKind[] = ["ctrl", "shift", "alt", "win"];
-/** Modifier names as the keyboard prints them. WebView2 reports Windows in its user agent and
- *  WKWebView reports Macintosh; a Mac reads the Windows key as Command and Alt as Option, and
- *  Linux calls the Windows key Super. */
-export function modifierLabels(userAgent: string): Record<ModifierKind, string> {
-  if (userAgent.includes("Windows")) return { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: "Win" };
-  if (userAgent.includes("Macintosh")) return { ctrl: "Control", shift: "Shift", alt: "Option", win: "Command" };
-  return { ctrl: "Ctrl", shift: "Shift", alt: "Alt", win: "Super" };
-}
 const MODIFIER_LABEL = modifierLabels(navigator.userAgent);
 const MODIFIER_CODE: Record<ModifierKind, number> = { ctrl: VK.leftControl, shift: VK.leftShift, alt: VK.leftAlt, win: VK.leftWin };
 
@@ -59,10 +52,6 @@ export function keyLabel(key: number): string {
 export function orderedKeys(keys: readonly number[]): number[] {
   const modifiers = MODIFIER_ORDER.filter((kind) => keys.some((key) => modifierKind(key) === kind)).map((kind) => MODIFIER_CODE[kind]);
   return [...modifiers, ...keys.filter((key) => modifierKind(key) === null)];
-}
-
-export function shortcutText(keys: readonly number[]): string {
-  return orderedKeys(keys).map(keyLabel).join(" + ");
 }
 
 const CODE_TO_VK: Record<string, number> = {

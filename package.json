@@ -25,7 +25,7 @@
     "readme:images": "node scripts/readme-images/render.mjs",
     "quality": "cargo run -p onda-core --release --bin onda-quality",
     "lint": "npm run lint:source && cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings",
-    "lint:source": "tsc --noEmit && tsc -p tests/ui/tsconfig.json --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit && biome lint && knip && node scripts/quality/architecture.mjs",
+    "lint:source": "tsc --noEmit && tsc -p tests/ui/tsconfig.json --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit && biome lint && knip && knip --production && node scripts/quality/architecture.mjs",
     "triage": "node scripts/triage.mjs"
   },
   "dependencies": {

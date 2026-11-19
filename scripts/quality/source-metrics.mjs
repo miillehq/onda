@@ -1,6 +1,8 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import treeSitter from "@vscode/tree-sitter-wasm";
+import { importsFrom, testOnly } from "./rust-scope.mjs";
+export { aggregateTypes } from "./type-ownership.mjs";
 
 const { Parser, Language } = treeSitter;
 const wasmDirectory = dirname(createRequire(import.meta.url).resolve("@vscode/tree-sitter-wasm"));
@@ -20,12 +22,6 @@ export async function createParsers() {
   return parsers;
 }
 
-function testAttribute(attribute) {
-  const text = attribute.text.replace(/\s+/g, "");
-  return ["#[test]", "#[tokio::test]", "#[cfg(test)]", "#[cfg(debug_assertions)]", "#[cfg(all(windows,debug_assertions))]",
-    '#[cfg(all(debug_assertions,feature="e2e"))]'].includes(text) || text.startsWith("#[cfg(all(test,");
-}
-
 function ignoredItems(root) {
   const excluded = new Set();
   function visit(parent) {
@@ -33,7 +29,7 @@ function ignoredItems(root) {
     for (const child of parent.namedChildren) {
       if (child.type === "attribute_item") { attributes.push(child); continue; }
       if (comments.has(child.type)) continue;
-      if (attributes.some(testAttribute)) {
+      if (attributes.some(testOnly)) {
         excluded.add(child.id);
         for (const attribute of attributes) excluded.add(attribute.id);
       } else { visit(child); }
@@ -53,14 +49,14 @@ function functionName(node) {
   return "callback";
 }
 
-function methods(node) {
+function methods(node, excluded) {
   const body = node.childForFieldName("body");
   if (node.type === "class_declaration" || node.type === "interface_declaration") {
     return (body?.namedChildren ?? []).filter((item) => ["method_definition", "public_field_definition", "property_signature", "method_signature", "abstract_method_signature"].includes(item.type))
       .filter((item) => !item.namedChildren.some((child) => child.type === "accessibility_modifier" && child.text !== "public"))
       .map((item) => field(item, "name")).filter((name) => name && !name.startsWith("#"));
   }
-  return (body?.namedChildren ?? []).filter((item) => item.type === "function_item" || item.type === "field_declaration")
+  return (body?.namedChildren ?? []).filter((item) => !excluded.has(item.id) && (item.type === "function_item" || item.type === "field_declaration"))
     .filter((item) => item.namedChildren.some((child) => child.type === "visibility_modifier" && child.text === "pub")
       || (item.type === "function_item" && Boolean(node.childForFieldName("trait"))))
     .map((item) => field(item, "name")).filter(Boolean);
@@ -77,16 +73,22 @@ export function measureSource(path, source, parser) {
     const markup = new Uint8Array(lines.length);
     const excluded = path.endsWith(".rs") ? ignoredItems(tree.rootNode) : new Set();
     const entities = [];
-    function visit(node, owner = "", inMarkup = false) {
+    const imports = [];
+    function visit(node, owner = "", inMarkup = false, module = []) {
       if (excluded.has(node.id) || comments.has(node.type)) return;
       const start = node.startPosition.row;
       const end = node.endPosition.row - Number(node.endPosition.column === 0 && node.endPosition.row > start);
       let nextOwner = owner;
-      if (node.type === "impl_item") {
-        nextOwner = (field(node, "type") ?? "").split("<")[0].split("::").at(-1);
-        entities.push({ kind: "impl", name: nextOwner, start, end, members: methods(node) });
+      let childModule = module;
+      if (node.type === "mod_item" && node.childForFieldName("body")) childModule = [...module, field(node, "name")];
+      if (node.type === "use_declaration") {
+        for (const imported of importsFrom(node.childForFieldName("argument"))) imports.push({ ...imported, module });
+      } else if (node.type === "impl_item") {
+        const reference = (field(node, "type") ?? "").split("<")[0].replace(/\s/g, "").split("::");
+        nextOwner = reference.at(-1);
+        entities.push({ kind: "impl", name: nextOwner, reference, module, start, end, members: methods(node, excluded) });
       } else if (["struct_item", "class_declaration", "interface_declaration"].includes(node.type)) {
-        entities.push({ kind: "type", name: field(node, "name"), start, end, members: methods(node) });
+        entities.push({ kind: "type", name: field(node, "name"), module, start, end, members: methods(node, excluded) });
       } else if (functions.has(node.type)) {
         const name = functionName(node);
         const entity = { kind: "function", name: owner ? `${owner}::${name}` : name, start, end };
@@ -99,7 +101,7 @@ export function measureSource(path, source, parser) {
       }
       const jsx = node.type.startsWith("jsx_") ? node.type !== "jsx_expression" : inMarkup;
       if (node.childCount) {
-        for (const child of node.children) visit(child, nextOwner, jsx);
+        for (const child of node.children) visit(child, nextOwner, jsx, childModule);
       } else {
         for (let row = start; row <= end; row++) {
           if (!lines[row]?.trim()) continue;
@@ -116,27 +118,9 @@ export function measureSource(path, source, parser) {
     }
     const prefix = totals(code), executable = totals(logic), jsx = totals(markup);
     return {
-      path, lines: prefix.at(-1),
+      path, lines: prefix.at(-1), imports,
       entities: entities.map(({ start, end, ...entity }) => ({ ...entity, line: start + 1, lines: prefix[end + 1] - prefix[start],
         logic: executable[end + 1] - executable[start], markup: jsx[end + 1] - jsx[start] })),
     };
   } finally { tree.delete(); }
-}
-
-export function aggregateTypes(files) {
-  const groups = new Map();
-  for (const file of files) {
-    for (const entity of file.entities.filter((item) => item.kind === "type" || item.kind === "impl")) {
-      const key = `${file.path.split("/src/")[0]}::${entity.name}`;
-      if (!groups.has(key)) groups.set(key, { declarations: [], implementations: [] });
-      const member = { ...entity, path: file.path };
-      groups.get(key)[entity.kind === "type" ? "declarations" : "implementations"].push(member);
-    }
-  }
-  return [...groups.values()].flatMap(({ declarations, implementations }) => declarations.map((declaration) => {
-    const related = implementations.filter((item) => declarations.length === 1 || item.path === declaration.path);
-    const parts = [declaration, ...related];
-    return { path: declaration.path, name: declaration.name, line: declaration.line,
-      lines: parts.reduce((sum, item) => sum + item.lines, 0), members: new Set(parts.flatMap((item) => item.members)).size };
-  }));
 }

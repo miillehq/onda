@@ -1,3 +1,4 @@
+import { dayKey } from "../../lib/activity";
 import { useComputed } from "@preact/signals";
 import { ArrowRight, AudioLines, BookOpen, Gauge } from "lucide-preact";
 import { Chip } from "../../components/controls";
@@ -7,9 +8,7 @@ import { dictionary, usage } from "../../lib/store";
 
 const TYPING_WPM = 40;
 
-function dayKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
+
 
 function useWeek() {
   return useComputed(() => {

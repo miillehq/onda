@@ -2,6 +2,8 @@
 
 The independent release review ran against the default branch at `522b528` and again against the first integrated product candidate at `3938d04`. The second review restored all 20,000 supported dictionary entries into a clean database, exercised the real editors and ran the Windows speech worker. Its 20 fixed probes produced 16 passes, three failures and one inapplicable case. Two failures exposed implementation defects and one reflected Onda’s documented duplicate-trigger rule. The follow-up changes and their tests are listed below.
 
+An independent rerun on `c24fa12` found 18 passes, the documented duplicate-trigger difference and one inapplicable probe. It also found three cases where the source checker assigned the wrong owner or counted test-only code. The gate now checks qualified implementations separately from homonymous types and limits production roots and members to the shipped configurations. Each checker defect has a regression fixture.
+
 ## Fixed release probes
 
 | # | Probe | Observed behavior and disposition |

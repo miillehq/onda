@@ -1,6 +1,7 @@
+import { describeShortcut } from "../lib/shortcutPresentation";
 import { Fragment, type ButtonHTMLAttributes, type ComponentChildren } from "preact";
 import { useId } from "preact/hooks";
-import { keyLabel, modifierKind, orderedKeys } from "../lib/keys";
+import { modifierKind, } from "../lib/keys";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "inverse" | "inverse-ghost";
 
@@ -159,11 +160,10 @@ const COMMAND_KEY = navigator.userAgent.includes("Macintosh");
 
 /** A chord drawn as physical keys. `size="hero"` is the large keycap used on Home and setup. */
 export function Keys({ keys, size = "sm", label }: { keys: readonly number[]; size?: "sm" | "md" | "hero"; label?: string }) {
-  const ordered = orderedKeys(keys);
-  const text = label ?? ordered.map(keyLabel).join(" + ");
+  const { keycaps, text } = describeShortcut(keys);
   return (
-    <span class={`keys keys-${size}`} role="img" aria-label={text}>
-      {ordered.map((key, index) => (
+    <span class={`keys keys-${size}`} role="img" aria-label={label ?? text}>
+      {keycaps.map(({ key, label: keyName }, index) => (
         <Fragment key={key}>
           {index > 0 && size === "hero" && (
             <span class="keys-plus" aria-hidden="true">
@@ -172,7 +172,7 @@ export function Keys({ keys, size = "sm", label }: { keys: readonly number[]; si
           )}
           <kbd class={`key${key === 0x20 ? " key-space" : ""}`}>
             {modifierKind(key) === "win" && (COMMAND_KEY ? <span aria-hidden="true">⌘</span> : <WinGlyph />)}
-            {keyLabel(key)}
+            {keyName}
           </kbd>
         </Fragment>
       ))}
