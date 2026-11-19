@@ -9,6 +9,8 @@ pub mod debug_fixture;
 mod desktop;
 #[cfg(target_os = "linux")]
 mod linux_clipboard;
+#[cfg(any(target_os = "linux", test))]
+mod linux_edits;
 #[cfg(target_os = "linux")]
 mod linux_target;
 #[cfg(target_os = "linux")]
@@ -24,6 +26,8 @@ pub mod portal;
 mod processes;
 mod protect;
 mod target;
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+mod text_clipboard;
 #[cfg(windows)]
 mod windows_target;
 
@@ -150,6 +154,10 @@ pub enum PlatformError {
     Clipboard(String),
     #[error("clipboard format {0} cannot be safely preserved")]
     UnsupportedClipboardFormat(u32),
+    #[error("the current clipboard contents cannot be preserved")]
+    ClipboardNotPreservable,
+    #[error("replacing the selection requires the desktop paste permission")]
+    SelectionNeedsPaste,
     #[error("paste input could not be injected")]
     InjectionFailed,
     #[error("physical modifier keys are held; release them before insertion")]

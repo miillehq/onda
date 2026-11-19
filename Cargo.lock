@@ -3393,6 +3393,8 @@ dependencies = [
  "cpal",
  "keyring",
  "libc",
+ "objc2-app-kit",
+ "objc2-foundation",
  "ring",
  "rtrb",
  "rubato",
@@ -3402,6 +3404,7 @@ dependencies = [
  "tracing",
  "windows 0.58.0",
  "windows-sys 0.59.0",
+ "x11rb",
  "zbus 5.19.0",
  "zeroize",
 ]

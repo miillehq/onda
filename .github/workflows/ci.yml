@@ -165,6 +165,8 @@ jobs:
           npm run test:unit
       - name: L1 and L3 workspace tests
         run: cargo test --locked --workspace
+      - name: Isolated X11 clipboard round trip
+        run: xvfb-run -a env ONDA_TEST_X11=isolated cargo test --locked -p onda-platform --lib isolated_x11_keeps_rich_content -- --ignored --test-threads=1
       - name: Quality fixtures
         run: npm run quality
       - name: L6 native smoke in WebKitGTK
@@ -315,6 +317,9 @@ jobs:
           "LIBCLANG_PATH=$env:LIBCLANG_PATH" >> $env:GITHUB_ENV
       - name: Crates without the app shell (L1, L3)
         run: cargo test --locked --workspace --exclude onda-app
+      - name: Isolated X11 clipboard round trip
+        if: runner.os == 'Linux'
+        run: xvfb-run -a env ONDA_TEST_X11=isolated cargo test --locked -p onda-platform --lib isolated_x11_keeps_rich_content -- --ignored --test-threads=1
       - name: Frontend (L0)
         if: always()
         run: |

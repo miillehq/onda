@@ -1,7 +1,7 @@
 //! The focused field on Linux, read through the accessibility bus (AT-SPI): which field it is,
 //! its text, caret and selection, and editing it. GTK, Qt and LibreOffice expose their fields
 //! by default; browsers and Electron apps only when the desktop's accessibility support is on.
-//! Where no field is visible, the snapshot is unidentified and dictation can only paste blind.
+//! Where no field is visible, the snapshot is unidentified and dictation is handed to the clipboard.
 use crate::{
     linux_typing,
     target::{ControlFingerprint, InsertionOutcome, PasteShortcut},
@@ -45,12 +45,6 @@ const PASTE_SETTLE: Duration = Duration::from_millis(800);
 const CALL_TIMEOUT: Duration = Duration::from_millis(1500);
 /// How long the paste keeps the clipboard before the previous text comes back.
 const CLIPBOARD_HOLD: Duration = Duration::from_millis(500);
-/// Copying a selection: each try first gives the rewrite shortcut's keys time to come up,
-/// then the app time to fill the clipboard.
-const COPY_KEYS_UP: Duration = Duration::from_millis(250);
-const COPY_SETTLE: Duration = Duration::from_millis(400);
-const COPY_ATTEMPTS: usize = 3;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Object {
     bus: String,
@@ -466,51 +460,6 @@ pub(crate) fn read_text(
     Ok(text)
 }
 
-/// The selection in an app that shows Onda no field, copied with Ctrl+Insert through the typing
-/// permission; the clipboard gets its text back afterwards. Ctrl+Insert copies in browsers,
-/// Electron, GTK, Qt and LibreOffice, and unlike Ctrl+C it never interrupts a terminal program.
-/// The rewrite shortcut's own keys may still be down at first, so the copy is tried again.
-pub(crate) fn copy_selection(max_characters: usize) -> Result<String, PlatformError> {
-    if linux_typing::typing_access() != linux_typing::TypingAccess::Allowed {
-        return Err(PlatformError::UnsupportedPlatform);
-    }
-    let previous = crate::linux_clipboard::read_text();
-    // A marker rather than an empty clipboard, which some clipboard managers refill.
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos())
-        .unwrap_or_default();
-    let marker = format!("onda-selection-{nanos:x}");
-    crate::linux_clipboard::copy_text(&marker)?;
-    let copied = (|| -> Result<Option<String>, PlatformError> {
-        for _ in 0..COPY_ATTEMPTS {
-            std::thread::sleep(COPY_KEYS_UP);
-            linux_typing::press_chord(&[linux_typing::KEY_CONTROL, linux_typing::KEY_INSERT])?;
-            let deadline = Instant::now() + COPY_SETTLE;
-            while Instant::now() < deadline {
-                match crate::linux_clipboard::read_text() {
-                    Some(text) if !text.is_empty() && text != marker => return Ok(Some(text)),
-                    _ => std::thread::sleep(Duration::from_millis(40)),
-                }
-            }
-        }
-        Ok(None)
-    })();
-    // Put the clipboard back, unless something else was copied meanwhile.
-    let current = crate::linux_clipboard::read_text();
-    let ours = current.as_deref() == Some(marker.as_str())
-        || matches!((&current, &copied), (Some(current), Ok(Some(text))) if current == text);
-    if ours {
-        let _ = match previous {
-            Some(previous) => crate::linux_clipboard::copy_text(&previous),
-            None => crate::linux_clipboard::clear(),
-        };
-    }
-    let text = copied?.ok_or(PlatformError::EmptySelection)?;
-    check_limit(&text, max_characters)?;
-    Ok(text)
-}
-
 /// Up to `max_characters` just before the caret, or before the selection a paste replaces.
 pub(crate) fn preceding_text(
     target: &TargetSnapshot,
@@ -566,10 +515,13 @@ pub(crate) fn select_unique_text(
 /// Whether a dictation into `target` can be typed: with the paste permission anywhere, or
 /// without it into a field that accepts edits through accessibility.
 pub(crate) fn can_type(target: &TargetSnapshot) -> bool {
+    if target.focused_runtime_id.is_empty() {
+        return false;
+    }
     if linux_typing::typing_access() == linux_typing::TypingAccess::Allowed {
         return true;
     }
-    !target.focused_runtime_id.is_empty() && field(target).is_ok_and(|object| editable(&object))
+    field(target).is_ok_and(|object| editable(&object))
 }
 
 fn editable(object: &Object) -> bool {
@@ -586,32 +538,26 @@ pub(crate) fn paste(
     shortcut: PasteShortcut,
     should_cancel: &dyn Fn() -> bool,
 ) -> Result<InsertionOutcome, PlatformError> {
-    // Unidentified means no app reports focus; there is nothing to check, so paste blind.
-    let object = if target.focused_runtime_id.is_empty() {
-        None
-    } else {
-        Some(field(target)?)
-    };
+    let object = field(target)?;
     if linux_typing::typing_access() == linux_typing::TypingAccess::Allowed {
-        return paste_with_shortcut(object.as_ref(), text, shortcut, should_cancel);
+        return paste_with_shortcut(target, &object, text, shortcut, should_cancel);
     }
-    match object {
-        Some(object) if editable(&object) => insert_directly(&object, text, should_cancel),
-        _ => Err(PlatformError::UnsupportedPlatform),
+    if !editable(&object) {
+        return Err(PlatformError::UnsupportedPlatform);
     }
+    insert_directly(&object, text, should_cancel)
 }
 
 fn paste_with_shortcut(
-    object: Option<&Object>,
+    target: &TargetSnapshot,
+    object: &Object,
     text: &str,
     shortcut: PasteShortcut,
     should_cancel: &dyn Fn() -> bool,
 ) -> Result<InsertionOutcome, PlatformError> {
     // Terminals paste with Ctrl+Shift+V; Ctrl+V would reach the shell as a control character.
-    let shortcut = match object.map(role) {
-        Some(Ok(ROLE_TERMINAL)) if shortcut == PasteShortcut::ControlV => {
-            PasteShortcut::ControlShiftV
-        }
+    let shortcut = match role(object) {
+        Ok(ROLE_TERMINAL) if shortcut == PasteShortcut::ControlV => PasteShortcut::ControlShiftV,
         _ => shortcut,
     };
     let keys: &[i32] = match shortcut {
@@ -623,23 +569,39 @@ fn paste_with_shortcut(
         ],
         PasteShortcut::ShiftInsert => &[linux_typing::KEY_SHIFT, linux_typing::KEY_INSERT],
     };
-    let before = object.and_then(|object| integer(object, TEXT, "CharacterCount").ok());
-    let previous = crate::linux_clipboard::read_text();
-    crate::linux_clipboard::copy_text(text)?;
+    let before = integer(object, TEXT, "CharacterCount").ok();
+    let replaced = selection(object).ok().flatten();
+    let inserted = crate::linux_edits::InsertSize::measure(text)?.characters;
+    let clipboard = crate::linux_clipboard::BorrowedClipboard::borrow(text, should_cancel)?;
+    if let Err(error) = field(target) {
+        clipboard.restore(text);
+        return Err(error);
+    }
     if should_cancel() {
-        restore_clipboard(text, previous);
+        clipboard.restore(text);
         return Err(PlatformError::Cancelled);
     }
     if let Err(error) = linux_typing::press_chord(keys) {
-        restore_clipboard(text, previous);
+        clipboard.restore(text);
         return Err(error);
     }
     // A field that reports its text shows whether the paste landed; others cannot be checked.
     let mut observed = before.is_none();
-    if let (Some(object), Some(before)) = (object, before) {
+    if let Some(before) = before {
         let deadline = Instant::now() + PASTE_SETTLE;
         while Instant::now() < deadline {
-            if integer(object, TEXT, "CharacterCount").is_ok_and(|count| count != before) {
+            if integer(object, TEXT, "CharacterCount").is_ok_and(|after| {
+                crate::linux_edits::paste_observed(
+                    before,
+                    after,
+                    replaced,
+                    inserted,
+                    |start, end| {
+                        selection(object).is_ok_and(|selection| selection.is_none())
+                            && text_range(object, start, end).is_ok_and(|current| current == text)
+                    },
+                )
+            }) {
                 observed = true;
                 break;
             }
@@ -647,7 +609,7 @@ fn paste_with_shortcut(
         }
     }
     std::thread::sleep(CLIPBOARD_HOLD);
-    let restored = restore_clipboard(text, previous);
+    let restored = clipboard.restore(text);
     Ok(InsertionOutcome {
         input_injected: true,
         clipboard_read_observed: observed,
@@ -656,52 +618,36 @@ fn paste_with_shortcut(
     })
 }
 
-/// Puts back the text the clipboard held before, unless something else replaced the
-/// dictation meanwhile. With nothing to put back it is emptied, so a later Ctrl+V cannot paste
-/// the dictation again somewhere else.
-fn restore_clipboard(dictated: &str, previous: Option<String>) -> bool {
-    if crate::linux_clipboard::read_text().as_deref() != Some(dictated) {
-        return false;
-    }
-    match previous {
-        Some(previous) => crate::linux_clipboard::copy_text(&previous).is_ok(),
-        None => crate::linux_clipboard::clear().is_ok(),
-    }
-}
-
 fn insert_directly(
     object: &Object,
     text: &str,
     should_cancel: &dyn Fn() -> bool,
 ) -> Result<InsertionOutcome, PlatformError> {
-    let position = match selection(object)? {
-        Some((start, end)) => {
-            if should_cancel() {
-                return Err(PlatformError::Cancelled);
-            }
-            let deleted: bool = call(object, EDITABLE_TEXT, "DeleteText", &(start, end))?;
-            if !deleted {
-                return Err(PlatformError::InjectionFailed);
-            }
-            start
-        }
-        None => integer(object, TEXT, "CaretOffset")?,
-    };
+    // AT-SPI exposes delete and insert as separate operations. A failed insertion must
+    // never leave the user's original selection deleted.
+    let position = crate::linux_edits::direct_caret(selection(object)?, || {
+        integer(object, TEXT, "CaretOffset")
+    })?;
     if should_cancel() {
         return Err(PlatformError::Cancelled);
     }
-    let length = i32::try_from(text.chars().count()).map_err(|_| PlatformError::TextLimit)?;
+    let size = crate::linux_edits::InsertSize::measure(text)?;
     let inserted: bool = call(
         object,
         EDITABLE_TEXT,
         "InsertText",
-        &(position, text, length),
+        &(position, text, size.bytes),
     )?;
     if !inserted {
         return Err(PlatformError::InjectionFailed);
     }
     // Leave the caret after the new text, where typing would have left it.
-    let _: Result<bool, _> = call(object, TEXT, "SetCaretOffset", &(position + length,));
+    let _: Result<bool, _> = call(
+        object,
+        TEXT,
+        "SetCaretOffset",
+        &(position.saturating_add(size.characters),),
+    );
     Ok(InsertionOutcome {
         input_injected: true,
         clipboard_read_observed: true,
