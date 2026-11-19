@@ -367,11 +367,12 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::CopyResult => {
-                let saved = lock(&self.result)?
+                let (saved, usage) = lock(&self.result)?
                     .as_ref()
-                    .map(|result| result.result.clone())
+                    .map(|result| (result.result.clone(), result.usage.clone()))
                     .ok_or_else(|| AppError::invalid("No result is available to copy."))?;
                 copy_text(saved.output.clone()).await?;
+                self.credit_delivery(usage.as_ref(), saved.fallback_used);
                 if let Some(current) = lock(&self.result)?.as_mut() {
                     if current.result.operation_id == saved.operation_id
                         && current.result.output == saved.output
@@ -457,7 +458,19 @@ impl Runtime {
             }
             R::CopyHistoryEntry { id } => {
                 let text = self.history_entry(&id)?.output.clone();
+                let usage = lock(&self.result)?
+                    .as_ref()
+                    .filter(|saved| saved.result.operation_id == id && saved.result.output == text)
+                    .and_then(|saved| {
+                        saved
+                            .usage
+                            .clone()
+                            .map(|usage| (usage, saved.result.fallback_used))
+                    });
                 copy_text(text.clone()).await?;
+                if let Some((receipt, fallback)) = usage {
+                    self.credit_delivery(Some(&receipt), fallback);
+                }
                 if let Some(current) = lock(&self.result)?.as_mut() {
                     if current.result.operation_id == id && current.result.output == text {
                         current.copied = true;
@@ -968,6 +981,7 @@ impl Runtime {
             cancellation,
             // Home shows a tried rewrite as the last result, so History keeps it too.
             history: true,
+            usage: None,
         };
         self.set_active(active.clone())?;
         let original = OperationResult {
@@ -990,6 +1004,7 @@ impl Runtime {
                 ));
             }
             *lock(&self.result)? = Some(SavedResult {
+                usage: None,
                 copied: false,
                 failed: false,
                 retry: None,
@@ -1045,6 +1060,7 @@ impl Runtime {
                     .as_ref()
                     .and_then(|saved| saved.retry.clone());
                 *lock(&self.result)? = Some(SavedResult {
+                    usage: None,
                     copied: false,
                     failed: false,
                     retry,
@@ -1104,6 +1120,7 @@ impl Runtime {
             cancellation: CancellationToken::new(),
             // A retry asks ChatGPT again, so its new text is kept like the first attempt's.
             history: true,
+            usage: saved.usage.clone(),
         };
         self.set_active(active.clone())?;
         self.save_result(
@@ -1233,6 +1250,7 @@ impl Runtime {
                 cancellation: CancellationToken::new(),
                 // A real dictation through the full pipeline, in the isolated smoke profile only.
                 history: true,
+                usage: None,
             };
             self.set_active(active.clone())?;
             self.transition(&id, Phase::FinalizingAudio)?;

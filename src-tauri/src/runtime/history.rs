@@ -168,10 +168,12 @@ impl Runtime {
         result: &OperationResult,
         route: DataRoute,
     ) {
-        let unchanged_edit = active.mode == OperationMode::Transform
-            && result.output == result.original
-            && result.suggestion.is_none();
-        if !active.history || unchanged_edit || result.output.trim().is_empty() {
+        if !recordable(
+            active.history,
+            &active.mode,
+            active.selection.is_some(),
+            result,
+        ) {
             return;
         }
         let (entry, persist) = {
@@ -312,6 +314,21 @@ impl Runtime {
     pub(super) fn delete_retained_history(&self, id: Option<&str>) -> AppResult<()> {
         lock(&self.history)?.delete(&mut *lock(&self.store)?, id)
     }
+}
+
+/// An unchanged selected-text draft is provisional. A completed preview has no selection
+/// and is a result the user can revisit even when the provider kept their wording.
+fn recordable(
+    keep: bool,
+    mode: &OperationMode,
+    has_selection: bool,
+    result: &OperationResult,
+) -> bool {
+    keep && !result.output.trim().is_empty()
+        && (*mode != OperationMode::Transform
+            || !has_selection
+            || result.output != result.original
+            || result.suggestion.is_some())
 }
 
 #[cfg(test)]

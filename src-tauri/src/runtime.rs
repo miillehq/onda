@@ -24,7 +24,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 mod commands;
 mod delivery;
+mod dictation_usage;
+use dictation_usage::DictationReceipt;
 mod history;
+mod learning;
 use history::History;
 mod profile;
 mod providers;
@@ -35,7 +38,6 @@ const MAX_METRICS: usize = 512;
 const CONTEXT_CHARACTERS: usize = 2048;
 const LEARNING_CHARACTERS: usize = 8192;
 const FOCUS_RETURN_DELAY: Duration = Duration::from_secs(3);
-const LEARNING_SAMPLE_DELAY: Duration = Duration::from_secs(4);
 const HELPER_POLL_TIMEOUT: Duration = Duration::from_millis(100);
 const LEVEL_INTERVAL: Duration = Duration::from_millis(50);
 /// Words in a model's display name that mark a lighter, faster model; Luna is the light
@@ -71,6 +73,7 @@ struct ActiveOperation {
     /// Dictations and edits, including rewrites tried in the app, are kept in history; pasting
     /// or undoing a result again, and test replays, are not.
     history: bool,
+    usage: Option<DictationReceipt>,
 }
 /// A speech worker started with the recording, loading its model while the user speaks.
 struct WarmWorker {
@@ -80,6 +83,7 @@ struct WarmWorker {
 
 #[derive(Clone)]
 struct SavedResult {
+    usage: Option<DictationReceipt>,
     copied: bool,
     /// The operation failed after producing this result, so it may hold untyped text.
     failed: bool,
@@ -870,6 +874,7 @@ impl Runtime {
             settings: settings.clone(),
             cancellation: CancellationToken::new(),
             history: true,
+            usage: None,
         };
         let start_cancellation = operation.cancellation.clone();
         let warm_context = operation.context.clone();
@@ -1080,7 +1085,7 @@ impl Runtime {
 
     async fn process_audio(
         self: &Arc<Self>,
-        active: ActiveOperation,
+        mut active: ActiveOperation,
         samples: Vec<f32>,
     ) -> AppResult<()> {
         let started = Instant::now();
@@ -1129,6 +1134,13 @@ impl Runtime {
                 (transcription.text.clone(), true)
             }
         };
+        active.usage = DictationReceipt::for_transcript(
+            &active.mode,
+            active.history,
+            &local,
+            transcription.audio_duration_ms,
+            transcription.inference_ms,
+        );
         let candidates = lock(&self.index)?.candidates(&local, &active.context);
         self.metric(&active.id, "dictionary", started, !fallback);
         let mut output = local.clone();
@@ -1196,22 +1208,6 @@ impl Runtime {
         }
         self.transition(&active.id, Phase::Inserting)?;
         self.insert(&active, &output, fallback).await?;
-        if lock(&self.store)?
-            .record_usage(
-                &onda_platform::local_date(),
-                onda_core::text::word_count(&local),
-                transcription.audio_duration_ms,
-                transcription.inference_ms,
-                fallback,
-            )
-            .is_err()
-        {
-            tracing::warn!(
-                subsystem = "metrics",
-                operation_id = active.id,
-                "usage aggregate was not saved"
-            );
-        }
         self.transition(&active.id, Phase::Completed)?;
         Ok(())
     }
@@ -1340,6 +1336,7 @@ impl Runtime {
         };
         let shortcut = paste_shortcut(&active.settings, &active.target.executable_name);
         *lock(&self.result)? = Some(SavedResult {
+            usage: active.usage.clone(),
             copied,
             failed: false,
             retry: previous_retry,
@@ -1570,55 +1567,6 @@ impl Runtime {
         self.queue_helper_action(Action::Toggle);
     }
 
-    fn start_learning(
-        self: &Arc<Self>,
-        active: &ActiveOperation,
-        baseline: String,
-        inserted: String,
-    ) {
-        let service = self.clone();
-        let active = active.clone();
-        tauri::async_runtime::spawn(async move {
-            for _ in 0..3 {
-                tokio::time::sleep(LEARNING_SAMPLE_DELAY).await;
-                if active.cancellation.is_cancelled()
-                    || lock(&service.state)
-                        .map(|state| state.snapshot().operation_id.as_deref() != Some(&active.id))
-                        .unwrap_or(true)
-                {
-                    return;
-                }
-                let target = active.target.clone();
-                let observed = tokio::task::spawn_blocking(move || {
-                    WindowsTargetService::new().field_text(&target, LEARNING_CHARACTERS)
-                })
-                .await;
-                let Ok(Ok(observed)) = observed else {
-                    return;
-                };
-                let Some(scope) = observed_inserted_scope(&baseline, &observed, &inserted) else {
-                    return;
-                };
-                if let Some(proposal) = onda_core::learning::propose_correction(&inserted, scope) {
-                    let Ok(state) = lock(&service.state) else {
-                        return;
-                    };
-                    if active.cancellation.is_cancelled()
-                        || state.snapshot().operation_id.as_deref() != Some(&active.id)
-                    {
-                        return;
-                    }
-                    if let Ok(mut saved) = lock(&service.proposal) {
-                        *saved = Some(proposal.clone());
-                    }
-                    service.domain(AppEvent::LearningProposed(proposal));
-                    drop(state);
-                    return;
-                }
-            }
-        });
-    }
-
     async fn begin_selection_transform(self: &Arc<Self>, transform_id: String) -> AppResult<()> {
         if self.microphone_testing.load(Ordering::Acquire) {
             return Err(AppError::new(
@@ -1664,6 +1612,7 @@ impl Runtime {
             settings,
             cancellation: CancellationToken::new(),
             history: true,
+            usage: None,
         };
         self.set_active(active.clone())?;
         self.save_result(&active, &selection, &selection, false, false, None)?;
@@ -1725,6 +1674,7 @@ impl Runtime {
             settings,
             cancellation: CancellationToken::new(),
             history: false,
+            usage: saved.usage.clone(),
         };
         self.set_active(active.clone())?;
         self.emit_state();
@@ -1792,6 +1742,7 @@ impl Runtime {
             settings: lock(&self.store)?.settings()?,
             cancellation: cancellation.clone(),
             history: false,
+            usage: None,
         };
         self.set_active(active)?;
         let service = self.clone();

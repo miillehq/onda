@@ -73,7 +73,12 @@ pub fn summarize(lifetime: &LifetimeUsage, today: &str) -> UsageSummary {
 /// Days since 1970-01-01 for a valid `YYYY-MM-DD` key (proleptic Gregorian calendar).
 pub fn day_number(day: &str) -> Option<i64> {
     let bytes = day.as_bytes();
-    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+    if bytes.len() != 10
+        || !bytes.iter().enumerate().all(|(index, byte)| match index {
+            4 | 7 => *byte == b'-',
+            _ => byte.is_ascii_digit(),
+        })
+    {
         return None;
     }
     let year: i64 = day.get(0..4)?.parse().ok()?;

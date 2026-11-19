@@ -52,9 +52,11 @@ or just "Good afternoon". Stats counts only content-free numbers:
   counted in the local transcript, before AI polish.
 - **Days:** the local calendar day when the dictation was delivered, as recorded then. A later time
   zone change does not move earlier days.
-- **Streak:** consecutive days with at least one dictation, ending today, or yesterday when nothing
-  has been dictated yet today. Longest streak and active days look back over the last 400 days that
-  had dictation; lifetime totals never expire.
+- **The current streak** counts consecutive active days ending today, or yesterday if today has
+  no dictation yet. Onda keeps daily detail for the most recent 400 active days. Lifetime totals
+  retain the number of active days and the longest streak. A corrected date within the retained
+  calendar can join two streaks. A delivery dated before that full window still contributes its
+  words and duration, while the historical active-day count stays at its last measured value.
 - **Pace:** words divided by minutes of recorded audio, including pauses, shown after one minute.
 - Days before Onda kept daily totals are not shown or estimated.
 

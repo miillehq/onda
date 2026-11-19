@@ -1,5 +1,27 @@
 use super::*;
 
+#[test]
+fn an_unchanged_preview_is_kept_and_a_provisional_selection_draft_is_skipped() {
+    let result = OperationResult {
+        operation_id: "preview".into(),
+        original: "Test".into(),
+        output: "Test".into(),
+        command_text: None,
+        inserted: false,
+        fallback_used: false,
+        suggestion: None,
+        diff: vec![],
+    };
+    assert!(recordable(true, &OperationMode::Transform, false, &result));
+    assert!(!recordable(true, &OperationMode::Transform, true, &result));
+    assert!(!recordable(
+        false,
+        &OperationMode::Transform,
+        false,
+        &result
+    ));
+}
+
 fn fixture(now: i64) -> HistoryEntry {
     HistoryEntry {
         id: "synthetic".into(),
