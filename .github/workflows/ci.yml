@@ -311,7 +311,11 @@ jobs:
       - name: Rust licenses, advisories and sources
         run: |
           cargo install cargo-deny --version 0.19.7 --locked
-          cargo deny --locked check licenses advisories sources
+          cargo deny --locked --workspace check licenses advisories sources
+      - name: Audit the complete Cargo lockfile
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo audit --file Cargo.lock
       - name: Frontend advisories
         run: |
           npm audit --omit=dev --audit-level=high
