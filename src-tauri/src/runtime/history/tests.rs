@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn an_unchanged_preview_is_kept_and_a_provisional_selection_draft_is_skipped() {
+fn only_a_successful_unchanged_preview_is_kept() {
     let result = OperationResult {
         operation_id: "preview".into(),
         original: "Test".into(),
@@ -12,12 +12,22 @@ fn an_unchanged_preview_is_kept_and_a_provisional_selection_draft_is_skipped() {
         suggestion: None,
         diff: vec![],
     };
-    assert!(recordable(true, &OperationMode::Transform, false, &result));
-    assert!(!recordable(true, &OperationMode::Transform, true, &result));
+    assert!(recordable(
+        true,
+        &OperationMode::Transform,
+        HistoryStage::CompletedPreview,
+        &result
+    ));
+    assert!(!recordable(
+        true,
+        &OperationMode::Transform,
+        HistoryStage::Result,
+        &result
+    ));
     assert!(!recordable(
         false,
         &OperationMode::Transform,
-        false,
+        HistoryStage::CompletedPreview,
         &result
     ));
 }

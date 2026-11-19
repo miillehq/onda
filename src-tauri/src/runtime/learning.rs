@@ -27,7 +27,9 @@ impl Runtime {
                 {
                     return;
                 }
-                let target = active.target.clone();
+                let Some(target) = active.target.clone() else {
+                    return;
+                };
                 let cancellation = active.cancellation.clone();
                 let reading = tokio::task::spawn_blocking(move || {
                     if cancellation.is_cancelled() || !window.allows(Instant::now()) {
