@@ -15,6 +15,8 @@ which platform and by which run is recorded in [VERIFICATION.md](VERIFICATION.md
 - Dictionary backups restore the full supported vocabulary. Invalid bytes and malformed rows produce an error with the existing data preserved. Editing one entry, snippet or rewrite keeps the other fields exactly as saved.
 - Removing the default rewrite selects Polish. A retry keeps its original destination and model. Usage counts a delivered dictation once across recovery paths, including when local dates arrive out of order.
 - Shared statistics images use the selected privacy options and measure 1200×630 pixels. Profile names accept forty visible graphemes, including flags.
+- In the dictionary editor, Enter saves a replacement and Shift+Enter adds a line to it. A typed word or trigger is saved without the spaces around it.
+- A dictation that follows full-width East Asian punctuation starts without a space.
 
 Dictionary imports retain one rule per normalized trigger. Repeated spellings in a single backup coalesce, and importing that backup a second time adds zero entries. [Audit details](docs/KEEL-AUDIT.md)
 
