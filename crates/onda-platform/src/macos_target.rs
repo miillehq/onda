@@ -78,6 +78,11 @@ extern "C" {
         parameter: CFTypeRef,
         result: *mut CFTypeRef,
     ) -> AXError;
+    fn AXUIElementSetAttributeValue(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        value: CFTypeRef,
+    ) -> AXError;
     fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut i32) -> AXError;
     fn AXUIElementSetMessagingTimeout(element: AXUIElementRef, seconds: f32) -> AXError;
     fn AXValueGetTypeID() -> CFTypeID;
@@ -326,7 +331,10 @@ fn focus() -> Option<Focus> {
 pub(crate) fn snapshot() -> Result<TargetSnapshot, PlatformError> {
     Ok(focus()
         .map(|focus| focus.snapshot)
-        .unwrap_or_else(TargetSnapshot::unidentified))
+        .unwrap_or_else(|| TargetSnapshot {
+            is_password: unsafe { IsSecureEventInputEnabled() } != 0,
+            ..TargetSnapshot::unidentified()
+        }))
 }
 
 pub(crate) fn can_type(target: &TargetSnapshot) -> bool {
@@ -416,7 +424,35 @@ pub(crate) fn paste(
     // Checked again after the wait, right before the keys go down.
     let field = field(target)?;
     let before = crate::text_clipboard::paste_baseline(edit_state(&field))?;
-    let clipboard = crate::macos_clipboard::BorrowedClipboard::borrow(text, should_cancel)?;
+    let clipboard = match crate::macos_clipboard::BorrowedClipboard::borrow(text, should_cancel) {
+        Err(PlatformError::ClipboardNotPreservable) => {
+            return crate::text_clipboard::edit_without_clipboard(should_cancel, || {
+                let original = self::field(target)?;
+                let attribute = CFString::from_static_string("AXSelectedText");
+                let replacement = CFString::new(text);
+                if should_cancel() {
+                    return Err(PlatformError::Cancelled);
+                }
+                let status = unsafe {
+                    AXUIElementSetAttributeValue(
+                        original.raw(),
+                        attribute.as_concrete_TypeRef(),
+                        replacement.as_CFTypeRef(),
+                    )
+                };
+                if status != AX_SUCCESS {
+                    return Err(PlatformError::ClipboardNotPreservable);
+                }
+                Ok(InsertionOutcome {
+                    input_injected: true,
+                    clipboard_read_observed: true,
+                    clipboard_restored: true,
+                    clipboard_changed_by_other: false,
+                })
+            });
+        }
+        result => result?,
+    };
     if let Err(error) = crate::WindowsTargetService::new().revalidate(target) {
         clipboard.restore(text);
         return Err(error);
@@ -535,7 +571,8 @@ mod tests {
             "typing access reports the permission"
         );
         if !trusted {
-            assert_eq!(snapshot, TargetSnapshot::unidentified());
+            assert!(snapshot.focused_runtime_id.is_empty());
+            assert_eq!(snapshot.process_id, 0);
         }
     }
 }

@@ -548,7 +548,12 @@ pub(crate) fn paste(
     if !editable(&object) {
         return Err(PlatformError::UnsupportedPlatform);
     }
-    insert_directly(&object, text, should_cancel)
+    insert_directly(
+        &object,
+        &target.focused_control.framework_id,
+        text,
+        should_cancel,
+    )
 }
 
 fn paste_with_shortcut(
@@ -578,8 +583,26 @@ fn paste_with_shortcut(
             .filter(|count| *count >= 0),
     )?;
     let replaced = selection(object).ok().flatten();
-    let inserted = crate::linux_edits::InsertSize::measure(text)?.characters;
-    let clipboard = crate::linux_clipboard::BorrowedClipboard::borrow(text, should_cancel)?;
+    let inserted =
+        crate::linux_edits::InsertSize::measure(text, &target.focused_control.framework_id)?
+            .offset_length;
+    let clipboard = match crate::linux_clipboard::BorrowedClipboard::borrow(text, should_cancel) {
+        Err(PlatformError::ClipboardNotPreservable) => {
+            return crate::text_clipboard::edit_without_clipboard(should_cancel, || {
+                let original = field(target)?;
+                if !editable(&original) {
+                    return Err(PlatformError::ClipboardNotPreservable);
+                }
+                insert_directly(
+                    &original,
+                    &target.focused_control.framework_id,
+                    text,
+                    should_cancel,
+                )
+            });
+        }
+        result => result?,
+    };
     if let Err(error) = field(target) {
         clipboard.restore(text);
         return Err(error);
@@ -619,6 +642,7 @@ fn paste_with_shortcut(
 
 fn insert_directly(
     object: &Object,
+    toolkit: &str,
     text: &str,
     should_cancel: &dyn Fn() -> bool,
 ) -> Result<InsertionOutcome, PlatformError> {
@@ -630,12 +654,12 @@ fn insert_directly(
     if should_cancel() {
         return Err(PlatformError::Cancelled);
     }
-    let size = crate::linux_edits::InsertSize::measure(text)?;
+    let size = crate::linux_edits::InsertSize::measure(text, toolkit)?;
     let inserted: bool = call(
         object,
         EDITABLE_TEXT,
         "InsertText",
-        &(position, text, size.bytes),
+        &(position, text, size.insertion_length),
     )?;
     if !inserted {
         return Err(PlatformError::InjectionFailed);
@@ -645,7 +669,7 @@ fn insert_directly(
         object,
         TEXT,
         "SetCaretOffset",
-        &(position.saturating_add(size.characters),),
+        &(position.saturating_add(size.offset_length),),
     );
     Ok(InsertionOutcome {
         input_injected: true,

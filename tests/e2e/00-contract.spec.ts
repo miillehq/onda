@@ -22,6 +22,16 @@ describe("the real backend on a fresh profile", () => {
   it("rejects malformed command envelopes through the real bridge", async () => {
     for (const request of malformedRequests) expect(await outcome(request)).toMatchObject({ error: shapeError });
   });
+  it("answers a call without a request like any other malformed envelope", async () => {
+    const result = await browser.tauri.execute(async ({ core }) => {
+      try {
+        return { response: await core.invoke("application_call", {}) };
+      } catch (error) {
+        return { error };
+      }
+    });
+    expect(result).toMatchObject({ error: shapeError });
+  });
   it("is not the labelled development mock", async () => {
     await expect($('[data-testid="backend-badge"]')).not.toExist();
   });
@@ -58,7 +68,7 @@ describe("the real backend on a fresh profile", () => {
     try {
       const saved = await saveSettings({ historyDays: 7 });
       for (const { name, request } of malformedSettingsRequests(saved)) {
-        expect({ name, result: await outcome(request) }).toMatchObject({ name, result: { error: expect.anything() } });
+        expect({ name, result: await outcome(request) }).toMatchObject({ name, result: { error: shapeError } });
       }
       expect((await snapshot()).settings).toEqual(saved);
     } finally {

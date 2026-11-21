@@ -9,6 +9,7 @@ const installerSteps = {
 /** Check the named native step as well as its job, including advisory jobs and fresh attempts. */
 export function requireReleaseEvidence(kind, sha, run, platforms) {
   if (kind !== "ci" && kind !== "installers") throw new Error("Unknown release evidence type.");
+  if (run.attempt !== 1) throw new Error(`Release evidence must come from a complete first attempt of the ${kind} workflow.`);
   if (run.headSha !== sha || run.status !== "completed" || run.conclusion !== "success") {
     throw new Error(`Expected a completed, successful ${kind} run for ${sha}.`);
   }

@@ -21,7 +21,9 @@ impl Runtime {
             let typeable =
                 tokio::task::spawn_blocking(move || WindowsTargetService::new().can_type(&target))
                     .await
-                    .unwrap_or(false);
+                    .map_err(|_| {
+                        AppError::new(ErrorCode::Internal, "Target check stopped.", true)
+                    })?;
             if !typeable {
                 return self.hand_off_to_clipboard(active, output, fallback).await;
             }
@@ -41,32 +43,34 @@ impl Runtime {
                 ));
             }
             let targets = WindowsTargetService::new();
-            let typed = (|| {
-                let outcome = if let Some(original) = &selection {
-                    targets.replace_selection_guarded(&target, original, &text, shortcut, || {
-                        cancellation.is_cancelled()
-                    })
+            let outcome = if let Some(original) = &selection {
+                targets.replace_selection_guarded(&target, original, &text, shortcut, || {
+                    cancellation.is_cancelled()
+                })
+            } else {
+                // Two characters tell a closing quote from an opening one; a field that
+                // exposes no caret simply gets the text as dictated.
+                let before = targets
+                    .preceding_text(&target, PRECEDING_CHARACTERS)
+                    .unwrap_or_default();
+                let spaced = onda_core::text::space_after_previous_text(&before, &text);
+                targets.paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
+            }
+            .map_err(errors::platform)
+            .map_err(|error| {
+                if selection.is_some() {
+                    (error, false)
                 } else {
-                    // Two characters tell a closing quote from an opening one; a field that
-                    // exposes no caret simply gets the text as dictated.
-                    let before = targets
-                        .preceding_text(&target, PRECEDING_CHARACTERS)
-                        .unwrap_or_default();
-                    let spaced = onda_core::text::space_after_previous_text(&before, &text);
-                    targets
-                        .paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
+                    copy_untyped(error, &text, &cancellation)
                 }
-                .map_err(errors::platform)?;
-                if !outcome.input_injected || !outcome.clipboard_read_observed {
-                    return Err(AppError::new(
-                        ErrorCode::Insertion,
-                        "The target did not acknowledge the paste. Copy your result or retry.",
-                        true,
-                    ));
-                }
-                Ok(())
-            })();
-            typed.map_err(|error| copy_untyped(error, &text, &cancellation))?;
+            })?;
+            if !outcome.input_injected || !outcome.clipboard_read_observed {
+                return Err((AppError::new(
+                    ErrorCode::Insertion,
+                    "Onda could not confirm the paste. Check the field before copying or retrying.",
+                    true,
+                ), false));
+            }
             let document = if observe_document {
                 targets.field_text(&target, LEARNING_CHARACTERS).ok()
             } else {
@@ -117,15 +121,16 @@ impl Runtime {
         output: &str,
         fallback: bool,
     ) -> AppResult<()> {
-        if active.selection.is_some() {
-            return Err(errors::platform(
-                onda_platform::PlatformError::UnsupportedPlatform,
-            ));
-        }
+        let target = active.insertion_target()?.clone();
+        let replacing_selection = active.selection.is_some();
         let text = output.to_owned();
         let started = Instant::now();
         let cancellation = active.cancellation.clone();
         let copied = tokio::task::spawn_blocking(move || {
+            WindowsTargetService::new().check_clipboard_handoff(&target)?;
+            if replacing_selection {
+                return Err(onda_platform::PlatformError::SelectionUnavailable);
+            }
             copy_while_active(&cancellation, || {
                 onda_platform::copy_text_to_clipboard(&text)
             })

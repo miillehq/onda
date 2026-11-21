@@ -449,30 +449,22 @@ impl Runtime {
             }
             R::GetHistory => Ok(O::History(self.history_entries()?)),
             R::CopyHistorySuggestion { id } => {
-                let text =
-                    self.history_entry(&id)?.suggestion.clone().ok_or_else(|| {
-                        AppError::invalid("That history entry is no longer kept.")
-                    })?;
+                let text = self
+                    .history_entry(&id)?
+                    .value
+                    .suggestion
+                    .clone()
+                    .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
                 copy_text(text).await?;
                 Ok(O::Unit)
             }
             R::CopyHistoryEntry { id } => {
-                let text = self.history_entry(&id)?.output.clone();
-                let usage = lock(&self.result)?
-                    .as_ref()
-                    .filter(|saved| saved.result.operation_id == id && saved.result.output == text)
-                    .and_then(|saved| {
-                        saved
-                            .usage
-                            .clone()
-                            .map(|usage| (usage, saved.result.fallback_used))
-                    });
+                let record = self.history_entry(&id)?;
+                let text = &record.value.output;
                 copy_text(text.clone()).await?;
-                if let Some((receipt, fallback)) = usage {
-                    self.credit_delivery(Some(&receipt), fallback);
-                }
+                self.credit_delivery(record.usage.as_ref(), record.value.fallback_used);
                 if let Some(current) = lock(&self.result)?.as_mut() {
-                    if current.result.operation_id == id && current.result.output == text {
+                    if current.result.operation_id == id && &current.result.output == text {
                         current.copied = true;
                     }
                 }

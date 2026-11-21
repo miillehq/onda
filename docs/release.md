@@ -123,8 +123,9 @@ job below may write.
 
 `release.yml` publishes a release from a `v*` tag. Its gate job checks that the tag,
 `package.json`, `tauri.conf.json` and the Cargo workspace carry one version, that the tagged
-commit is on `master`, and that one `installers` run passed on that commit with all six package
-jobs green; the Tier 2 jobs are checked by name, because they never fail their run. The publish
+commit is on `master`, and that complete first attempts of both `ci` and `installers` passed on
+that commit. The gate checks the named real-shell and installed-launch steps on all six platforms.
+If a job was re-run, dispatch a fresh workflow at the same revision to produce release evidence. The publish
 job then downloads that run's packages (no rebuild), adds `SHA256SUMS.txt`, the third-party
 notices and the MPL source archive, takes the notes from the version's `CHANGELOG.md` section,
 and creates the GitHub release, as a pre-release for 0.x versions. To ship:
@@ -132,7 +133,7 @@ and creates the GitHub release, as a pre-release for 0.x versions. To ship:
 1. Bump the version in `package.json` (`npm version --no-git-tag-version`), `Cargo.toml`
    (`[workspace.package]`, then `cargo update --workspace`) and `src-tauri/tauri.conf.json`, and
    write the `CHANGELOG.md` section, in one pull request.
-2. After it merges, wait for the `installers` run on that `master` commit to pass on all six
+2. After it merges, wait for both workflows on that `master` commit to pass on all six
    platforms, and record it in the ledger.
 3. Tag that commit `v<version>` and push the tag. If the gate fails, nothing is published: fix,
    merge, and tag the new commit.
