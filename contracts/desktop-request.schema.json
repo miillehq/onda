@@ -1,0 +1,1845 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "AiProvider": {
+      "description": "Where AI polish, rewrites and spoken edits send text. Only the chosen provider is ever used:\na failure keeps the local text and never retries with another provider.",
+      "oneOf": [
+        {
+          "const": "chatgpt",
+          "description": "Sign in with ChatGPT, using the account's plan.",
+          "type": "string"
+        },
+        {
+          "const": "openaiCompatible",
+          "description": "A user-configured server that speaks the OpenAI Chat Completions API.",
+          "type": "string"
+        },
+        {
+          "const": "anthropic",
+          "description": "Anthropic's Messages API with the user's own API key.",
+          "type": "string"
+        },
+        {
+          "const": "local",
+          "description": "An OpenAI-compatible server on this computer (Ollama, LM Studio, llama.cpp); loopback only.",
+          "type": "string"
+        }
+      ]
+    },
+    "AppProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "cleanupInstruction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contextEnabled": {
+          "type": "boolean"
+        },
+        "enhancementEnabled": {
+          "type": "boolean"
+        },
+        "executable": {
+          "type": "string"
+        },
+        "pasteShortcut": {
+          "$ref": "#/definitions/PasteShortcut"
+        }
+      },
+      "required": [
+        "cleanupInstruction",
+        "contextEnabled",
+        "enhancementEnabled",
+        "executable",
+        "pasteShortcut"
+      ],
+      "type": "object"
+    },
+    "DictionaryEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/DictionaryKind"
+        },
+        "phrase": {
+          "type": "string"
+        },
+        "replacement": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/definitions/EntrySource"
+        },
+        "starred": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "id",
+        "kind",
+        "phrase",
+        "replacement",
+        "source",
+        "starred"
+      ],
+      "type": "object"
+    },
+    "DictionaryKind": {
+      "enum": [
+        "vocabulary",
+        "replacement"
+      ],
+      "type": "string"
+    },
+    "EntrySource": {
+      "enum": [
+        "manual",
+        "autoLearned",
+        "imported"
+      ],
+      "type": "string"
+    },
+    "ExecutionPreference": {
+      "enum": [
+        "auto",
+        "cpuOnly",
+        "gpuPreferred"
+      ],
+      "type": "string"
+    },
+    "PasteShortcut": {
+      "enum": [
+        "controlV",
+        "controlShiftV",
+        "shiftInsert"
+      ],
+      "type": "string"
+    },
+    "QualityProfile": {
+      "enum": [
+        "fast",
+        "balanced",
+        "bestQuality",
+        "custom"
+      ],
+      "type": "string"
+    },
+    "Settings": {
+      "additionalProperties": false,
+      "description": "Durable preferences contain no tokens, transcripts or microphone recordings.",
+      "properties": {
+        "aiProvider": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/AiProvider"
+            }
+          ]
+        },
+        "anthropicModel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appProfiles": {
+          "items": {
+            "$ref": "#/definitions/AppProfile"
+          },
+          "type": "array"
+        },
+        "commandShortcut": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Shortcut"
+            }
+          ]
+        },
+        "contextEnabled": {
+          "type": "boolean"
+        },
+        "defaultTransformId": {
+          "type": "string"
+        },
+        "enhancementEnabled": {
+          "type": "boolean"
+        },
+        "executionPreference": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ExecutionPreference"
+            }
+          ]
+        },
+        "historyDays": {
+          "description": "Days to keep dictation history, encrypted to the Windows user. 0 keeps it for this\nsession only, in memory.",
+          "format": "uint32",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "launchAtLogin": {
+          "description": "Registered under the current user's Run key with `--background`.",
+          "type": "boolean"
+        },
+        "learningEnabled": {
+          "type": "boolean"
+        },
+        "localBaseUrl": {
+          "description": "Base URL of the local server; must be a loopback address.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "localModel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maxRecordingSeconds": {
+          "format": "uint32",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "microphoneId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modelDirectory": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modelId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "onboardingCompleted": {
+          "type": "boolean"
+        },
+        "openaiBaseUrl": {
+          "description": "Base URL of the OpenAI-compatible server, e.g. `https://api.example.com/v1`. API keys are\nkept in protected storage, never here.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "openaiModel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "playSounds": {
+          "type": "boolean"
+        },
+        "pushToTalk": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Shortcut"
+            }
+          ]
+        },
+        "qualityProfile": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualityProfile"
+            }
+          ]
+        },
+        "showPill": {
+          "description": "The non-activating dictation indicator shown above the taskbar.",
+          "type": "boolean"
+        },
+        "theme": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ThemePreference"
+            }
+          ]
+        },
+        "toggleEnabled": {
+          "type": "boolean"
+        },
+        "toggleShortcut": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Shortcut"
+            }
+          ]
+        },
+        "transformShortcut": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Shortcut"
+            }
+          ]
+        },
+        "trayIcon": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/TrayIconStyle"
+            }
+          ]
+        }
+      },
+      "required": [
+        "aiProvider",
+        "anthropicModel",
+        "appProfiles",
+        "commandShortcut",
+        "contextEnabled",
+        "defaultTransformId",
+        "enhancementEnabled",
+        "executionPreference",
+        "historyDays",
+        "language",
+        "launchAtLogin",
+        "learningEnabled",
+        "localBaseUrl",
+        "localModel",
+        "maxRecordingSeconds",
+        "microphoneId",
+        "modelDirectory",
+        "modelId",
+        "onboardingCompleted",
+        "openaiBaseUrl",
+        "openaiModel",
+        "playSounds",
+        "pushToTalk",
+        "qualityProfile",
+        "showPill",
+        "theme",
+        "toggleEnabled",
+        "toggleShortcut",
+        "transformShortcut",
+        "trayIcon"
+      ],
+      "type": "object"
+    },
+    "Shortcut": {
+      "additionalProperties": false,
+      "description": "Virtual-key chord interpreted only by the native shortcut process.",
+      "properties": {
+        "keys": {
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "keys"
+      ],
+      "type": "object"
+    },
+    "Snippet": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "expansion": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "trigger": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "expansion",
+        "id",
+        "trigger"
+      ],
+      "type": "object"
+    },
+    "ThemePreference": {
+      "description": "Window appearance; `System` follows the Windows app theme.",
+      "enum": [
+        "system",
+        "light",
+        "dark"
+      ],
+      "type": "string"
+    },
+    "Transform": {
+      "additionalProperties": false,
+      "properties": {
+        "builtIn": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "instruction": {
+          "type": "string"
+        },
+        "modelPreference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "preserveProtectedTokens": {
+          "type": "boolean"
+        },
+        "shortcut": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Shortcut"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "builtIn",
+        "id",
+        "instruction",
+        "modelPreference",
+        "name",
+        "preserveProtectedTokens",
+        "shortcut"
+      ],
+      "type": "object"
+    },
+    "TrayIconStyle": {
+      "description": "Colour of the notification-area (tray) mark. `Auto` picks white on a dark taskbar and black on\na light one; the fixed choices are for taskbars Onda cannot read, such as Linux panels.",
+      "enum": [
+        "auto",
+        "black",
+        "white"
+      ],
+      "type": "string"
+    }
+  },
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "checks": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "passed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "checks",
+            "passed"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "completeDebugSmoke",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "replayDebugFixture",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getSnapshot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getSettings",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "settings": {
+              "$ref": "#/definitions/Settings"
+            }
+          },
+          "required": [
+            "settings"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "updateSettings",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getDictionary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "entry": {
+              "$ref": "#/definitions/DictionaryEntry"
+            }
+          },
+          "required": [
+            "entry"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "saveDictionaryEntry",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "deleteDictionaryEntry",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "json": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "json"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "importDictionary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "exportDictionary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getSnippets",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "snippet": {
+              "$ref": "#/definitions/Snippet"
+            }
+          },
+          "required": [
+            "snippet"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "saveSnippet",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "deleteSnippet",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getTransforms",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "transform": {
+              "$ref": "#/definitions/Transform"
+            }
+          },
+          "required": [
+            "transform"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "saveTransform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "deleteTransform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "listAudioDevices",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "durationMs": {
+              "format": "uint32",
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "durationMs"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "testMicrophone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "commandMode": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "commandMode"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "startDictation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "stopDictation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "cancelOperation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getModelCatalog",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getInstalledModels",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "modelId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "modelId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "startModelDownload",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "modelId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "modelId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "cancelModelDownload",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "modelId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "modelId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "uninstallModel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "profileId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "profileId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "startChatgptSignIn",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "profileId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "profileId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "enableChatgptPlanUsage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "cancelChatgptSignIn",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "listChatgptProfiles",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "profileId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "profileId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "selectChatgptProfile",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "profileId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "profileId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "signOutChatgptProfile",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Forget an account on this PC, signing it out first if needed.",
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "profileId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "profileId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "removeChatgptProfile",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "listAvailableModels",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "profileId": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "profileId",
+            "slug"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "setChatgptModel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "transformId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "transformId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "previewTransform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "transformId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "transformId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "transformSelection",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "retryResult",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "retryTransformation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "copyResult",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Copy ChatGPT's version of the current result after Onda's checks kept the original.",
+      "properties": {
+        "command": {
+          "const": "copySuggestion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "undoLastTransform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "clearResult",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "proposalId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "proposalId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "acceptLearning",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "exportDiagnostics",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "checkUpdate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "installUpdate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Content-free daily dictation counts for the home screen.",
+      "properties": {
+        "command": {
+          "const": "getUsage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Bring the main window forward, optionally at a section such as `settings/microphone`.",
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "section": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "section"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "openMainWindow",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Hide the dictation pill early, e.g. after reading an error.",
+      "properties": {
+        "command": {
+          "const": "dismissPill",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Acknowledge a failed operation so Onda reads as ready again. Its text stays in History.",
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "operationId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operationId"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "dismissError",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Retained dictations and edits, newest first.",
+      "properties": {
+        "command": {
+          "const": "getHistory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "copyHistoryEntry",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Copy ChatGPT's version kept with a history entry whose polish was skipped.",
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "copyHistorySuggestion",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "deleteHistoryEntry",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "clearHistory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Record one short take of a dictionary word and transcribe it as dictation would,\nwithout typing it anywhere or keeping it in history.",
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "durationMs": {
+              "format": "uint32",
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "durationMs"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "teachWord",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "getProfile",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "setProfileName",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Opens the system file picker natively, so the original file never passes through the\nwebview; the picture is re-encoded before it is stored.",
+      "properties": {
+        "command": {
+          "const": "chooseProfilePicture",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "removeProfilePicture",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "A PNG the statistics page drew from content-free numbers; native code asks where to save it.",
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "pngBase64": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pngBase64"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "saveStatsImage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Models the configured provider offers; also the connection check for a local server.",
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "$ref": "#/definitions/AiProvider"
+            }
+          },
+          "required": [
+            "provider"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "listProviderModels",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "provider": {
+              "$ref": "#/definitions/AiProvider"
+            }
+          },
+          "required": [
+            "key",
+            "provider"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "saveProviderKey",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "$ref": "#/definitions/AiProvider"
+            }
+          },
+          "required": [
+            "provider"
+          ],
+          "type": "object"
+        },
+        "command": {
+          "const": "removeProviderKey",
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Memory and CPU of Onda's own process tree, including its web view processes.",
+      "properties": {
+        "command": {
+          "const": "getResourceUsage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Linux: asks the desktop to let Onda press the paste shortcut in other apps.",
+      "properties": {
+        "command": {
+          "const": "allowTyping",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Linux: stops typing into other apps and forgets the permission.",
+      "properties": {
+        "command": {
+          "const": "stopTyping",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Asks the desktop again to approve Onda's shortcuts, or restarts a stopped helper.",
+      "properties": {
+        "command": {
+          "const": "restartShortcuts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "ApiRequest"
+}

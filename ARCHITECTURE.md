@@ -73,6 +73,12 @@ mock (`tests/unit/contract.test.ts`) and the real-shell suite runs them in the r
 (`tests/e2e/00-contract.spec.ts`), so neither side can drift alone. The mock shows a "Development
 mock" badge; browser tests assert it and the real-shell suite asserts it is absent.
 
+The command decodes a JSON object before dispatch. Structured replacements require every field,
+and clearing a nullable preference or name requires explicit null. The contract generator also
+derives `contracts/desktop-request.schema.json` from Rust. The development mock validates only
+the requested command against that schema, then applies the same domain rules as the native app.
+Schema generation is an opt-in Cargo feature of the development tooling.
+
 ## State and data
 
 Rust owns all state; the UI rebuilds from `getSnapshot` and events. Data lives in the per-user app

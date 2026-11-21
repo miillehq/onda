@@ -3,6 +3,7 @@ use onda_core::contracts::*;
 use serde::{Deserialize, Deserializer};
 use ts_rs::TS;
 
+#[cfg_attr(feature = "wire-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Deserialize, TS)]
 #[serde(
     tag = "command",
@@ -20,11 +21,14 @@ pub enum ApiRequest {
     GetSnapshot,
     GetSettings,
     UpdateSettings {
-        #[serde(deserialize_with = "complete_settings")]
+        #[cfg_attr(feature = "wire-schema", schemars(with = "Settings"))]
+        #[serde(deserialize_with = "complete_object")]
         settings: Box<Settings>,
     },
     GetDictionary,
     SaveDictionaryEntry {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "DictionaryEntry"))]
+        #[serde(deserialize_with = "complete_object")]
         entry: DictionaryEntry,
     },
     DeleteDictionaryEntry {
@@ -36,6 +40,8 @@ pub enum ApiRequest {
     ExportDictionary,
     GetSnippets,
     SaveSnippet {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "Snippet"))]
+        #[serde(deserialize_with = "complete_object")]
         snippet: Snippet,
     },
     DeleteSnippet {
@@ -43,6 +49,8 @@ pub enum ApiRequest {
     },
     GetTransforms,
     SaveTransform {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "Transform"))]
+        #[serde(deserialize_with = "complete_object")]
         transform: Transform,
     },
     DeleteTransform {
@@ -69,6 +77,8 @@ pub enum ApiRequest {
         model_id: String,
     },
     StartChatgptSignIn {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "Option<String>"))]
+        #[serde(deserialize_with = "Option::deserialize")]
         profile_id: Option<String>,
     },
     EnableChatgptPlanUsage {
@@ -115,6 +125,8 @@ pub enum ApiRequest {
     GetUsage,
     /// Bring the main window forward, optionally at a section such as `settings/microphone`.
     OpenMainWindow {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "Option<String>"))]
+        #[serde(deserialize_with = "Option::deserialize")]
         section: Option<String>,
     },
     /// Hide the dictation pill early, e.g. after reading an error.
@@ -143,6 +155,8 @@ pub enum ApiRequest {
     },
     GetProfile,
     SetProfileName {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "Option<String>"))]
+        #[serde(deserialize_with = "Option::deserialize")]
         name: Option<String>,
     },
     /// Opens the system file picker natively, so the original file never passes through the
@@ -155,13 +169,19 @@ pub enum ApiRequest {
     },
     /// Models the configured provider offers; also the connection check for a local server.
     ListProviderModels {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "AiProvider"))]
+        #[serde(deserialize_with = "named_choice")]
         provider: AiProvider,
     },
     SaveProviderKey {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "AiProvider"))]
+        #[serde(deserialize_with = "named_choice")]
         provider: AiProvider,
         key: String,
     },
     RemoveProviderKey {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "AiProvider"))]
+        #[serde(deserialize_with = "named_choice")]
         provider: AiProvider,
     },
     /// Memory and CPU of Onda's own process tree, including its web view processes.
@@ -174,19 +194,48 @@ pub enum ApiRequest {
     RestartShortcuts,
 }
 
-/// Stored profiles may omit preferences introduced by later versions. A renderer replaces the
-/// whole document, so letting those same defaults repair a request would silently erase data.
-/// On this infrequent write, compare with serde's own wire representation to include nested and
-/// nullable fields without maintaining a second settings schema.
-fn complete_settings<'de, D>(deserializer: D) -> Result<Box<Settings>, D::Error>
+impl ApiRequest {
+    /// Decode the one IPC envelope before any handler can read or change application state.
+    pub fn decode(received: serde_json::Value) -> onda_core::error::AppResult<Self> {
+        let invalid =
+            || onda_core::error::AppError::invalid("The desktop request has an invalid shape.");
+        let envelope = received.as_object().ok_or_else(invalid)?;
+        // serde also reads a unit variant from a one-key map. The wire form is its name.
+        if !envelope
+            .get("command")
+            .is_some_and(serde_json::Value::is_string)
+            || envelope.get("args").is_some_and(|args| !args.is_object())
+        {
+            return Err(invalid());
+        }
+        serde_json::from_value(received).map_err(|_| invalid())
+    }
+}
+
+/// Small structured replacements must carry exactly the fields the renderer was given.
+/// Durable records retain their independent backwards-compatible decoding rules.
+fn complete_object<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned + serde::Serialize,
 {
     use serde::de::Error;
     let received = serde_json::Value::deserialize(deserializer)?;
-    let settings = Settings::deserialize(&received).map_err(D::Error::custom)?;
-    if serde_json::to_value(&settings).map_err(D::Error::custom)? != received {
-        return Err(D::Error::custom("Send the complete settings object."));
+    let value = T::deserialize(&received).map_err(D::Error::custom)?;
+    if !received.is_object() || serde_json::to_value(&value).map_err(D::Error::custom)? != received
+    {
+        return Err(D::Error::custom("Expected a complete desktop object."));
     }
-    Ok(Box::new(settings))
+    Ok(value)
+}
+
+/// One of several named choices arrives as its name, never as serde's one-key map.
+fn named_choice<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    use serde::de::{value::StringDeserializer, IntoDeserializer};
+    let name: StringDeserializer<D::Error> = String::deserialize(deserializer)?.into_deserializer();
+    T::deserialize(name)
 }
