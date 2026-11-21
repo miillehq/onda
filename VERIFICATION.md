@@ -146,3 +146,9 @@ with an identical tree.
   runs, no diagnosis yet ([issue #25](https://github.com/miillehq/onda/issues/25)). The step now
   retries once after a timeout (L6 only); each retry's warning goes into the issue, and two
   timeouts in one run fail the job. If retries keep coming, the step is quarantined.
+
+## Per-PR review verification
+
+| Date | Level | Claim | Platforms | Evidence |
+|---|---|---|---|---|
+| 2026-11-21 | L1, L3 | #42 Refusing a future WAL preserves its uncheckpointed pages. An unreadable history table leaves session dictation available. | windows-x64, local | cargo test --locked -p onda-core --test profile_storage and cargo test --locked -p onda-app --lib runtime::history::tests passed. The regressions first reported “refusal checkpointed a newer database” and “history read failure prevented startup”. |

@@ -182,7 +182,7 @@ impl Runtime {
         let settings = store.settings()?;
         let history = History::load(&mut store, settings.history_days, now_ms(), |bytes| {
             onda_platform::unprotect_user_data(bytes).ok()
-        })?;
+        });
         let index = DictionaryIndex::build(&store.dictionary()?, &store.snippets()?)?;
         let helper_config = shortcut_config(&settings, &store.transforms()?)?;
         let cloud_result = ChatGptService::new(CloudConfig {
