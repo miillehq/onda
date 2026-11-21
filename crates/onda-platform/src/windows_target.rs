@@ -1,5 +1,7 @@
+mod text;
 use crate::{target::validate_identity, PlatformError, TargetSnapshot};
 use std::ffi::c_void;
+pub(crate) use text::*;
 use windows::{
     core::{Error as WindowsError, BSTR},
     Win32::{
@@ -132,29 +134,7 @@ fn snapshot_with(
     if integrity_level > integrity(unsafe { GetCurrentProcess() })? {
         return Err(PlatformError::ElevatedTarget);
     }
-    let mut created: FILETIME = unsafe { std::mem::zeroed() };
-    let mut exited = created;
-    let mut kernel = created;
-    let mut user = created;
-    if unsafe { GetProcessTimes(process.0, &mut created, &mut exited, &mut kernel, &mut user) } == 0
-    {
-        return Err(PlatformError::TargetUnavailable(
-            "process lifetime unavailable".into(),
-        ));
-    }
-    let mut path = vec![0u16; 32768];
-    let mut length = path.len() as u32;
-    if unsafe { QueryFullProcessImageNameW(process.0, 0, path.as_mut_ptr(), &mut length) } == 0 {
-        return Err(PlatformError::TargetUnavailable(
-            "process identity unavailable".into(),
-        ));
-    }
-    let full_path = String::from_utf16_lossy(&path[..length as usize]);
-    let executable_name = full_path
-        .rsplit(['\\', '/'])
-        .next()
-        .unwrap_or(&full_path)
-        .to_owned();
+    let (process_created_at, executable_name) = process_identity(&process)?;
     let element = unsafe { automation.GetFocusedElement().map_err(uia_error)? };
     let element_pid = unsafe { element.CurrentProcessId().map_err(uia_error)? } as u32;
     if element_pid != pid && !hosted_in(hwnd, element_pid)? {
@@ -175,7 +155,7 @@ fn snapshot_with(
     let snapshot = TargetSnapshot {
         window_handle: hwnd as isize,
         process_id: pid,
-        process_created_at: (created.dwHighDateTime as u64) << 32 | created.dwLowDateTime as u64,
+        process_created_at,
         executable_name,
         focused_runtime_id,
         is_password,
@@ -333,157 +313,37 @@ fn integrity(process: HANDLE) -> Result<u32, PlatformError> {
     Ok(unsafe { *level })
 }
 
-pub(crate) fn read_text(
-    target: &TargetSnapshot,
-    max_characters: usize,
-    selection: bool,
-) -> Result<String, PlatformError> {
-    let _apartment = ComApartment::initialize()?;
-    let automation = automation()?;
-    let (actual, element) = snapshot_with(&automation)?;
-    validate_identity(target, &actual)?;
-    let pattern: IUIAutomationTextPattern = unsafe {
-        element
-            .GetCurrentPatternAs(UIA_TextPatternId)
-            .map_err(|_| PlatformError::SelectionUnavailable)?
-    };
-    let range = if selection {
-        let ranges = unsafe { pattern.GetSelection().map_err(uia_error)? };
-        match unsafe { ranges.Length().map_err(uia_error)? } {
-            0 => None,
-            1 => Some(unsafe { ranges.GetElement(0).map_err(uia_error)? }),
-            _ => return Err(PlatformError::SelectionUnavailable),
-        }
-    } else {
-        Some(unsafe { pattern.DocumentRange().map_err(uia_error)? })
-    };
-    let text = match range {
-        Some(range) => unsafe {
-            range
-                .GetText((max_characters + 1) as i32)
-                .map_err(uia_error)?
-        }
-        .to_string(),
-        None => String::new(),
-    };
-    if text.encode_utf16().count() > max_characters {
-        return Err(PlatformError::TextLimit);
-    }
-    // Some providers can switch focus while servicing a range request.
-    let (after, _) = snapshot_with(&automation)?;
-    validate_identity(target, &after)?;
-    if selection && text.is_empty() {
-        return Err(PlatformError::EmptySelection);
-    }
-    Ok(text)
-}
-
-/// Up to `max_characters` immediately before the caret (or before the selection, which a
-/// paste replaces). Empty at the start of the field or when the control exposes no caret.
-pub(crate) fn preceding_text(
-    target: &TargetSnapshot,
-    max_characters: usize,
-) -> Result<String, PlatformError> {
-    let _apartment = ComApartment::initialize()?;
-    let automation = automation()?;
-    let (actual, element) = snapshot_with(&automation)?;
-    validate_identity(target, &actual)?;
-    let pattern: IUIAutomationTextPattern = unsafe {
-        element
-            .GetCurrentPatternAs(UIA_TextPatternId)
-            .map_err(|_| PlatformError::SelectionUnavailable)?
-    };
-    let ranges = unsafe { pattern.GetSelection().map_err(uia_error)? };
-    if unsafe { ranges.Length().map_err(uia_error)? } != 1 {
-        return Ok(String::new());
-    }
-    let caret = unsafe { ranges.GetElement(0).map_err(uia_error)? };
-    let before = unsafe { caret.Clone().map_err(uia_error)? };
-    let moved = unsafe {
-        before
-            .MoveEndpointByRange(
-                TextPatternRangeEndpoint_End,
-                &caret,
-                TextPatternRangeEndpoint_Start,
-            )
-            .map_err(uia_error)?;
-        before
-            .MoveEndpointByUnit(
-                TextPatternRangeEndpoint_Start,
-                TextUnit_Character,
-                -(max_characters as i32),
-            )
-            .map_err(uia_error)?
-    };
-    if moved == 0 {
-        return Ok(String::new());
-    }
-    // Surrogate pairs count as two UTF-16 units for GetText.
-    let text = unsafe {
-        before
-            .GetText((max_characters * 2) as i32)
-            .map_err(uia_error)?
-    }
-    .to_string();
-    let (after, _) = snapshot_with(&automation)?;
-    validate_identity(target, &after)?;
-    let skip = text.chars().count().saturating_sub(max_characters);
-    Ok(text.chars().skip(skip).collect())
-}
-
 fn uia_error(error: WindowsError) -> PlatformError {
     PlatformError::TargetUnavailable(format!("UI Automation HRESULT {}", error.code().0))
 }
 
-pub(crate) fn select_unique_text(
-    target: &TargetSnapshot,
-    expected_document: &str,
-    needle: &str,
-    should_cancel: &dyn Fn() -> bool,
-) -> Result<(), PlatformError> {
-    if needle.is_empty() || expected_document.match_indices(needle).count() != 1 {
-        return Err(PlatformError::TargetChanged);
+/// Include the creation time so a reused process ID cannot identify an old target.
+fn process_identity(process: &Handle) -> Result<(u64, String), PlatformError> {
+    let mut created: FILETIME = unsafe { std::mem::zeroed() };
+    let mut exited = created;
+    let mut kernel = created;
+    let mut user = created;
+    if unsafe { GetProcessTimes(process.0, &mut created, &mut exited, &mut kernel, &mut user) } == 0
+    {
+        return Err(PlatformError::TargetUnavailable(
+            "process lifetime unavailable".into(),
+        ));
     }
-    let _apartment = ComApartment::initialize()?;
-    let automation = automation()?;
-    let (actual, element) = snapshot_with(&automation)?;
-    validate_identity(target, &actual)?;
-    let pattern: IUIAutomationTextPattern = unsafe {
-        element
-            .GetCurrentPatternAs(UIA_TextPatternId)
-            .map_err(|_| PlatformError::SelectionUnavailable)?
-    };
-    let document = unsafe { pattern.DocumentRange().map_err(uia_error)? };
-    let current = unsafe {
-        document
-            .GetText((crate::target::MAX_TEXT_CHARACTERS + 1) as i32)
-            .map_err(uia_error)?
+    let mut path = vec![0u16; 32768];
+    let mut length = path.len() as u32;
+    if unsafe { QueryFullProcessImageNameW(process.0, 0, path.as_mut_ptr(), &mut length) } == 0 {
+        return Err(PlatformError::TargetUnavailable(
+            "process identity unavailable".into(),
+        ));
     }
-    .to_string();
-    if current != expected_document {
-        return Err(PlatformError::TargetChanged);
-    }
-    let found = unsafe {
-        document
-            .FindText(&BSTR::from(needle), false, false)
-            .map_err(|_| PlatformError::SelectionUnavailable)?
-    };
-    let found_text = unsafe {
-        found
-            .GetText((needle.encode_utf16().count() + 1) as i32)
-            .map_err(uia_error)?
-    }
-    .to_string();
-    if found_text != needle {
-        return Err(PlatformError::TargetChanged);
-    }
-    let (before, _) = snapshot_with(&automation)?;
-    validate_identity(target, &before)?;
-    if should_cancel() {
-        return Err(PlatformError::Cancelled);
-    }
-    unsafe {
-        found.Select().map_err(uia_error)?;
-    }
-    Ok(())
+    let full_path = String::from_utf16_lossy(&path[..length as usize]);
+    let executable_name = full_path
+        .rsplit(['\\', '/'])
+        .next()
+        .unwrap_or(&full_path)
+        .to_owned();
+    Ok((
+        (created.dwHighDateTime as u64) << 32 | created.dwLowDateTime as u64,
+        executable_name,
+    ))
 }

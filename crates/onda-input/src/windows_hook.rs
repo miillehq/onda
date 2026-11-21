@@ -128,34 +128,7 @@ pub fn run() -> Result<(), InputError> {
     let output_worker = thread::Builder::new()
         .name("onda-hook-output".into())
         .spawn(move || {
-            let stdout = std::io::stdout();
-            let mut output = stdout.lock();
-            while let Ok(event) = receiver.recv() {
-                let event = match event {
-                    HookEvent::Ready => HelperEvent::Ready {
-                        protocol_version: onda_input::PROTOCOL_VERSION,
-                    },
-                    HookEvent::Heartbeat(uptime_ms) => HelperEvent::Heartbeat { uptime_ms },
-                    HookEvent::Pressed(index) => HelperEvent::Pressed {
-                        action: bindings[index].action,
-                        transform_id: bindings[index].transform_id.clone(),
-                    },
-                    HookEvent::Released(index) => HelperEvent::Released {
-                        action: bindings[index].action,
-                        transform_id: bindings[index].transform_id.clone(),
-                    },
-                    HookEvent::Reset => HelperEvent::Reset {
-                        reason: "inputDesktopUnavailable".into(),
-                    },
-                };
-                if serde_json::to_writer(&mut output, &event).is_err()
-                    || output.write_all(b"\n").is_err()
-                    || output.flush().is_err()
-                {
-                    QUEUE_FAILED.store(true, Ordering::Relaxed);
-                    break;
-                }
-            }
+            write_events(receiver, bindings);
         })?;
     STATE.with(|state| *state.borrow_mut() = Some(HookState { matcher, sender }));
     // A helper must terminate when the owning process disappears rather than persist as a hook.
@@ -176,30 +149,7 @@ pub fn run() -> Result<(), InputError> {
     let input_worker = thread::Builder::new()
         .name("onda-hook-owner".into())
         .spawn(move || {
-            let mut input = std::io::stdin().lock();
-            loop {
-                let mut line = String::new();
-                let read = (&mut input)
-                    .take((MAX_CONTROL_LINE_BYTES + 1) as u64)
-                    .read_line(&mut line);
-                if !matches!(read, Ok(length) if length > 0 && length <= MAX_CONTROL_LINE_BYTES) {
-                    break;
-                }
-                match serde_json::from_str::<HelperCommand>(&line) {
-                    Ok(HelperCommand::SetOperationActive { active }) => unsafe {
-                        PostThreadMessageW(
-                            thread_id,
-                            OPERATION_ACTIVE_MESSAGE,
-                            usize::from(active),
-                            0,
-                        );
-                    },
-                    Ok(HelperCommand::Shutdown) | Err(_) => break,
-                }
-            }
-            unsafe {
-                PostThreadMessageW(thread_id, WM_QUIT, 0, 0);
-            }
+            read_owner(thread_id);
         })?;
     let mut hook = unsafe {
         SetWindowsHookExW(
@@ -227,83 +177,7 @@ pub fn run() -> Result<(), InputError> {
         return Err(InputError::Helper("hookTimerFailed".into()));
     }
     emit(HookEvent::Ready);
-    let started = Instant::now();
-    let mut rearmed_at = Instant::now();
-    let mut message: MSG = unsafe { std::mem::zeroed() };
-    let result = loop {
-        let status = unsafe { GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) };
-        if status == 0 {
-            break Ok(());
-        }
-        if status == -1 {
-            break Err(InputError::Helper("hookMessageLoopFailed".into()));
-        }
-        if QUEUE_FAILED.load(Ordering::Relaxed) {
-            break Err(InputError::Helper("hookQueueOverflow".into()));
-        }
-        if message.message == OPERATION_ACTIVE_MESSAGE {
-            STATE.with(|state| {
-                if let Some(state) = state.borrow_mut().as_mut() {
-                    state.matcher.set_operation_active(message.wParam != 0);
-                }
-            });
-            continue;
-        }
-        if message.message == WM_TIMER {
-            emit(HookEvent::Heartbeat(started.elapsed().as_millis() as u64));
-            let desktop_active = input_desktop.receives_input().unwrap_or(false);
-            let (desktop_lost, desktop_restored, idle_for_rearm) = STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                let Some(state) = state.as_mut() else {
-                    return (false, false, false);
-                };
-                let restored = desktop_active && !state.matcher.desktop_active();
-                let lost = state.matcher.set_desktop_active(desktop_active);
-                if restored {
-                    seed_modifiers(&mut state.matcher);
-                }
-                (lost, restored, state.matcher.is_idle_for_rearm())
-            });
-            if desktop_lost {
-                emit(HookEvent::Reset);
-            }
-            if desktop_restored {
-                emit(HookEvent::Ready);
-            }
-            // Consumed key-downs do not reliably update Windows' asynchronous key state.
-            // Genuine hook key-up is authoritative; heartbeat must never unlatch a held chord.
-            if idle_for_rearm && rearmed_at.elapsed().as_millis() as u64 >= REARM_INTERVAL_MS {
-                // Windows exposes no hook-removal notification; periodic idle reinstallation limits silent loss.
-                unsafe {
-                    UnhookWindowsHookEx(hook);
-                }
-                hook = unsafe {
-                    SetWindowsHookExW(
-                        WH_KEYBOARD_LL,
-                        Some(keyboard_hook),
-                        GetModuleHandleW(std::ptr::null()),
-                        0,
-                    )
-                };
-                if hook.is_null() {
-                    break Err(InputError::Helper("hookRearmFailed".into()));
-                }
-                STATE.with(|state| {
-                    if let Some(state) = state.borrow_mut().as_mut() {
-                        let operation_active = state.matcher.operation_active();
-                        state.matcher.reset();
-                        state.matcher.set_operation_active(operation_active);
-                        seed_modifiers(&mut state.matcher);
-                    }
-                });
-                rearmed_at = Instant::now();
-            }
-        }
-        unsafe {
-            TranslateMessage(&message);
-            DispatchMessageW(&message);
-        }
-    };
+    let result = read_hook_messages(&input_desktop, &mut hook);
     unsafe {
         KillTimer(std::ptr::null_mut(), timer);
         UnhookWindowsHookEx(hook);
@@ -328,6 +202,152 @@ fn emit(event: HookEvent) {
 fn seed_modifiers(matcher: &mut ShortcutMatcher) {
     for key in MODIFIER_KEYS {
         matcher.seed_key(key, unsafe { GetAsyncKeyState(key as i32) } < 0);
+    }
+}
+
+/// Encode only registered shortcut events on the helper output thread.
+fn write_events(receiver: mpsc::Receiver<HookEvent>, bindings: Vec<onda_input::ShortcutBinding>) {
+    let stdout = std::io::stdout();
+    let mut output = stdout.lock();
+    while let Ok(event) = receiver.recv() {
+        let event = match event {
+            HookEvent::Ready => HelperEvent::Ready {
+                protocol_version: onda_input::PROTOCOL_VERSION,
+            },
+            HookEvent::Heartbeat(uptime_ms) => HelperEvent::Heartbeat { uptime_ms },
+            HookEvent::Pressed(index) => HelperEvent::Pressed {
+                action: bindings[index].action,
+                transform_id: bindings[index].transform_id.clone(),
+            },
+            HookEvent::Released(index) => HelperEvent::Released {
+                action: bindings[index].action,
+                transform_id: bindings[index].transform_id.clone(),
+            },
+            HookEvent::Reset => HelperEvent::Reset {
+                reason: "inputDesktopUnavailable".into(),
+            },
+        };
+        if serde_json::to_writer(&mut output, &event).is_err()
+            || output.write_all(b"\n").is_err()
+            || output.flush().is_err()
+        {
+            QUEUE_FAILED.store(true, Ordering::Relaxed);
+            break;
+        }
+    }
+}
+/// The owner closing its input pipe always stops the keyboard hook.
+fn read_owner(thread_id: u32) {
+    let mut input = std::io::stdin().lock();
+    loop {
+        let mut line = String::new();
+        let read = (&mut input)
+            .take((MAX_CONTROL_LINE_BYTES + 1) as u64)
+            .read_line(&mut line);
+        if !matches!(read, Ok(length) if length > 0 && length <= MAX_CONTROL_LINE_BYTES) {
+            break;
+        }
+        match serde_json::from_str::<HelperCommand>(&line) {
+            Ok(HelperCommand::SetOperationActive { active }) => unsafe {
+                PostThreadMessageW(thread_id, OPERATION_ACTIVE_MESSAGE, usize::from(active), 0);
+            },
+            Ok(HelperCommand::Shutdown) | Err(_) => break,
+        }
+    }
+    unsafe {
+        PostThreadMessageW(thread_id, WM_QUIT, 0, 0);
+    }
+}
+/// Re-arm an idle hook and reset its matcher when the active desktop changes.
+fn heartbeat(
+    input_desktop: &InputDesktop,
+    hook: &mut HHOOK,
+    rearmed_at: &mut Instant,
+    started: Instant,
+) -> Result<(), InputError> {
+    emit(HookEvent::Heartbeat(started.elapsed().as_millis() as u64));
+    let desktop_active = input_desktop.receives_input().unwrap_or(false);
+    let (desktop_lost, desktop_restored, idle_for_rearm) = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let Some(state) = state.as_mut() else {
+            return (false, false, false);
+        };
+        let restored = desktop_active && !state.matcher.desktop_active();
+        let lost = state.matcher.set_desktop_active(desktop_active);
+        if restored {
+            seed_modifiers(&mut state.matcher);
+        }
+        (lost, restored, state.matcher.is_idle_for_rearm())
+    });
+    if desktop_lost {
+        emit(HookEvent::Reset);
+    }
+    if desktop_restored {
+        emit(HookEvent::Ready);
+    }
+    // Consumed key-downs do not reliably update Windows' asynchronous key state.
+    // Genuine hook key-up is authoritative; heartbeat must never unlatch a held chord.
+    if idle_for_rearm && rearmed_at.elapsed().as_millis() as u64 >= REARM_INTERVAL_MS {
+        // Windows exposes no hook-removal notification; periodic idle reinstallation limits silent loss.
+        unsafe {
+            UnhookWindowsHookEx(*hook);
+        }
+        *hook = unsafe {
+            SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(keyboard_hook),
+                GetModuleHandleW(std::ptr::null()),
+                0,
+            )
+        };
+        if (*hook).is_null() {
+            return Err(InputError::Helper("hookRearmFailed".into()));
+        }
+        STATE.with(|state| {
+            if let Some(state) = state.borrow_mut().as_mut() {
+                let operation_active = state.matcher.operation_active();
+                state.matcher.reset();
+                state.matcher.set_operation_active(operation_active);
+                seed_modifiers(&mut state.matcher);
+            }
+        });
+        *rearmed_at = Instant::now();
+    }
+    Ok(())
+}
+
+fn read_hook_messages(input_desktop: &InputDesktop, hook: &mut HHOOK) -> Result<(), InputError> {
+    let started = Instant::now();
+    let mut rearmed_at = Instant::now();
+    let mut message: MSG = unsafe { std::mem::zeroed() };
+    loop {
+        let status = unsafe { GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) };
+        if status == 0 {
+            break Ok(());
+        }
+        if status == -1 {
+            break Err(InputError::Helper("hookMessageLoopFailed".into()));
+        }
+        if QUEUE_FAILED.load(Ordering::Relaxed) {
+            break Err(InputError::Helper("hookQueueOverflow".into()));
+        }
+        if message.message == OPERATION_ACTIVE_MESSAGE {
+            STATE.with(|state| {
+                if let Some(state) = state.borrow_mut().as_mut() {
+                    state.matcher.set_operation_active(message.wParam != 0);
+                }
+            });
+            continue;
+        }
+        if message.message == WM_TIMER {
+            if let Err(error) = heartbeat(input_desktop, hook, &mut rearmed_at, started) {
+                break Err(error);
+            }
+        }
+        unsafe {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
     }
 }
 
