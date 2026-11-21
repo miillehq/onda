@@ -1,0 +1,240 @@
+/* Three equal boxes on one line at every window size; wrapping left ChatGPT alone after the arrow. */
+.sent-diagram {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.sent-diagram .flow-sub {
+  max-width: none;
+  white-space: normal;
+}
+.sent-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: var(--text-sm);
+}
+.sent-box b {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 640;
+}
+.sent-box.is-local {
+  background: none;
+  box-shadow: none;
+  border: 1px dashed var(--line-strong);
+}
+.sent-box.is-local svg {
+  color: var(--ok);
+}
+.sent-box.is-cloud {
+  background: var(--tile);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 var(--tile-line);
+}
+.sent-box.is-cloud .flow-sub {
+  color: var(--tile-fg-2);
+}
+.sent-box svg {
+  flex: none;
+}
+.sent-arrow {
+  align-self: center;
+  color: var(--fg-3);
+}
+.sent-box b {
+  overflow-wrap: anywhere;
+}
+.hero-command {
+  display: inline-block;
+  align-self: flex-start;
+  margin: 4px 0 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-control);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--tile-line);
+  color: var(--tile-fg);
+  font-size: 20px;
+}
+.resources {
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px;
+}
+.resources-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.resources .tile-value {
+  margin: 4px 0 2px;
+}
+.resources .link-button {
+  justify-self: start;
+}
+.provider-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.provider-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  text-align: left;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.provider-option .flow-sub {
+  max-width: none;
+  white-space: normal;
+}
+.provider-option b {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 640;
+}
+.provider-option:hover {
+  box-shadow: 0 0 0 1px var(--fg-3);
+}
+.provider-option.is-selected {
+  box-shadow: 0 0 0 2px var(--fg);
+}
+.provider-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.provider-option.is-selected .provider-icon {
+  background: var(--tile);
+  color: var(--tile-fg);
+  box-shadow: none;
+}
+.provider-card {
+  display: grid;
+  gap: 20px;
+  padding: 20px 22px;
+}
+.provider-field {
+  display: grid;
+  gap: 6px;
+}
+.key-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.key-entry .input {
+  flex: 1;
+  min-width: 0;
+}
+.key-saved {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+}
+.key-saved svg {
+  color: var(--ok);
+}
+.field-hint.is-error {
+  color: var(--err);
+  font-weight: 540;
+}
+.field-hint.is-ok {
+  color: var(--ok);
+  font-weight: 540;
+}
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-1);
+}
+.plain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.plain-table th,
+.plain-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.plain-table th {
+  color: var(--fg-2);
+  font-weight: 600;
+}
+.plain-table tr:last-child td {
+  border-bottom: 0;
+}
+.plain-table .is-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.avatar,
+.app-badge {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--tile);
+  color: #ffffff;
+  font-weight: 680;
+}
+.app-badge {
+  border-radius: 10px;
+}
+.row.account {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.connect {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.connect-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--sunken);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.connect p {
+  margin-top: 4px;
+}
+
+.add-app {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}

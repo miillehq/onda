@@ -1,0 +1,104 @@
+/* ================================================================== Rewrites */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 16px;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: var(--radius-card);
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.steps b {
+  color: var(--fg);
+  font-weight: 640;
+}
+.step-icon {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--fg);
+}
+.rewrite-list {
+  margin: 20px 0 16px;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  background: var(--panel);
+  overflow: hidden;
+}
+.rewrite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 12px 14px 20px;
+}
+.rewrite + .rewrite {
+  border-top: 1px solid var(--line);
+}
+.rewrite-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: var(--text-lg);
+  font-weight: 620;
+}
+.rewrite-instruction {
+  margin-top: 3px;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rewrite-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.try {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.try-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.try-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.try-output {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.try-output .diff {
+  font-size: 17px;
+}

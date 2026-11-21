@@ -1,0 +1,208 @@
+/* ------------------------------------------------------------------ meters */
+.level-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 64px;
+}
+.level-bars i {
+  width: 6px;
+  border-radius: 3px;
+  background: var(--line-strong);
+  transition: background-color 90ms linear;
+}
+.level-bars.is-active i.on {
+  background: var(--fg);
+}
+
+.diff {
+  font-size: 19px;
+  line-height: 1.6;
+}
+.diff ins {
+  text-decoration: none;
+  background: var(--diff-add);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+.diff del {
+  color: var(--fg-3);
+  text-decoration-thickness: 1.5px;
+  background: var(--diff-remove);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+/* ------------------------------------------------------------------ disclosure */
+.disclosure {
+  margin-top: 14px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  background: var(--panel);
+}
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  list-style: none;
+  font-size: var(--text-md);
+}
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.disclosure > summary::after {
+  content: "";
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--fg-2);
+  border-bottom: 2px solid var(--fg-2);
+  transform: rotate(45deg);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.disclosure[open] > summary::after {
+  transform: rotate(-135deg);
+}
+.disclosure > summary:hover {
+  background: var(--hover);
+  border-radius: var(--radius-card);
+}
+.disclosure.is-inline {
+  margin-top: 8px;
+  box-shadow: none;
+  background: none;
+}
+/* A compact toggle sized to its label. Padding keeps the hover fill off the text, and the
+   negative margin keeps the label aligned with the description above it. */
+.disclosure.is-inline > summary {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: -8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-control);
+  font-size: var(--text-sm);
+  font-weight: 560;
+}
+.disclosure.is-inline > summary:hover {
+  border-radius: var(--radius-control);
+}
+.disclosure.is-inline > summary::after {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 4px;
+}
+.disclosure.is-inline[open] > summary::after {
+  margin-top: 3px;
+}
+.disclosure.is-inline > .code {
+  margin-top: 6px;
+}
+.code {
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ------------------------------------------------------------------ recorder */
+.recorder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.recorder-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.recorder-capture {
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1.5px dashed var(--fg);
+  background: var(--sunken);
+}
+.recorder-hint {
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+  font-weight: 540;
+  animation: soft-pulse 1.4s var(--ease-in-out) infinite;
+}
+@keyframes soft-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.muted {
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.muted-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+}
+.footnote {
+  margin-top: 12px;
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.grow {
+  flex: 1;
+}
+.caret {
+  display: inline-block;
+  width: 2.5px;
+  height: 1.15em;
+  margin-left: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  vertical-align: -0.2em;
+  animation: blink 1.1s steps(1) infinite;
+}
+/* A finished sample settles; endless blinking would keep an idle window repainting. */
+.caret.is-done {
+  animation-iteration-count: 3;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret,
+  .recorder-hint,
+  .progress.is-indeterminate .progress-fill,
+  .button.is-busy::after {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .switch[aria-checked="true"] {
+    background: Highlight;
+  }
+  .chip,
+  .card,
+  .rows,
+  .callout {
+    border: 1px solid CanvasText;
+  }
+}

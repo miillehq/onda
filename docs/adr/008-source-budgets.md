@@ -21,4 +21,6 @@ Rustfmt and Clippy check code compiled for the host. The source scanner follows 
 
 Biome checks renderer and tooling source. Knip checks the full tree and the production entry points separately. The production pass exposed test-only exports and duplicate shortcut and calendar formatting. The renderer now uses the same functions the tests exercise. Generated mirrors, fixtures and test bodies have their own compile and test checks.
 
+The file limit also applies to styles, Vite’s configured HTML entries and SQLite migrations. PostCSS parses the same source that Vite bundles. A write-free production build identifies emitted CSS after Vite folds development guards. The check follows its local imports and matches SQL resources to native compile-time includes. HTML and SQL comment-only lines are excluded without treating comment markers inside literals as comments. Feature styles retain their original cascade order through the three style entry files.
+
 `node scripts/quality/architecture.mjs --stats` prints the measurements. An additional wire field, view branch or operation phase faces the same checked limits on the next PR. A higher limit requires an ADR with the compatibility or implementation reason.

@@ -44,6 +44,7 @@ test has been seen red with its probe.
 | 34 | Keep appearance previews legible | All six samples fill their cards at compact widths. Native screenshots capture the settled screen. | L4–L6 | In review, #56 |
 | 35 | Audit the complete npm tree | A clean Node 24 dependency tree runs the native WebDriver suite and both shipped and development packages pass the advisory gate. | L0, L6 | In review, #57 |
 | 36 | Parallelize Intel macOS verification | A single worker archive feeds the ordinary app tests and real WKWebView. The package gate requires the separate library, credential, app and desktop results. | L0–L3, L6 | In review |
+| 37 | Cover the shipped renderer assets | Feature styles fit the file budget and retain their cascade. Every local stylesheet and SQL migration has a production reference. | L0, L4, L5 | In review |
 
 Rulings:
 

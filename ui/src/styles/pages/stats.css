@@ -1,0 +1,164 @@
+/* ================================================================== Stats */
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--tile);
+  color: var(--tile-fg);
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.stats-person {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.stats-greeting {
+  font-size: var(--text-xl, 20px);
+  font-weight: 680;
+  letter-spacing: -0.018em;
+}
+.stats-since {
+  margin-top: 2px;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+}
+.stats-since a {
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.stats-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+/* The year fits the card: 53 equal columns of square days, no sideways scrollbar. Below about
+   8 px a day stops reading, so a very narrow window scrolls to the latest weeks instead. */
+.activity {
+  --cell-gap: 3px;
+  padding: 18px 20px 14px;
+}
+.activity-scroll {
+  overflow-x: auto;
+}
+.activity-months,
+.activity-grid {
+  min-width: calc(53 * 8px + 52 * var(--cell-gap));
+}
+.activity-months {
+  display: grid;
+  column-gap: var(--cell-gap);
+  height: 18px;
+  line-height: 18px;
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+}
+.activity-months span {
+  white-space: nowrap;
+}
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(53, minmax(0, 1fr));
+  gap: var(--cell-gap);
+}
+.activity-week {
+  display: grid;
+  gap: var(--cell-gap);
+}
+.activity-day {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--fg);
+}
+.activity-day.level-0 {
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.activity-day.level-1 {
+  opacity: 0.28;
+}
+.activity-day.level-2 {
+  opacity: 0.5;
+}
+.activity-day.level-3 {
+  opacity: 0.74;
+}
+.activity-day.is-future {
+  visibility: hidden;
+}
+.activity-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+}
+.activity-legend .activity-day {
+  width: 11px;
+}
+.stats-help {
+  margin-top: 28px;
+}
+.stats-help .stats-rules {
+  padding: 4px 20px 18px;
+}
+.activity-legend span {
+  margin: 0 4px;
+}
+.stats-rules {
+  display: grid;
+  gap: 14px;
+}
+.stats-rules dt {
+  font-weight: 640;
+}
+.stats-rules dd {
+  margin: 2px 0 0;
+  color: var(--fg-2);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.share-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  border-radius: var(--radius-card);
+  background: var(--tile);
+}
+.share-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.share-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.share-option small {
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+}
+@media (forced-colors: active) {
+  .activity-day {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+  .activity-day.level-0 {
+    background: Canvas;
+    box-shadow: inset 0 0 0 1px CanvasText;
+  }
+}
