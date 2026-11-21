@@ -34,6 +34,7 @@ test has been seen red with its probe.
 | 24 | Protect the active field and clipboard during delivery | A cancelled handoff cannot reach the writer. Rich clipboard formats are refused, the Linux selection survives a failed replacement, and a same-length rewrite can be acknowledged. | L1, L3 | In review |
 | 25 | Account for delivered results and bounded learning | Dictations receive one credit on delivery, edited selections and previews receive none, late local days reconnect streaks, unchanged successful previews remain in History, and learning enforces its deadline. | L1, L3 | In review |
 | 26 | Verify installed processes and package provenance | The owned process launches, the exact platform packages and native jobs gate release, and a published build can be replaced while retaining its profile. | L3, L6–L8 | In review |
+| 27 | Validate the desktop command envelope | Malformed arguments on every command are rejected before dispatch. Nullable changes require explicit null. Rust generates the development mock’s request schema. | L1, L2, L6 | In review |
 
 Rulings:
 

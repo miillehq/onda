@@ -4,9 +4,8 @@
  * Messages must match Rust's exactly; the shared examples in contracts/examples.ts run against
  * both this mock (tests/unit) and the real app (tests/e2e), so a drift fails one of them.
  */
-import type { AppError, DictionaryEntry, Shortcut } from "../generated/core";
+import type { AppError, DictionaryEntry, Settings, Shortcut } from "../generated/core";
 import { LIMITS } from "../generated/core";
-import { isCompleteSettings } from "./settings-shape";
 
 function invalid(message: string): AppError {
   return { code: "invalidInput", message, retryable: false };
@@ -15,8 +14,7 @@ function invalid(message: string): AppError {
 /** Rust's `char::is_control`: Unicode general category Cc. */
 const CONTROL = /\p{Cc}/u;
 
-export function validateSettings(settings: unknown): AppError | null {
-  if (!isCompleteSettings(settings)) return invalid("Send the complete settings object.");
+export function validateSettings(settings: Settings): AppError | null {
   if (settings.historyDays > LIMITS.maxHistoryDays) return invalid("History can be kept for at most 30 days.");
   if (settings.maxRecordingSeconds < 1 || settings.maxRecordingSeconds > LIMITS.maxRecordingSeconds) {
     return invalid("Recording limit must be between 1 and 600 seconds.");

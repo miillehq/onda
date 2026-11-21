@@ -7,6 +7,9 @@
 import { describe, expect, it } from "vitest";
 import { examplesFor, type Example } from "../../contracts/examples";
 import { malformedSettingsRequests } from "../../contracts/settings-inputs";
+import { malformedRequests, shapeError } from "../../contracts/malformed-requests";
+import requestContract from "../../contracts/desktop-request.schema.json";
+import type { ApiRequest } from "../../ui/src/generated/api";
 import { DEFAULT_SETTINGS } from "../../ui/src/generated/core";
 import { createMockBackend } from "../../ui/src/mock/backend";
 
@@ -21,6 +24,21 @@ async function outcome(example: Example): Promise<unknown> {
 }
 
 describe("the development mock on a fresh install", () => {
+  it("rejects malformed command envelopes before dispatch", async () => {
+    for (const request of malformedRequests) await expect(backend.call(request)).rejects.toMatchObject(shapeError);
+    for (const branch of requestContract.oneOf) {
+      const command = branch.properties.command.const;
+      for (const args of [null, 17, [], { unexpected: true }, "2026-11-19"]) {
+        await expect(backend.call({ command, args } as unknown as ApiRequest)).rejects.toMatchObject(shapeError);
+      }
+    }
+  });
+  it("checks the JSON the desktop bridge would carry, not the live object", async () => {
+    // JSON drops an undefined member: the bridge would carry a missing name, and an ordinary delete.
+    await expect(backend.call({ command: "setProfileName", args: { name: undefined } } as unknown as ApiRequest)).rejects.toMatchObject(shapeError);
+    await expect(backend.call({ command: "deleteSnippet", args: { id: "absent", extra: undefined } } as unknown as ApiRequest)).resolves.toEqual({ type: "unit" });
+    await expect(backend.call(undefined as unknown as ApiRequest)).rejects.toMatchObject(shapeError);
+  });
   // The mock answers as Onda on Windows, whichever OS runs this test.
   for (const example of examplesFor(false)) {
     it(example.name, async () => {

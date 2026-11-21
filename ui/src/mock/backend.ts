@@ -16,6 +16,7 @@ import type { AiProvider, AppError, DailyUsage, HistoryEntry, OperationResult, O
 import { DEFAULT_SETTINGS, MACOS_DEFAULT_SETTINGS } from "../generated/core";
 import { normalizeName, validateSettings } from "./validate";
 import { createDictionary } from "./dictionary";
+import { requireRequestShape } from "./request-shape";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = params.get("mock") ?? "default";
@@ -593,7 +594,9 @@ export function createMockBackend(): Backend {
   console.info("[Onda] Using the development mock backend. Data is fictional.");
   let started = false;
   return {
-    call: async (request) => {
+    call: async (received) => {
+      // Rust sees the JSON the bridge carried, so the mock checks and answers that same form.
+      const request = requireRequestShape(received);
       await wait(40);
       return respond(request);
     },

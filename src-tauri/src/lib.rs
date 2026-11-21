@@ -58,10 +58,14 @@ fn isolated() -> bool {
 
 #[tauri::command]
 async fn application_call(
-    request: api::ApiRequest,
+    // Optional, so a call without a request gets the same refusal as any other malformed one.
+    request: Option<serde_json::Value>,
     service: tauri::State<'_, Arc<Runtime>>,
 ) -> AppResult<api::ApiResponse> {
-    service.inner().dispatch(request).await
+    service
+        .inner()
+        .dispatch(api::ApiRequest::decode(request.unwrap_or_default())?)
+        .await
 }
 
 pub(crate) fn show_main(app: &tauri::AppHandle) {
