@@ -1,6 +1,7 @@
 // L4 and L5: Settings › General against the labelled mock.
 import { expect, test } from "@playwright/test";
 import { openMock, tier1, tier2, tier3 } from "./visual";
+import { unusedPreviewWidths } from "../shared/preview-widths";
 
 test.beforeEach(async ({ page }) => openMock(page, "/#settings/general"));
 
@@ -23,6 +24,14 @@ test("choosing Dark applies it at once and Light switches back", async ({ page }
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.locator(".theme-option.theme-light").click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
+test("theme and tray previews fill their cards at a compact desktop size", async ({ page }) => {
+  await page.setViewportSize({ width: 1028, height: 749 });
+  await page.locator(".theme-option.theme-dark").click();
+  const widths = await page.evaluate(unusedPreviewWidths);
+  expect(widths).toHaveLength(6);
+  expect(widths.every((missingWidth) => Math.abs(missingWidth) <= 1), JSON.stringify(widths)).toBe(true);
 });
 
 test("tier 1: General settings' structure", async ({ page }) => tier1(page.getByRole("main", { name: "Content" }), "general"));

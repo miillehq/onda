@@ -968,6 +968,11 @@
 .theme-option.is-selected {
   box-shadow: 0 0 0 2px var(--fg);
 }
+.theme-option > .theme-preview,
+.tray-option > .tray-swatches {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
 .theme-preview {
   display: grid;
   grid-template-columns: 30% 1fr;
