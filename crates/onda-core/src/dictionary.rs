@@ -1,10 +1,12 @@
 //! Indexed dictionary retrieval and deterministic Unicode-aware phrase correction.
+mod matching;
 use crate::{
     contracts::{DictionaryEntry, DictionaryKind, Snippet},
     error::{AppError, AppResult},
     MAX_TEXT_BYTES,
 };
 use aho_corasick::AhoCorasick;
+pub(crate) use matching::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 use unicode_segmentation::UnicodeSegmentation;
@@ -35,175 +37,6 @@ pub fn lookup_key(text: &str) -> String {
 
 fn is_cjk(character: char) -> bool {
     matches!(character as u32, 0x3400..=0x9fff | 0x20000..=0x3134f | 0xf900..=0xfaff | 0x3040..=0x30ff | 0x1100..=0x11ff | 0xa960..=0xa97f | 0xac00..=0xd7af | 0xd7b0..=0xd7ff)
-}
-
-/// Mapping normalized bytes back to source graphemes preserves Unicode expansions.
-struct NormalizedText {
-    text: String,
-    ranges: Vec<(usize, usize)>,
-}
-
-impl NormalizedText {
-    // Time O(n), space O(n), where n is source UTF-8 bytes.
-    fn new(source: &str) -> Self {
-        let mut text = String::with_capacity(source.len());
-        let mut ranges: Vec<(usize, usize)> = Vec::with_capacity(source.len());
-        for (start, grapheme) in source.grapheme_indices(true) {
-            let normalized: String = grapheme.nfkc().flat_map(char::to_lowercase).collect();
-            for character in normalized.chars() {
-                let value = if character.is_whitespace() && character != '\n' {
-                    ' '
-                } else {
-                    character
-                };
-                if value == ' ' && text.ends_with(' ') {
-                    if let Some(last) = ranges.last_mut() {
-                        last.1 = start + grapheme.len();
-                    }
-                    continue;
-                }
-                text.push(value);
-                ranges.extend(std::iter::repeat_n(
-                    (start, start + grapheme.len()),
-                    value.len_utf8(),
-                ));
-            }
-        }
-        Self { text, ranges }
-    }
-}
-
-pub(crate) fn bounded(source: &str, start: usize, end: usize) -> bool {
-    let first = source[start..end].chars().next();
-    let last = source[start..end]
-        .chars()
-        .rev()
-        .find(|character| !is_combining_mark(*character));
-    let previous = source[..start].chars().next_back();
-    let next = source[end..].chars().next();
-    let word = |value: char| value.is_alphanumeric() || value == '_' || is_combining_mark(value);
-    let left = first.is_some_and(is_cjk) || !first.is_some_and(word) || !previous.is_some_and(word);
-    let right = last.is_some_and(is_cjk) || !last.is_some_and(word) || !next.is_some_and(word);
-    left && right
-}
-
-/// A compiled immutable index is replaced after each committed dictionary edit.
-pub struct PhraseMatcher {
-    automaton: Option<AhoCorasick>,
-    expansions: Vec<String>,
-}
-
-impl PhraseMatcher {
-    pub fn new(patterns: Vec<(String, String)>) -> AppResult<Self> {
-        let mut seen = HashSet::new();
-        let mut keys = Vec::new();
-        let mut expansions = Vec::new();
-        for (pattern, expansion) in patterns {
-            let key = lookup_key(&pattern);
-            if key.is_empty()
-                || pattern.chars().count() > MAX_PATTERN_CHARS
-                || pattern.contains('\0')
-                || expansion.is_empty()
-                || expansion.len() > MAX_TEXT_BYTES
-                || expansion.contains('\0')
-            {
-                return Err(AppError::invalid(
-                    "A phrase or expansion is invalid or too long.",
-                ));
-            }
-            if !seen.insert(key.clone()) {
-                return Err(AppError::invalid(
-                    "Duplicate phrase triggers are ambiguous.",
-                ));
-            }
-            keys.push(key);
-            expansions.push(expansion);
-        }
-        let automaton = if keys.is_empty() {
-            None
-        } else {
-            Some(
-                AhoCorasick::new(keys)
-                    .map_err(|_| AppError::invalid("Dictionary index could not be built."))?,
-            )
-        };
-        Ok(Self {
-            automaton,
-            expansions,
-        })
-    }
-
-    /// One non-cascading pass; same-position matches prefer the longest phrase.
-    // Time O(n + m log(1+p) + k log k), space O(n + p + k);
-    // m matches, p protected spans, k distinct match starts.
-    pub fn apply(&self, source: &str) -> AppResult<String> {
-        if source.len() > MAX_TEXT_BYTES {
-            return Err(AppError::invalid("Text exceeds the operation limit."));
-        }
-        let Some(automaton) = &self.automaton else {
-            return Ok(source.to_owned());
-        };
-        let normalized = NormalizedText::new(source);
-        let mut matches: BTreeMap<usize, (usize, usize)> = BTreeMap::new();
-        let protected = crate::text::protected_ranges(source);
-        for (count, found) in automaton
-            .find_overlapping_iter(&normalized.text)
-            .enumerate()
-        {
-            if count >= MAX_MATCHES {
-                return Err(AppError::invalid("Dictionary match limit exceeded."));
-            }
-            let start = normalized.ranges[found.start()].0;
-            let end = normalized.ranges[found.end() - 1].1;
-            // A compatibility character may expand into several normalized
-            // characters. Partial matches must never consume its entire grapheme.
-            if (found.start() > 0
-                && normalized.ranges[found.start() - 1] == normalized.ranges[found.start()])
-                || (found.end() < normalized.ranges.len()
-                    && normalized.ranges[found.end() - 1] == normalized.ranges[found.end()])
-            {
-                continue;
-            }
-            if !bounded(source, start, end) {
-                continue;
-            }
-            let protected_index = protected.partition_point(|span| span.end <= start);
-            if protected
-                .get(protected_index)
-                .is_some_and(|span| span.start < end)
-            {
-                continue;
-            }
-            let candidate = matches
-                .entry(start)
-                .or_insert((end, found.pattern().as_usize()));
-            if end > candidate.0 {
-                *candidate = (end, found.pattern().as_usize());
-            }
-        }
-        let mut output = String::with_capacity(source.len());
-        let mut consumed = 0;
-        for (start, (end, index)) in matches {
-            if start < consumed {
-                continue;
-            }
-            if output.len() + start - consumed + self.expansions[index].len() > MAX_TEXT_BYTES {
-                return Err(AppError::invalid(
-                    "Expanded text exceeds the operation limit.",
-                ));
-            }
-            output.push_str(&source[consumed..start]);
-            output.push_str(&self.expansions[index]);
-            consumed = end;
-        }
-        output.push_str(&source[consumed..]);
-        if output.len() > MAX_TEXT_BYTES {
-            return Err(AppError::invalid(
-                "Expanded text exceeds the operation limit.",
-            ));
-        }
-        Ok(output)
-    }
 }
 
 fn trigrams(value: &str) -> Vec<String> {
@@ -316,47 +149,8 @@ impl DictionaryIndex {
             return Vec::new();
         }
         let query = lookup_key(&format!("{} {}", transcript, context));
-        let mut exact: HashMap<usize, (usize, usize)> = HashMap::new();
-        let mut exact_words = HashSet::new();
-        if let Some(automaton) = &self.lexical_automaton {
-            for found in automaton.find_overlapping_iter(&query).take(MAX_MATCHES) {
-                if !bounded(&query, found.start(), found.end()) {
-                    continue;
-                }
-                let index = self.lexical_indices[found.pattern().as_usize()];
-                exact
-                    .entry(index)
-                    .and_modify(|position| {
-                        if found.start() < position.0
-                            || (found.start() == position.0 && found.len() > position.1)
-                        {
-                            *position = (found.start(), found.len());
-                        }
-                    })
-                    .or_insert((found.start(), found.len()));
-                exact_words.extend(query[found.start()..found.end()].unicode_words());
-            }
-        }
-        let mut exact_ranked: Vec<_> = exact.into_iter().collect();
-        exact_ranked.sort_unstable_by(|a, b| {
-            a.1 .0
-                .cmp(&b.1 .0)
-                .then(b.1 .1.cmp(&a.1 .1))
-                .then(a.0.cmp(&b.0))
-        });
-        let mut selected: Vec<usize> = exact_ranked
-            .into_iter()
-            .take(MAX_CANDIDATES)
-            .map(|(index, _)| index)
-            .collect();
-        for index in self.starred.iter().take(MAX_STARRED_CANDIDATES) {
-            if selected.len() >= MAX_CANDIDATES {
-                break;
-            }
-            if !selected.contains(index) {
-                selected.push(*index);
-            }
-        }
+        let (mut selected, exact_words) = self.exact_candidates(&query);
+        self.add_starred_candidates(&mut selected);
         if selected.len() >= MAX_CANDIDATES {
             return selected
                 .into_iter()
@@ -457,6 +251,60 @@ impl DictionaryIndex {
                 .replacements
                 .apply(&crate::text::normalize_whitespace(source))?,
         )
+    }
+}
+
+impl DictionaryIndex {
+    /// Rank boundary-matched terms by position, longest spelling and stable vocabulary index.
+    /// O(m log m) time and O(m) space for at most MAX_MATCHES matches.
+    fn exact_candidates<'a>(&self, query: &'a str) -> (Vec<usize>, HashSet<&'a str>) {
+        let mut exact: HashMap<usize, (usize, usize)> = HashMap::new();
+        let mut exact_words = HashSet::new();
+        if let Some(automaton) = &self.lexical_automaton {
+            for found in automaton.find_overlapping_iter(query).take(MAX_MATCHES) {
+                if !bounded(query, found.start(), found.end()) {
+                    continue;
+                }
+                let index = self.lexical_indices[found.pattern().as_usize()];
+                exact
+                    .entry(index)
+                    .and_modify(|position| {
+                        if found.start() < position.0
+                            || (found.start() == position.0 && found.len() > position.1)
+                        {
+                            *position = (found.start(), found.len());
+                        }
+                    })
+                    .or_insert((found.start(), found.len()));
+                exact_words.extend(query[found.start()..found.end()].unicode_words());
+            }
+        }
+        let mut exact_ranked: Vec<_> = exact.into_iter().collect();
+        exact_ranked.sort_unstable_by(|a, b| {
+            a.1 .0
+                .cmp(&b.1 .0)
+                .then(b.1 .1.cmp(&a.1 .1))
+                .then(a.0.cmp(&b.0))
+        });
+        let selected: Vec<usize> = exact_ranked
+            .into_iter()
+            .take(MAX_CANDIDATES)
+            .map(|(index, _)| index)
+            .collect();
+        (selected, exact_words)
+    }
+}
+
+impl DictionaryIndex {
+    fn add_starred_candidates(&self, selected: &mut Vec<usize>) {
+        for index in self.starred.iter().take(MAX_STARRED_CANDIDATES) {
+            if selected.len() >= MAX_CANDIDATES {
+                break;
+            }
+            if !selected.contains(index) {
+                selected.push(*index);
+            }
+        }
     }
 }
 

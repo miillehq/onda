@@ -103,39 +103,8 @@ impl ShortcutMatcher {
         }
         let repeated = self.pressed_keys[key as usize] == down;
         self.pressed_keys[key as usize] = down;
-        if let Some((cancel_key, binding_index)) = self.cancel_latch {
-            if key == cancel_key {
-                if !down {
-                    self.cancel_latch = None;
-                }
-                return MatchResult {
-                    suppress: true,
-                    event: if down {
-                        None
-                    } else {
-                        Some((ShortcutAction::Cancel, false))
-                    },
-                    binding_index: if down { None } else { Some(binding_index) },
-                };
-            }
-        }
-        if self.operation_active && down && !repeated {
-            let modifiers = self.modifiers();
-            if let Some((binding_index, _)) =
-                self.bindings.iter().enumerate().find(|(_, binding)| {
-                    binding.action == ShortcutAction::Cancel
-                        && binding.virtual_key == key
-                        && (binding.modifiers == Modifiers::default()
-                            || binding.modifiers == modifiers)
-                })
-            {
-                self.cancel_latch = Some((key, binding_index));
-                return MatchResult {
-                    suppress: true,
-                    event: Some((ShortcutAction::Cancel, true)),
-                    binding_index: Some(binding_index),
-                };
-            }
+        if let Some(cancel) = self.match_cancellation(key, down, repeated) {
+            return cancel;
         }
         if let Some((active_key, binding_index)) = self.active {
             let action = self.bindings[binding_index].action;
@@ -186,6 +155,47 @@ impl ShortcutMatcher {
             alt: any(&[0x12, 0xa4, 0xa5]),
             windows: any(&[0x5b, 0x5c]),
         }
+    }
+}
+
+impl ShortcutMatcher {
+    /// Cancellation preempts a latched shortcut and owns its corresponding release.
+    fn match_cancellation(&mut self, key: u16, down: bool, repeated: bool) -> Option<MatchResult> {
+        if let Some((cancel_key, binding_index)) = self.cancel_latch {
+            if key == cancel_key {
+                if !down {
+                    self.cancel_latch = None;
+                }
+                return Some(MatchResult {
+                    suppress: true,
+                    event: if down {
+                        None
+                    } else {
+                        Some((ShortcutAction::Cancel, false))
+                    },
+                    binding_index: if down { None } else { Some(binding_index) },
+                });
+            }
+        }
+        if self.operation_active && down && !repeated {
+            let modifiers = self.modifiers();
+            if let Some((binding_index, _)) =
+                self.bindings.iter().enumerate().find(|(_, binding)| {
+                    binding.action == ShortcutAction::Cancel
+                        && binding.virtual_key == key
+                        && (binding.modifiers == Modifiers::default()
+                            || binding.modifiers == modifiers)
+                })
+            {
+                self.cancel_latch = Some((key, binding_index));
+                return Some(MatchResult {
+                    suppress: true,
+                    event: Some((ShortcutAction::Cancel, true)),
+                    binding_index: Some(binding_index),
+                });
+            }
+        }
+        None
     }
 }
 

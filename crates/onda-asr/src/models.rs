@@ -1,3 +1,6 @@
+mod download;
+mod migration;
+mod verification;
 use crate::{
     manifest::{find_model, MODEL_MANIFEST_VERSION},
     AsrError, CancellationToken, ModelSpec,
@@ -22,6 +25,7 @@ use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use verification::*;
 
 const DISK_RESERVE_BYTES: u64 = 64 * 1024 * 1024;
 const CHECKSUM_BUFFER_BYTES: usize = 128 * 1024;
@@ -199,112 +203,26 @@ impl ModelManager {
             }
         }
         let partial = self.path_for(model, "part")?;
-        let mut completed = match fs::metadata(&partial).await {
-            Ok(metadata) if metadata.is_file() => metadata.len(),
-            Ok(_) => return Err(AsrError::UnsafePath),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
-            Err(error) => return Err(error.into()),
-        };
-        if completed > model.expected_size_bytes {
-            fs::remove_file(&partial).await?;
-            completed = 0;
-        }
-        let available = fs2::available_space(&*self.directory)?;
-        let required = model
-            .expected_size_bytes
-            .saturating_sub(completed)
-            .saturating_add(DISK_RESERVE_BYTES);
-        if available < required {
-            return Err(AsrError::InsufficientDisk {
-                required_bytes: required,
-                available_bytes: available,
-            });
-        }
+        let mut completed = download::resume_offset(&partial, &self.directory, model).await?;
         progress(download_progress(
             model,
             DownloadStage::Downloading,
             completed,
         ));
         if completed < model.expected_size_bytes {
-            let mut request = self.client.get(source_url);
-            if completed > 0 {
-                request = request.header(RANGE, format!("bytes={completed}-"));
-            }
-            let response = tokio::select! {
-                response = request.send() => response.map_err(AsrError::DownloadNetwork)?,
-                _ = cancellation.cancelled() => return Err(AsrError::Cancelled),
-            };
-            let append = if completed > 0 && response.status() == StatusCode::PARTIAL_CONTENT {
-                validate_content_range(
-                    response
-                        .headers()
-                        .get(CONTENT_RANGE)
-                        .and_then(|value| value.to_str().ok()),
-                    completed,
-                    model.expected_size_bytes,
-                )?;
-                true
-            } else if response.status() == StatusCode::OK {
-                completed = 0;
-                false
-            } else {
-                return Err(AsrError::InvalidDownload);
-            };
-            if response
-                .content_length()
-                .is_some_and(|length| length != model.expected_size_bytes - completed)
-            {
-                return Err(AsrError::InvalidDownload);
-            }
-            let mut file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .append(append)
-                .truncate(!append)
-                .open(&partial)
-                .await?;
-            let mut body = response.bytes_stream();
-            let mut last_progress = Instant::now();
-            progress(download_progress(
+            let (response, offset, append) =
+                download::response(&self.client, source_url, completed, model, cancellation)
+                    .await?;
+            completed = download::write_body(
+                &partial,
+                response,
+                offset,
+                append,
                 model,
-                DownloadStage::Downloading,
-                completed,
-            ));
-            loop {
-                let chunk = tokio::select! {
-                    chunk = body.next() => chunk,
-                    _ = cancellation.cancelled() => { file.flush().await?; return Err(AsrError::Cancelled); }
-                };
-                let Some(chunk) = chunk else {
-                    break;
-                };
-                let chunk = match chunk {
-                    Ok(chunk) => chunk,
-                    Err(error) => {
-                        // A tokio file finishes writes in the background: flush, so the bytes
-                        // that arrived are in the partial file to resume from before this returns.
-                        file.flush().await?;
-                        return Err(AsrError::DownloadNetwork(error));
-                    }
-                };
-                if completed + chunk.len() as u64 > model.expected_size_bytes {
-                    drop(file);
-                    fs::remove_file(&partial).await?;
-                    return Err(AsrError::InvalidDownload);
-                }
-                file.write_all(&chunk).await?;
-                completed += chunk.len() as u64;
-                if last_progress.elapsed() >= PROGRESS_INTERVAL {
-                    progress(download_progress(
-                        model,
-                        DownloadStage::Downloading,
-                        completed,
-                    ));
-                    last_progress = Instant::now();
-                }
-            }
-            file.flush().await?;
-            file.sync_all().await?;
+                cancellation,
+                &progress,
+            )
+            .await?;
         }
         if completed != model.expected_size_bytes {
             return Err(AsrError::InvalidDownload);
@@ -346,71 +264,6 @@ impl ModelManager {
             }
         }
         Ok(())
-    }
-
-    /// Copy current verified installations to another location, preserving the source.
-    /// Switch the saved setting only after this returns; cancellation never invalidates the old location.
-    /// Complexity: O(n) installed model bytes; O(1) bounded transfer memory.
-    pub async fn migrate_to(
-        &self,
-        directory: PathBuf,
-        cancellation: &CancellationToken,
-    ) -> Result<Self, AsrError> {
-        if cancellation.is_cancelled() {
-            return Err(AsrError::Cancelled);
-        }
-        let destination_manager = Self::new(directory)?;
-        if destination_manager.directory == self.directory {
-            return Ok(destination_manager);
-        }
-        let installed = self.installed()?;
-        for installation in installed {
-            if cancellation.is_cancelled() {
-                return Err(AsrError::Cancelled);
-            }
-            let model = find_model(&installation.model_id)?;
-            let _source_lock = self.acquire_lock(model)?;
-            let _destination_lock = destination_manager.acquire_lock(model)?;
-            verify_file(&installation.path, model, cancellation).await?;
-            let destination = destination_manager.path_for(model, "bin")?;
-            if destination.is_file() {
-                verify_file(&destination, model, cancellation).await?;
-                continue;
-            }
-            let required = model.expected_size_bytes.saturating_add(DISK_RESERVE_BYTES);
-            let available = fs2::available_space(&*destination_manager.directory)?;
-            if available < required {
-                return Err(AsrError::InsufficientDisk {
-                    required_bytes: required,
-                    available_bytes: available,
-                });
-            }
-            let partial = destination_manager.path_for(model, "part")?;
-            let mut source = fs::File::open(&installation.path).await?;
-            let mut target = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(&partial)
-                .await?;
-            let mut buffer = vec![0u8; CHECKSUM_BUFFER_BYTES];
-            loop {
-                let count = tokio::select! {
-                    count = source.read(&mut buffer) => count?,
-                    _ = cancellation.cancelled() => return Err(AsrError::Cancelled),
-                };
-                if count == 0 {
-                    break;
-                }
-                target.write_all(&buffer[..count]).await?;
-            }
-            target.flush().await?;
-            target.sync_all().await?;
-            drop(target);
-            verify_file(&partial, model, cancellation).await?;
-            fs::rename(partial, destination).await?;
-        }
-        Ok(destination_manager)
     }
 
     fn path_for(&self, model: &ModelSpec, extension: &str) -> Result<PathBuf, AsrError> {
@@ -462,84 +315,6 @@ impl Drop for ModelLock {
     fn drop(&mut self) {
         let _ = FileExt::unlock(&self.0);
     }
-}
-
-fn installation(model: &ModelSpec, path: PathBuf) -> InstalledModel {
-    InstalledModel {
-        model_id: model.id.into(),
-        version: model.version.into(),
-        path,
-        size_bytes: model.expected_size_bytes,
-        manifest_version: MODEL_MANIFEST_VERSION,
-    }
-}
-fn download_progress(
-    model: &ModelSpec,
-    stage: DownloadStage,
-    completed_bytes: u64,
-) -> DownloadProgress {
-    DownloadProgress {
-        model_id: model.id.into(),
-        stage,
-        completed_bytes,
-        total_bytes: model.expected_size_bytes,
-    }
-}
-fn trusted_model_host(host: &str) -> bool {
-    host == "huggingface.co"
-        || host.ends_with(".huggingface.co")
-        || host == "hf.co"
-        || host.ends_with(".hf.co")
-}
-
-fn validate_content_range(
-    header: Option<&str>,
-    expected_start: u64,
-    expected_total: u64,
-) -> Result<(), AsrError> {
-    let range = header
-        .and_then(|value| value.strip_prefix("bytes "))
-        .ok_or(AsrError::InvalidDownload)?;
-    let (bounds, total) = range.split_once('/').ok_or(AsrError::InvalidDownload)?;
-    let (start, end) = bounds.split_once('-').ok_or(AsrError::InvalidDownload)?;
-    let start = start
-        .parse::<u64>()
-        .map_err(|_| AsrError::InvalidDownload)?;
-    let end = end.parse::<u64>().map_err(|_| AsrError::InvalidDownload)?;
-    let total = total
-        .parse::<u64>()
-        .map_err(|_| AsrError::InvalidDownload)?;
-    if start != expected_start || total != expected_total || end != expected_total - 1 {
-        return Err(AsrError::InvalidDownload);
-    }
-    Ok(())
-}
-
-async fn verify_file(
-    path: &Path,
-    model: &ModelSpec,
-    cancellation: &CancellationToken,
-) -> Result<(), AsrError> {
-    let mut file = fs::File::open(path).await?;
-    if file.metadata().await?.len() != model.expected_size_bytes {
-        return Err(AsrError::ChecksumMismatch);
-    }
-    let mut hasher = Sha256::new();
-    let mut buffer = vec![0u8; CHECKSUM_BUFFER_BYTES];
-    loop {
-        let count = tokio::select! {
-            count = file.read(&mut buffer) => count?,
-            _ = cancellation.cancelled() => return Err(AsrError::Cancelled),
-        };
-        if count == 0 {
-            break;
-        }
-        hasher.update(&buffer[..count]);
-    }
-    if hex::encode(hasher.finalize()) != model.sha256 {
-        return Err(AsrError::ChecksumMismatch);
-    }
-    Ok(())
 }
 
 #[cfg(test)]
