@@ -151,19 +151,13 @@ pub(crate) fn paste(
     )
 }
 
-pub(super) fn paste_with_shortcut(
-    target: &TargetSnapshot,
-    object: &Object,
-    text: &str,
-    shortcut: PasteShortcut,
-    should_cancel: &dyn Fn() -> bool,
-) -> Result<InsertionOutcome, PlatformError> {
+fn paste_keys(object: &Object, shortcut: PasteShortcut) -> &'static [i32] {
     // Terminals paste with Ctrl+Shift+V; Ctrl+V would reach the shell as a control character.
     let shortcut = match role(object) {
         Ok(ROLE_TERMINAL) if shortcut == PasteShortcut::ControlV => PasteShortcut::ControlShiftV,
         _ => shortcut,
     };
-    let keys: &[i32] = match shortcut {
+    match shortcut {
         PasteShortcut::ControlV => &[linux_typing::KEY_CONTROL, linux_typing::KEY_V],
         PasteShortcut::ControlShiftV => &[
             linux_typing::KEY_CONTROL,
@@ -171,7 +165,17 @@ pub(super) fn paste_with_shortcut(
             linux_typing::KEY_V,
         ],
         PasteShortcut::ShiftInsert => &[linux_typing::KEY_SHIFT, linux_typing::KEY_INSERT],
-    };
+    }
+}
+
+pub(super) fn paste_with_shortcut(
+    target: &TargetSnapshot,
+    object: &Object,
+    text: &str,
+    shortcut: PasteShortcut,
+    should_cancel: &dyn Fn() -> bool,
+) -> Result<InsertionOutcome, PlatformError> {
+    let keys = paste_keys(object, shortcut);
     let before = crate::text_clipboard::paste_baseline(
         integer(object, TEXT, "CharacterCount")
             .ok()
