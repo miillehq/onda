@@ -331,7 +331,10 @@ fn focus() -> Option<Focus> {
 pub(crate) fn snapshot() -> Result<TargetSnapshot, PlatformError> {
     Ok(focus()
         .map(|focus| focus.snapshot)
-        .unwrap_or_else(TargetSnapshot::unidentified))
+        .unwrap_or_else(|| TargetSnapshot {
+            is_password: unsafe { IsSecureEventInputEnabled() } != 0,
+            ..TargetSnapshot::unidentified()
+        }))
 }
 
 pub(crate) fn can_type(target: &TargetSnapshot) -> bool {
@@ -568,7 +571,8 @@ mod tests {
             "typing access reports the permission"
         );
         if !trusted {
-            assert_eq!(snapshot, TargetSnapshot::unidentified());
+            assert!(snapshot.focused_runtime_id.is_empty());
+            assert_eq!(snapshot.process_id, 0);
         }
     }
 }
