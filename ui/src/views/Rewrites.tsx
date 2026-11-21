@@ -8,12 +8,21 @@ import { Callout, Dialog, Page } from "../components/layout";
 import { ShortcutRecorder } from "../components/ShortcutRecorder";
 import type { OperationResult, Transform } from "../generated/core";
 import { navigate } from "../lib/router";
+import { useCloudModels } from "../lib/useCloudModels";
 import { aiReady, commandShortcutOnly, copyResult, isBusy, lastResult, saveSettings, settings, toast, toastError, transforms } from "../lib/store";
+
+function RewriteModel({ value, onChange }: { value: string; onChange: (slug: string) => void }) {
+  const { models } = useCloudModels();
+  const options = [{ value: "", label: "Account default" }, ...models.map((model) => ({ value: model.slug, label: model.name }))];
+  if (value && !models.some((model) => model.slug === value)) options.push({ value, label: value });
+  return <Field label="ChatGPT model">{({ id }) => <Select id={id} label="ChatGPT model" value={value} options={options} onChange={onChange} />}</Field>;
+}
 
 function RewriteDialog({ transform, onClose }: { transform: Transform | null; onClose: () => void }) {
   const [name, setName] = useState(transform?.name ?? "");
   const [instruction, setInstruction] = useState(transform?.instruction ?? "");
   const [shortcut, setShortcut] = useState<number[] | null>(transform?.shortcut?.keys ?? null);
+  const [model, setModel] = useState(transform?.modelPreference ?? "");
   const [preserve, setPreserve] = useState(transform?.preserveProtectedTokens ?? true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -34,7 +43,7 @@ function RewriteDialog({ transform, onClose }: { transform: Transform | null; on
               name: name.trim(),
               instruction: instruction.trim(),
               shortcut: shortcut ? { keys: shortcut } : null,
-              modelPreference: transform?.modelPreference ?? null,
+              modelPreference: model || null,
               preserveProtectedTokens: preserve,
               builtIn: transform?.builtIn ?? false,
             },
@@ -77,6 +86,7 @@ function RewriteDialog({ transform, onClose }: { transform: Transform | null; on
             <textarea id={id} class="textarea" rows={4} value={instruction} aria-describedby={describedBy} aria-invalid={invalid} onInput={(event) => setInstruction((event.currentTarget as HTMLTextAreaElement).value)} />
           )}
         </Field>
+        {settings.value?.aiProvider === "chatgpt" && <RewriteModel value={model} onChange={setModel} />}
         <div class="field">
           <span class="field-label">Its own shortcut</span>
           {shortcut ? (

@@ -36,6 +36,7 @@ dispatcher by the contract suite before any test depends on it.
 | History retention and statistics | L3 retention rollback and future schema refusal in `crates/onda-core/tests/profile_storage.rs`. Temporary unlock failures, expiry and delayed writes in `src-tauri/src/runtime/history/tests.rs`. Atomic PNG saves in `src-tauri/src/runtime/stats_export.rs`. Browser coverage in `tests/ui/history.spec.ts` and `tests/ui/stats.spec.ts`. |
 | Install, upgrade, uninstall | L3 migrations, L7 on each OS family |
 | Restore a dictionary backup | L3 large round trips, malformed rows and oversized inputs in `crates/onda-core/tests/dictionary_archives.rs`. L2/L6 import and duplicate handling in `contracts/examples.ts`, executed by `tests/unit/contract.test.ts` and `tests/e2e/00-contract.spec.ts`. |
+| Edit and share | `tests/ui/dictionary.spec.ts` checks imported text, UTF-8 failures and editing focus. `tests/ui/rewrites.spec.ts` saves and clears a per-rewrite model. `tests/ui/stats.spec.ts` checks the encoded PNG dimensions. `tests/unit/dictionary-file.test.ts` checks the size before reading a file. |
 
 Coverage is tracked per journey in this table, never as a percentage. A change that removes a
 level from a journey needs a replacement that proves the same behaviour first.

@@ -15,7 +15,6 @@ export interface StatsCard {
 
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 630;
-const SCALE = 2;
 const PADDING = 64;
 const FONT = '"Inter Variable", "Segoe UI", system-ui, sans-serif';
 // Brand graphite tile and the tile's text tiers (DESIGN.md, tokens.css).
@@ -70,15 +69,15 @@ function plural(value: number, word: string): string {
   return `${formatInteger(value)} ${word}${value === 1 ? "" : "s"}`;
 }
 
-/** Draws the card into `canvas` (created if absent) at 2× for sharp text when shared. */
-export async function renderStatsImage(card: StatsCard, canvas = document.createElement("canvas")): Promise<HTMLCanvasElement> {
+/** Draw the card at the advertised export dimensions. A superseded preview leaves the canvas alone. */
+export async function renderStatsImage(card: StatsCard, canvas = document.createElement("canvas"), signal?: AbortSignal): Promise<HTMLCanvasElement> {
   await loadFonts();
   const picture = card.picture ? await loadImage(card.picture) : null;
-  canvas.width = CARD_WIDTH * SCALE;
-  canvas.height = CARD_HEIGHT * SCALE;
+  if (signal?.aborted) return canvas;
+  canvas.width = CARD_WIDTH;
+  canvas.height = CARD_HEIGHT;
   const context = canvas.getContext("2d");
   if (!context) return canvas;
-  context.scale(SCALE, SCALE);
   const background = context.createLinearGradient(0, 0, 0, CARD_HEIGHT);
   for (const [stop, color] of TILE_STOPS) background.addColorStop(stop, color);
   context.fillStyle = background;
