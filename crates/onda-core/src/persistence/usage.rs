@@ -38,6 +38,19 @@ impl Store {
     }
 }
 
+/// Reconcile legacy counters once when opening the profile, using at most 400 indexed days.
+pub(super) fn repair_retained_streaks(connection: &Connection) -> AppResult<()> {
+    let runs = retained_runs(connection, "9999-12-31")?;
+    if let Some(day) = runs.day {
+        connection.execute(
+            "UPDATE usage_lifetime SET current_run=max(current_run,?2), longest_run=max(longest_run,?3)
+             WHERE id=1 AND last_day=?1 AND (current_run<?2 OR longest_run<?3)",
+            params![day, runs.latest, runs.longest],
+        ).map_err(|_| AppError::storage())?;
+    }
+    Ok(())
+}
+
 struct RetainedRuns {
     day: Option<String>,
     latest: u32,

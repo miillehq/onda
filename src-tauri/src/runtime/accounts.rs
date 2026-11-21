@@ -72,8 +72,6 @@ impl ConnectedAccounts {
         instructions: &str,
         preferred: Option<&str>,
     ) -> AppResult<String> {
-        lock(&host.operations.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
-        host.operations.emit_state(host);
         let profiles = self.cloud()?.list_profiles().await.map_err(errors::cloud)?;
         let profile = profiles
             .iter()
@@ -175,6 +173,8 @@ impl ConnectedAccounts {
             &profile.id,
             profile.preferred_model.as_deref(),
         )?;
+        lock(&host.operations.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
+        host.operations.emit_state(host);
         let models = self.account_models(&profile.id).await?;
         let selected_model = AccountModel::bind(
             &mut *lock(&account)?,

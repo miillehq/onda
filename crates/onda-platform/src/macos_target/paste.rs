@@ -1,7 +1,7 @@
 use super::*;
 
-/// Presses ⌘V into the frontmost app with the text on the pasteboard, then puts the earlier
-/// pasteboard text back. A Mac pastes with ⌘V in terminals too, so an app profile's paste keys,
+/// Presses âŒ˜V into the frontmost app with the text on the pasteboard, then puts the earlier
+/// pasteboard text back. A Mac pastes with âŒ˜V in terminals too, so an app profile's paste keys,
 /// which are Windows and Linux keys, do not apply.
 pub(crate) fn paste(
     target: &TargetSnapshot,
@@ -16,7 +16,35 @@ pub(crate) fn paste(
     // Checked again after the wait, right before the keys go down.
     let field = field(target)?;
     let before = crate::text_clipboard::paste_baseline(edit_state(&field))?;
-    let clipboard = crate::macos_clipboard::BorrowedClipboard::borrow(text, should_cancel)?;
+    let clipboard = match crate::macos_clipboard::BorrowedClipboard::borrow(text, should_cancel) {
+        Err(PlatformError::ClipboardNotPreservable) => {
+            return crate::text_clipboard::edit_without_clipboard(should_cancel, || {
+                let original = self::field(target)?;
+                let attribute = CFString::from_static_string("AXSelectedText");
+                let replacement = CFString::new(text);
+                if should_cancel() {
+                    return Err(PlatformError::Cancelled);
+                }
+                let status = unsafe {
+                    AXUIElementSetAttributeValue(
+                        original.raw(),
+                        attribute.as_concrete_TypeRef(),
+                        replacement.as_CFTypeRef(),
+                    )
+                };
+                if status != AX_SUCCESS {
+                    return Err(PlatformError::ClipboardNotPreservable);
+                }
+                Ok(InsertionOutcome {
+                    input_injected: true,
+                    clipboard_read_observed: true,
+                    clipboard_restored: true,
+                    clipboard_changed_by_other: false,
+                })
+            });
+        }
+        result => result?,
+    };
     if let Err(error) = crate::WindowsTargetService::new().revalidate(target) {
         clipboard.restore(text);
         return Err(error);
@@ -59,7 +87,7 @@ pub(super) fn edit_state(field: &Element) -> Option<(Option<i64>, Option<isize>)
     (length.is_some() || caret.is_some()).then_some((length, caret))
 }
 
-/// A shortcut's own keys can still be down when the text is ready; ⌘V with Control or Shift
+/// A shortcut's own keys can still be down when the text is ready; âŒ˜V with Control or Shift
 /// held would be another shortcut.
 pub(super) fn wait_for_modifiers() -> Result<(), PlatformError> {
     let deadline = Instant::now() + MODIFIERS_WAIT;

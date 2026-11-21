@@ -169,13 +169,19 @@ pub enum ApiRequest {
     },
     /// Models the configured provider offers; also the connection check for a local server.
     ListProviderModels {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "AiProvider"))]
+        #[serde(deserialize_with = "named_choice")]
         provider: AiProvider,
     },
     SaveProviderKey {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "AiProvider"))]
+        #[serde(deserialize_with = "named_choice")]
         provider: AiProvider,
         key: String,
     },
     RemoveProviderKey {
+        #[cfg_attr(feature = "wire-schema", schemars(with = "AiProvider"))]
+        #[serde(deserialize_with = "named_choice")]
         provider: AiProvider,
     },
     /// Memory and CPU of Onda's own process tree, including its web view processes.
@@ -194,7 +200,12 @@ impl ApiRequest {
         let invalid =
             || onda_core::error::AppError::invalid("The desktop request has an invalid shape.");
         let envelope = received.as_object().ok_or_else(invalid)?;
-        if envelope.get("args").is_some_and(|args| !args.is_object()) {
+        // serde also reads a unit variant from a one-key map. The wire form is its name.
+        if !envelope
+            .get("command")
+            .is_some_and(serde_json::Value::is_string)
+            || envelope.get("args").is_some_and(|args| !args.is_object())
+        {
             return Err(invalid());
         }
         serde_json::from_value(received).map_err(|_| invalid())
@@ -216,4 +227,15 @@ where
         return Err(D::Error::custom("Expected a complete desktop object."));
     }
     Ok(value)
+}
+
+/// One of several named choices arrives as its name, never as serde's one-key map.
+fn named_choice<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    use serde::de::{value::StringDeserializer, IntoDeserializer};
+    let name: StringDeserializer<D::Error> = String::deserialize(deserializer)?.into_deserializer();
+    T::deserialize(name)
 }

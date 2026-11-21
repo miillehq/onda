@@ -17,6 +17,12 @@ fn removing_the_default_repairs_the_shortcut_and_preserves_other_settings() {
     };
     store.save_settings(&settings).unwrap();
     store.delete_transform(&custom.id).unwrap();
+    // Opening a profile repairs it too, so the delete itself is checked before the reopen.
+    assert_eq!(
+        store.settings().unwrap().default_transform_id,
+        "polish",
+        "the delete left the shortcut on the removed rewrite"
+    );
     drop(store);
     let mut reopened = Store::open(&path).unwrap();
     assert_eq!(reopened.settings().unwrap().default_transform_id, "polish");
