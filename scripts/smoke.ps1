@@ -38,7 +38,17 @@ try {
         $viteProcess = Start-Process -FilePath $nodeExecutable -ArgumentList @('node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '1420', '--strictPort') -WorkingDirectory $repositoryDirectory -WindowStyle Hidden -RedirectStandardOutput $viteOutput -RedirectStandardError (Join-Path $smokeDirectory 'vite-errors.log') -PassThru
         $serverClock = [System.Diagnostics.Stopwatch]::StartNew()
         $serverAnswered = $false
-        do { try { $null = Invoke-WebRequest -Uri 'http://127.0.0.1:1420' -UseBasicParsing -TimeoutSec 1; $serverAnswered = $true; break } catch { Start-Sleep -Milliseconds 100 } } while ($serverClock.Elapsed.TotalSeconds -lt 5)
+        $expectedRun = Split-Path -Leaf $smokeDirectory
+        do {
+            $viteProcess.Refresh()
+            if ($viteProcess.HasExited) { throw "The smoke dev server exited before startup. Check $viteOutput for the port or startup error." }
+            try {
+                $reply = Invoke-WebRequest 'http://127.0.0.1:1420' -UseBasicParsing -TimeoutSec 1
+                if (@($reply.Headers['X-Onda-Smoke-Run']) -contains $expectedRun) { $serverAnswered = $true; break }
+            } catch { }
+            Start-Sleep -Milliseconds 100
+        } while ($serverClock.Elapsed.TotalSeconds -lt 5)
+        if (-not $serverAnswered) { throw "The smoke dev server for this checkout did not answer. Check $viteOutput." }
         $serverSeconds = [math]::Round($serverClock.Elapsed.TotalSeconds, 1)
         $process = Start-Process -FilePath (Join-Path $repositoryDirectory 'target/debug/onda.exe') -WorkingDirectory $repositoryDirectory -WindowStyle Hidden -PassThru
         $smokeTimeout = if($WithDictationFixture){180000}else{30000}

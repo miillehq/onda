@@ -71,7 +71,7 @@ pub struct SignOutResult {
 #[derive(Debug, thiserror::Error, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CloudError {
-    #[error("Cloud credentials are supported only on Windows and Linux")]
+    #[error("Cloud credentials require Windows, macOS or Linux")]
     UnsupportedPlatform,
     #[error("The cloud configuration is invalid")]
     Configuration,

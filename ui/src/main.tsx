@@ -55,10 +55,10 @@ render(
 
 void init()
   .then(async () => {
-    if (window.__ONDA_SMOKE__) await (await import("./smoke")).runSmoke();
+    if (import.meta.env.DEV && window.__ONDA_SMOKE__) await (await import("../../tests/smoke/desktop")).runSmoke();
   })
   .catch(async (error: unknown) => {
-    if (window.__ONDA_SMOKE__) {
+    if (import.meta.env.DEV && window.__ONDA_SMOKE__) {
       const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "unknown";
       await call({ command: "completeDebugSmoke", args: { passed: false, checks: ["frontend startup " + code] } });
     }

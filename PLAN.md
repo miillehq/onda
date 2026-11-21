@@ -67,9 +67,9 @@ Rulings:
   sides — cost if wrong: a rule without an example can drift until one is added.
 - Slice 6: Ruling: only the fresh-install scenario must equal Rust's defaults; the other mock
   scenarios stand for a returning user and keep demo data — cost if wrong: none, they are labelled.
-- Slice 8: Ruling: a pixel check without a baseline skips with a message, locally and in CI, until
-  the snapshots workflow commits one — CI would otherwise be red until a runner captured it —
-  cost if wrong: a deleted baseline skips rather than fails; tiers 1 and 2 still run.
+- Slice 8 originally allowed missing pixels to skip. Once runner baselines were in place,
+  the November 19 sweep made a missing baseline fail CI. The snapshots workflow captures new
+  baselines on their native runners. Local runs report missing platform images as skips.
 - Slice 8: Ruling: the browser suite on macOS is advisory with the rest of Tier 2 — cost if wrong:
   a webkit regression on macOS waits for a release check.
 - Slice 8: Ruling: tier 3 keeps Playwright's tolerances (0.2 per-pixel colour threshold, 0.2% of
