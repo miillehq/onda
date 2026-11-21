@@ -1,11 +1,10 @@
-//! A rewrite retry keeps its original destination and model. No credential is cached here.
+//! A rewrite retry keeps its original destination and ChatGPT account. No credential is cached here.
 use super::*;
 
 #[derive(Clone)]
 pub(super) struct RetryRoute {
     provider: AiProvider,
     address: Option<String>,
-    model: Option<String>,
     pub(super) account: Arc<Mutex<Option<AccountModel>>>,
 }
 
@@ -25,34 +24,21 @@ fn configured_address(settings: &Settings) -> Option<&str> {
 
 impl RetryRoute {
     pub(super) fn capture(settings: &Settings) -> Self {
-        let model = match settings.ai_provider {
-            AiProvider::OpenaiCompatible => &settings.openai_model,
-            AiProvider::Anthropic => &settings.anthropic_model,
-            AiProvider::Local => &settings.local_model,
-            AiProvider::Chatgpt => &None,
-        };
         Self {
             provider: settings.ai_provider,
             address: configured_address(settings).map(str::to_owned),
-            model: model.clone(),
             account: Arc::default(),
         }
     }
 
     /// A change of recipient requires a new user action before any credentials or text are sent.
-    pub(super) fn apply(&self, mut current: Settings) -> AppResult<Settings> {
+    pub(super) fn apply(&self, current: Settings) -> AppResult<Settings> {
         if current.ai_provider != self.provider
             || configured_address(&current) != self.address.as_deref()
         {
             return Err(AppError::invalid(
                 "The rewrite destination changed. Start a new rewrite to use it.",
             ));
-        }
-        match self.provider {
-            AiProvider::OpenaiCompatible => current.openai_model.clone_from(&self.model),
-            AiProvider::Anthropic => current.anthropic_model.clone_from(&self.model),
-            AiProvider::Local => current.local_model.clone_from(&self.model),
-            AiProvider::Chatgpt => {}
         }
         Ok(current)
     }
@@ -108,7 +94,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_retry_pins_the_model_and_refuses_a_new_recipient() {
+    fn a_retry_uses_the_corrected_model_and_refuses_a_new_recipient() {
         let mut settings = Settings {
             ai_provider: AiProvider::Local,
             local_model: Some("first".into()),
@@ -122,8 +108,11 @@ mod tests {
                 .unwrap()
                 .local_model
                 .as_deref(),
-            Some("first")
+            Some("second")
         );
+        let mut redirected = settings.clone();
+        redirected.local_base_url = Some("http://localhost:9876".into());
+        assert!(route.apply(redirected).is_err());
         settings.ai_provider = AiProvider::Anthropic;
         assert!(route.apply(settings).is_err());
     }

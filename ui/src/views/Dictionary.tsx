@@ -31,7 +31,9 @@ function Editor({ kind, draft, onCancel, onSaved }: { kind: DictionaryKind; draf
     const entry: DictionaryEntry = {
       id: draft.id ?? crypto.randomUUID(),
       kind,
-      phrase,
+      // A field the user left alone is saved exactly as stored. A typed phrase loses stray spaces
+      // around it, which a word would otherwise carry into every dictation.
+      phrase: phrase === draft.phrase ? phrase : phrase.trim(),
       replacement: kind === "replacement" ? replacement : null,
       enabled: existing?.enabled ?? true,
       starred: existing?.starred ?? false,
@@ -60,7 +62,18 @@ function Editor({ kind, draft, onCancel, onSaved }: { kind: DictionaryKind; draf
             <ArrowRight size={18} class="entry-arrow" aria-hidden="true" />
             <label class="inline-field">
               <span class="field-label">Write</span>
-              <textarea class="input" rows={1} value={replacement} onInput={(event) => setReplacement(event.currentTarget.value)} placeholder="Kubernetes" aria-invalid={!!error} />
+              <textarea
+                class="input"
+                rows={1}
+                value={replacement}
+                onInput={(event) => setReplacement(event.currentTarget.value)}
+                // Enter saves, as in the field beside it. Shift+Enter adds a line to the replacement.
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) void submit(event);
+                }}
+                placeholder="Kubernetes"
+                aria-invalid={!!error}
+              />
             </label>
           </>
         )}

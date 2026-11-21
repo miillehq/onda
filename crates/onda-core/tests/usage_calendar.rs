@@ -65,3 +65,22 @@ fn filling_a_gap_after_a_long_streak_keeps_the_part_before_the_daily_window() {
     assert_eq!((total.current_streak, total.longest_streak), (452, 452));
     assert_eq!(store.daily_usage(1000).unwrap().len(), 400);
 }
+
+#[test]
+fn reopening_repairs_a_streak_undercounted_before_the_upgrade() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("profile.db");
+    let mut store = Store::open(&path).unwrap();
+    for day in ["2026-11-01", "2026-11-03", "2026-11-02"] {
+        store.record_usage(day, 1, 1000, 10, false).unwrap();
+    }
+    drop(store);
+    let database = rusqlite::Connection::open(&path).unwrap();
+    database
+        .execute("UPDATE usage_lifetime SET current_run=1, longest_run=2", [])
+        .unwrap();
+    drop(database);
+    let store = Store::open(&path).unwrap();
+    let summary = store.usage_summary("2026-11-03").unwrap();
+    assert_eq!((summary.current_streak, summary.longest_streak), (3, 3));
+}
