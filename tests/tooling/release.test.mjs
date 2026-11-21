@@ -8,6 +8,24 @@ const platforms = { tier1: ["windows-x64"], tier2: ["macos-arm64"] };
 const job = (name, step) => ({ name, conclusion: "success", steps: [{ name: step, conclusion: "success" }] });
 const report = (jobs) => ({ attempt: 1, headSha: "fixture-sha", status: "completed", conclusion: "success", databaseId: 12, jobs });
 
+test("splitting Intel verification still requires its real workers, account lifecycle and default app tests", () => {
+  const intel = { tier1: [], tier2: ["macos-x64"] };
+  const core = job("native libraries macos-x64", "Crates without the app shell (L1, L3)");
+  core.steps.push({ name: "Synthetic account and key storage round trips (L3)", conclusion: "success" });
+  const checks = [
+    job("tier2 macos-x64", "Real-shell journeys (L6)"),
+    job("debug workers macos-x64", "Build the native workers"),
+    job("app tests macos-x64", "App shell (L1)"),
+    core,
+  ];
+  assert.equal(requireReleaseEvidence("ci", "fixture-sha", report(checks), intel), 12);
+  for (const [index, check] of checks.entries()) {
+    const incomplete = structuredClone(checks);
+    incomplete[index].steps.at(-1).conclusion = "skipped";
+    assert.throws(() => requireReleaseEvidence("ci", "fixture-sha", report(incomplete), intel), { message: new RegExp(check.name) });
+  }
+});
+
 test("a release needs successful shell and installer steps on the tagged revision", () => {
   const ci = report([job("tier1 windows-x64", "L6 real-shell journeys"), job("tier2 macos-arm64", "Real-shell journeys (L6)")]);
   assert.equal(requireReleaseEvidence("ci", "fixture-sha", ci, platforms), 12);

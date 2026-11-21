@@ -79,6 +79,13 @@ only, and each retry is added to [issue #25](https://github.com/miillehq/onda/is
 - L0 to L3 on one runner: under 3 minutes with a warm cache (2 minutes on Windows on 2026-11-12).
 - Whole PR wall clock: 20 minutes. The NSIS build and installer test run on `master` and releases.
 - L4 and L5 per OS: under 5 minutes. L6 per platform: under 15 minutes including the debug build.
+- L7 per OS aims for 25 minutes including the release build. The distribution and public-upgrade
+  jobs report their own durations.
+
+Intel macOS builds its three genuine debug sidecars once. The ordinary app tests and real
+WKWebView journeys consume that archive in parallel. Native crate and private Keychain cases run
+independently. The release gate checks each lane and its named steps. For timing investigations,
+record both Actions wall time and time waiting for a hosted runner.
 
 ## Deliberately not automated
 
