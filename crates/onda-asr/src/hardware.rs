@@ -18,6 +18,24 @@ pub enum ExecutionPreference {
 pub enum ExecutionBackend {
     Cpu,
     Vulkan,
+    Metal,
+}
+
+impl ExecutionBackend {
+    /// The bundled Apple worker can serve both requests. Other platforms use a separate
+    /// executable for optional acceleration.
+    pub fn bundled(preference: ExecutionPreference, macos: bool) -> Self {
+        if macos && preference != ExecutionPreference::CpuOnly {
+            Self::Metal
+        } else {
+            Self::Cpu
+        }
+    }
+
+    /// Whether the selected worker should offer a GPU to whisper.cpp.
+    pub fn uses_gpu(self, metal_build: bool) -> bool {
+        self == Self::Vulkan || (self == Self::Metal && metal_build)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

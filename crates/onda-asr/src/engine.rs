@@ -189,6 +189,8 @@ impl AsrEngine {
         let threads = options
             .thread_count
             .unwrap_or_else(|| self.hardware.inference_threads());
+        let bundled_backend =
+            ExecutionBackend::bundled(options.preference, cfg!(target_os = "macos"));
         let mut accelerator_fallback = false;
         let mut worker = None;
         if self.wants_accelerator(&options) {
@@ -207,15 +209,22 @@ impl AsrEngine {
                     Err(AsrError::Cancelled) => return Err(AsrError::Cancelled),
                     _ => accelerator_fallback = true,
                 },
-                None => accelerator_fallback = true,
+                None => accelerator_fallback = bundled_backend == ExecutionBackend::Cpu,
             }
-        } else if options.preference == ExecutionPreference::GpuPreferred {
+        } else if options.preference == ExecutionPreference::GpuPreferred
+            && bundled_backend == ExecutionBackend::Cpu
+        {
             accelerator_fallback = true;
         }
         let worker = match worker {
             Some(worker) => worker,
             None => {
-                self.spawn_worker(&self.cpu_worker, ExecutionBackend::Cpu, &options, threads)
+                let backend = if accelerator_fallback {
+                    ExecutionBackend::Cpu
+                } else {
+                    bundled_backend
+                };
+                self.spawn_worker(&self.cpu_worker, backend, &options, threads)
                     .await?
             }
         };
@@ -377,7 +386,7 @@ impl PreparedTranscription {
         let timeout = Duration::from_secs(options.timeout_seconds);
         let backend = worker.backend;
         let failed_path = worker.path.clone();
-        let budget = if backend == ExecutionBackend::Vulkan {
+        let budget = if backend != ExecutionBackend::Cpu {
             // A hung driver must leave time for the mandatory CPU recovery path.
             timeout / ACCELERATOR_TIMEOUT_SHARE
         } else {
@@ -386,8 +395,10 @@ impl PreparedTranscription {
         let first = worker.run(samples, budget, &cancellation).await;
         let retry = match &first {
             Ok(_) | Err(AsrError::Cancelled) => None,
-            Err(_) if backend == ExecutionBackend::Vulkan => {
-                engine.forget_vulkan();
+            Err(_) if backend != ExecutionBackend::Cpu => {
+                if backend == ExecutionBackend::Vulkan {
+                    engine.forget_vulkan();
+                }
                 accelerator_fallback = true;
                 Some(engine.cpu_worker.clone())
             }

@@ -143,21 +143,22 @@ fn validate_setup(setup: &WorkerSetup) -> Result<(), &'static str> {
     if setup.backend == ExecutionBackend::Vulkan && vulkan_device_count() == 0 {
         return Err("no Vulkan device");
     }
+    if setup.backend == ExecutionBackend::Metal && !cfg!(feature = "metal") {
+        return Err("worker has no Metal support");
+    }
     Ok(())
 }
 
 fn load(setup: &WorkerSetup) -> Result<WhisperState, &'static str> {
     let mut context_options = WhisperContextParameters::default();
-    // A Metal build (macOS) always offers the GPU; whisper.cpp uses the CPU when Metal is absent.
-    context_options.use_gpu(setup.backend == ExecutionBackend::Vulkan || cfg!(feature = "metal"));
+    // CPU-only and CPU recovery use the same binary on a Mac, with the GPU explicitly disabled.
+    context_options.use_gpu(setup.backend.uses_gpu(cfg!(feature = "metal")));
     let context = WhisperContext::new_with_params(&setup.model_path, context_options)
         .map_err(|_| "model load failed")?;
     let state = context
         .create_state()
         .map_err(|_| "state allocation failed")?;
-    if setup.backend == ExecutionBackend::Vulkan
-        && NATIVE_ACCELERATOR_FAILED.load(Ordering::Relaxed)
-    {
+    if setup.backend != ExecutionBackend::Cpu && NATIVE_ACCELERATOR_FAILED.load(Ordering::Relaxed) {
         return Err("native accelerator initialization failed");
     }
     Ok(state)

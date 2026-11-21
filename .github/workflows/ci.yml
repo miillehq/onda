@@ -86,21 +86,10 @@ jobs:
         run: |
           npm run quality
           if ($LASTEXITCODE -ne 0) { throw 'Deterministic quality regression' }
-      - name: Cache pinned golden model
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: .artifacts/ci-models
-          key: whisper-tiny-en-921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f
       - name: L3 real-model transcription, GPU fallback and cancellation
-        run: |
-          $modelDirectory = Join-Path $PWD '.artifacts/ci-models'
-          $installationJson = (& cargo run --locked -p onda-asr --bin onda-asr-benchmark -- download $modelDirectory whisper-tiny-en) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw 'Verified model download failed' }
-          $installation = $installationJson | ConvertFrom-Json
-          $env:ONDA_ASR_TEST_MODEL = $installation.path
-          $env:ONDA_ASR_WORKER_DIR = Join-Path $PWD 'target/debug'
-          cargo test --locked -p onda-asr --test golden -- --ignored --test-threads=1
-          if ($LASTEXITCODE -ne 0) { throw 'Real ASR golden tests failed' }
+        uses: ./.github/actions/asr-golden
+        with:
+          workers: target/debug
       - name: L6 native smoke in WebView2
         # L6 may retry once (AGENTS.md, rule 5): a timeout retries, a failed check fails at once.
         # Each retry is a data point for https://github.com/miillehq/onda/issues/25.
