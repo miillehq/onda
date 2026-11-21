@@ -38,6 +38,7 @@ dispatcher by the contract suite before any test depends on it.
 | Restore a dictionary backup | L3 large round trips, malformed rows and oversized inputs in `crates/onda-core/tests/dictionary_archives.rs`. L2/L6 import and duplicate handling in `contracts/examples.ts`, executed by `tests/unit/contract.test.ts` and `tests/e2e/00-contract.spec.ts`. |
 | Edit and share | `tests/ui/dictionary.spec.ts` checks imported text, UTF-8 failures and editing focus. `tests/ui/rewrites.spec.ts` saves and clears a per-rewrite model. `tests/ui/stats.spec.ts` checks the encoded PNG dimensions. `tests/unit/dictionary-file.test.ts` checks the size before reading a file. |
 | Speech worker selection and punctuation | `crates/onda-asr/tests/worker_policy.rs` checks CPU and Metal selection. `crates/onda-asr/tests/golden.rs` drives the built workers using `scripts/asr-golden.mjs`. `crates/onda-core/src/text.rs` checks East Asian opening and closing punctuation at the caret. |
+| Native clipboard and accessible text | `crates/onda-platform/src/text_clipboard.rs` and `linux_edits.rs` cover the decision rules. `linux_clipboard.rs` uses a disposable Xvfb display in CI. `macos_clipboard.rs` uses a private system pasteboard. `src-tauri/src/runtime/delivery.rs` checks cancellation before writing. |
 
 Coverage is tracked per journey in this table, never as a percentage. A change that removes a
 level from a journey needs a replacement that proves the same behaviour first.

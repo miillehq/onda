@@ -31,6 +31,7 @@ test has been seen red with its probe.
 | 21 | Restore every supported dictionary backup | The store accepts its own large exports, identifies malformed records and rolls back the whole import. The development mock follows the same contract. | L2, L3, L6 | In review |
 | 22 | Keep editor input and shared output faithful | Damaged backups fail visibly, replacement whitespace survives an edit, rewrites remember their preferred ChatGPT model, and the exported stats PNG measures 1200×630. | L1, L4 | In review |
 | 23 | Respect the chosen speech backend on every platform | CPU only disables Metal, accelerator recovery has a CPU budget, and release workers transcribe the shared clip. East Asian punctuation attaches at the caret. | L1, L3 | In review |
+| 24 | Protect the active field and clipboard during delivery | A cancelled handoff cannot reach the writer. Rich clipboard formats are refused, the Linux selection survives a failed replacement, and a same-length rewrite can be acknowledged. | L1, L3 | In review |
 
 Rulings:
 

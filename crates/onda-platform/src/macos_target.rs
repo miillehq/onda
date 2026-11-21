@@ -78,6 +78,11 @@ extern "C" {
         parameter: CFTypeRef,
         result: *mut CFTypeRef,
     ) -> AXError;
+    fn AXUIElementSetAttributeValue(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        value: CFTypeRef,
+    ) -> AXError;
     fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut i32) -> AXError;
     fn AXUIElementSetMessagingTimeout(element: AXUIElementRef, seconds: f32) -> AXError;
     fn AXValueGetTypeID() -> CFTypeID;
@@ -419,14 +424,45 @@ pub(crate) fn paste(
         Some(focus.field.ok_or(PlatformError::TargetChanged)?)
     };
     let before = field.as_ref().and_then(edit_state);
-    let previous = crate::macos_clipboard::read_text();
-    crate::macos_clipboard::copy_text(text)?;
+    let clipboard = match crate::macos_clipboard::BorrowedClipboard::borrow(text, should_cancel) {
+        Err(PlatformError::ClipboardNotPreservable) => {
+            return crate::text_clipboard::edit_without_clipboard(should_cancel, || {
+                let original = self::field(target)?;
+                let attribute = CFString::from_static_string("AXSelectedText");
+                let replacement = CFString::new(text);
+                if should_cancel() {
+                    return Err(PlatformError::Cancelled);
+                }
+                let status = unsafe {
+                    AXUIElementSetAttributeValue(
+                        original.raw(),
+                        attribute.as_concrete_TypeRef(),
+                        replacement.as_CFTypeRef(),
+                    )
+                };
+                if status != AX_SUCCESS {
+                    return Err(PlatformError::ClipboardNotPreservable);
+                }
+                Ok(InsertionOutcome {
+                    input_injected: true,
+                    clipboard_read_observed: true,
+                    clipboard_restored: true,
+                    clipboard_changed_by_other: false,
+                })
+            });
+        }
+        result => result?,
+    };
+    if let Err(error) = crate::WindowsTargetService::new().revalidate(target) {
+        clipboard.restore(text);
+        return Err(error);
+    }
     if should_cancel() {
-        restore_clipboard(text, previous);
+        clipboard.restore(text);
         return Err(PlatformError::Cancelled);
     }
     if let Err(error) = press_paste() {
-        restore_clipboard(text, previous);
+        clipboard.restore(text);
         return Err(error);
     }
     // A field that reports its length or caret shows whether the paste landed; others cannot
@@ -443,7 +479,7 @@ pub(crate) fn paste(
         }
     }
     std::thread::sleep(CLIPBOARD_HOLD);
-    let restored = restore_clipboard(text, previous);
+    let restored = clipboard.restore(text);
     Ok(InsertionOutcome {
         input_injected: true,
         clipboard_read_observed: observed,
@@ -497,19 +533,6 @@ fn press_paste() -> Result<(), PlatformError> {
         }
     }
     Ok(())
-}
-
-/// Puts back the text the pasteboard held before, unless something else replaced the dictation
-/// meanwhile. With nothing to put back it is emptied, so a later ⌘V cannot paste the dictation
-/// again somewhere else.
-fn restore_clipboard(dictated: &str, previous: Option<String>) -> bool {
-    if crate::macos_clipboard::read_text().as_deref() != Some(dictated) {
-        return false;
-    }
-    match previous {
-        Some(previous) => crate::macos_clipboard::copy_text(&previous).is_ok(),
-        None => crate::macos_clipboard::clear().is_ok(),
-    }
 }
 
 #[cfg(test)]
