@@ -1,8 +1,8 @@
 /** Exercises the actual hidden webview (WebView2, or WebKitGTK on Linux) -> Tauri -> native facade
  *  in an isolated debug profile. */
-import { call } from "./api";
-import type { ApiRequest } from "./generated/api";
-import { refresh } from "./lib/store";
+import { call } from "../../ui/src/api";
+import type { ApiRequest } from "../../ui/src/generated/api";
+import { refresh } from "../../ui/src/lib/store";
 
 const UI_SETTLE_TIMEOUT_MS = 3000;
 const UI_POLL_INTERVAL_MS = 25;

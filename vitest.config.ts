@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 // contract examples. Browser-like files opt into happy-dom per file.
 export default defineConfig({
   test: {
-    include: ["tests/unit/**/*.test.ts"],
+    include: ["tests/unit/**/*.test.ts", "tests/tooling/**/*.test.ts"],
     environment: "node",
   },
 });

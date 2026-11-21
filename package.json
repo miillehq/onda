@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
+    "dev": "vite --host 127.0.0.1 --strictPort",
     "build": "tsc --noEmit && vite build",
     "build:e2e-ui": "tsc --noEmit && vite build --mode e2e",
     "build:e2e": "tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json",
@@ -14,6 +14,7 @@
     "package:desktop": "node scripts/desktop-package.mjs package",
     "test:installers": "node scripts/desktop-package.mjs installers",
     "test:ui": "playwright test",
+    "test:production-ui": "npm run build -- --outDir ../artifacts/production-ui && playwright test -c playwright.production.config.ts",
     "test:ui:update": "cross-env UPDATE_SNAPSHOTS=1 playwright test --update-snapshots=all",
     "test:e2e": "wdio run wdio.conf.ts",
     "contracts": "cargo run -p onda-core --bin onda-contracts && cargo run -p onda-app --features wire-schema --example onda-api-contracts",

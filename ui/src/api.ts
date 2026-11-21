@@ -8,8 +8,14 @@ export interface Backend {
   onEvent(callback: (event: RuntimeEvent) => void): Promise<UnlistenFn>;
 }
 
-/** True inside the desktop shell. Outside it, development builds use a labelled mock backend. */
-export const isNative = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+/** A missing bridge gets the labelled mock only under the development server. */
+export function chooseBackend(hasBridge: boolean, development: boolean): "native" | "mock" | "unavailable" {
+  if (hasBridge) return "native";
+  return development ? "mock" : "unavailable";
+}
+
+export const backendKind = chooseBackend(typeof window !== "undefined" && "__TAURI_INTERNALS__" in window, import.meta.env.DEV);
+const isNative = backendKind === "native";
 
 let mockBackend: Promise<Backend> | undefined;
 function mock(): Promise<Backend> {

@@ -229,6 +229,22 @@ mod tests {
     #[test]
     #[ignore]
     fn secret_service_round_trip() {
+        check_desktop_store();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires a private hosted Keychain"]
+    fn keychain_round_trip() {
+        assert_eq!(
+            std::env::var("ONDA_TEST_CREDENTIAL_STORE").as_deref(),
+            Ok("isolated")
+        );
+        check_desktop_store();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn check_desktop_store() {
         let directory = tempfile::tempdir().unwrap();
         let store = KeyStore::new(directory.path().into(), "com.miille.onda.test");
         store.remove(KeySlot::Anthropic).unwrap();

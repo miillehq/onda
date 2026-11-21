@@ -44,4 +44,13 @@ describe("a fresh profile in the real app", () => {
     await expect($("html")).toHaveAttribute("data-theme", "dark");
     await screenshot("settings-dark");
   });
+
+  it("creates a multiline snippet through the editor", async () => {
+    await open("snippets");
+    await $("button=New snippet").click();
+    await $('input[placeholder="my address"]').setValue("fixture signature");
+    await $('#snippet-form textarea').setValue("Test signature\nSecond line");
+    await $("button=Create snippet").click();
+    await expect($("main")).toHaveText(expect.stringContaining("fixture signature"));
+  });
 });

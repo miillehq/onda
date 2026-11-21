@@ -3300,6 +3300,7 @@ dependencies = [
  "tracing-subscriber",
  "ts-rs",
  "uuid",
+ "webbrowser",
  "zeroize",
 ]
 

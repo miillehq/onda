@@ -29,7 +29,7 @@ design in `DESIGN.md`.
 - the app: `npm run desktop` (Windows); `npm run tauri dev` after `scripts/prepare.sh` (Linux, macOS)
 - packages: `npm run release` (Windows NSIS); `scripts/build.sh --bundles deb,appimage` (Linux) or
   `--bundles app,dmg` (macOS), then `scripts/installer-test.sh` installs, launches and removes them (L7)
-- a failed CI run: `gh run view <id> --log-failed`
+- a failed CI run: `node scripts/triage.mjs <run-id>`. The `shell-contact-sheet` artifact contains the real-shell screenshots.
 
 ## Layout
 
