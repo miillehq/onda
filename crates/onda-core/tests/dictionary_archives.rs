@@ -40,7 +40,11 @@ fn wide_or_incomplete_entries_identify_the_record_and_leave_existing_words_alone
     fields.remove("extra");
     fields.remove("enabled");
     let positional = json!(["2", "vocabulary", "Invalid", null, true, false, "manual"]);
-    for invalid in [wide, narrow, positional] {
+    let mut mapped_kind = valid.clone();
+    mapped_kind["kind"] = json!({ "vocabulary": null });
+    let mut mapped_source = valid.clone();
+    mapped_source["source"] = json!({ "manual": null });
+    for invalid in [wide, narrow, positional, mapped_kind, mapped_source] {
         let source = format!(
             "{{\n\"version\":1,\n\"entries\":[\n{},\n{}\n]}}",
             vocabulary(3, "New".into()),
