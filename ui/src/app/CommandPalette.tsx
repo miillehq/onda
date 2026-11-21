@@ -60,19 +60,7 @@ export function CommandPalette() {
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        open.value = !open.value;
-      } else if (event.ctrlKey && event.key === ",") {
-        event.preventDefault();
-        navigate("settings/general");
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  usePaletteShortcut();
 
   useEffect(() => {
     if (open.value) {
@@ -169,4 +157,21 @@ export function CommandPalette() {
       </div>
     </div>
   );
+}
+
+function usePaletteShortcut(): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        open.value = !open.value;
+      } else if (event.ctrlKey && event.key === ",") {
+        event.preventDefault();
+        navigate("settings/general");
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
 }

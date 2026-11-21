@@ -112,54 +112,36 @@ with an identical tree.
 | 2026-11-19 | L1 release tooling | The platform dispatcher selects native package and installer scripts, the release gate requires the trusted SHA and actual L6/L7 steps, and the collector requires each architecture's own formats. A skipped native step, misrouted Linux package and duplicate package name each failed the respective regression case. | windows-x64, local | `npm run test:tooling` (3 passed), `scripts/release-evidence.mjs` against CI 44567484115 and installers 44567497213. |
 | 2026-11-19 | L1, L6 | Failed previews and unsuccessful retries stay out of History. Only an explicitly completed unchanged preview is retained, and previews carry no native insertion target. | windows-x64, local | The original Tier 1 hidden-shell checks failed in [CI 44584366400](https://github.com/miillehq/onda/actions/runs/44584366400). After separating completion from a provisional result, `cargo test --locked -p onda-app --lib` (30 passed) and `scripts/smoke.ps1 -SkipBuild` passed in an isolated WebView2 profile. |
 | 2026-11-19 | L1, L2, L6 | All 69 registered commands refuse null, numeric, positional, wrong-shaped and date-string arguments at the native decoder and development mock. Explicit null can clear the profile name. Representative malformed envelopes produce the same fixed error from the real WebView2 bridge. | windows-x64, local | `cargo test --locked -p onda-app --test request_shapes`, `npm run test:unit`, `npm run build:e2e`, `npm run test:e2e` (3 spec files passed). The old parser accepted an empty name-update object and the old bridge returned a framework string. |
-
 | 2026-11-19 | L3, L6, L7, L8 | Six release workers transcribed the fixture and six candidate installations launched. Six fresh runners downloaded v0.3.0, checked both published digests, launched it, then retained a multiline snippet across replacement with the candidate and schema 5→6 migration. Debian, Fedora and Arch launched their packages. | Windows, Linux and macOS x64/ARM64, three Linux distributions | All 15 [installer and upgrade jobs](https://github.com/miillehq/onda/actions/runs/44593069718) and all ten [CI jobs](https://github.com/miillehq/onda/actions/runs/44593084135) passed for `5ca06cd`. Both installer builds identify as 0.3.0. |
 | 2026-11-19 | L1, L4–L6 | A selected, missing Fast model now downloads from its card. Loading the distributable UI without IPC shows the startup error, and its emitted assets exclude the smoke fixture. WebView2 enforces the bundled image policy. The saved multiline snippet survives a real process restart. | windows-x64, local | `npm run test:unit` (55 Vitest and 3 tooling checks), Playwright (74 browser and 4 production cases), `npm run build:e2e` and `npm run test:e2e` (3 spec files). Before the fixes the card made zero download requests, the production renderer showed a mock badge and shipped its smoke fixture, and the restarted profile lacked the new snippet. |
-
 | 2026-11-19 | L3 diagnosis | Both Apple Silicon and Intel refused to initialize the account store before reaching the Keychain. The existing encryption backend already supported Keychain. The store constructor excluded macOS. | macos-arm64, macos-x64 | Both real account lifecycle jobs reported `UnsupportedPlatform` in the [first cross-platform credential run](https://github.com/miillehq/onda/actions/runs/44602049735). |
-
 | 2026-11-19 | L1, L3 | Native paste needs an observable field before a key event can be sent. A failed permission-file replacement preserves the old bytes and removes the temporary file. | windows-x64, local, synthetic field and temporary directory | `cargo test --locked -p onda-platform --lib` covers missing versus zero-length fields and interrupted writes. The hosted OS uses the same preflight and file writer. Physical target behavior stays in the manual matrix. |
-
 | 2026-11-19 | L1, L3, L4, L6 | Deleting a custom default selects Polish in the same database transaction. Opening an older dangling default restores it and preserves edited built-ins. Editors preserve surrounding whitespace. The real bridge refuses a rewrite retry after its endpoint changes. | windows-x64, local | `cargo test --locked -p onda-core --test default_rewrite` originally returned the deleted ID and subsequently passed both SQLite cases. Chromium previously trimmed the saved trigger and instruction. The native retry test originally returned the new destination’s model error. All three native spec files subsequently passed. |
-
 | 2026-11-19 | L4 | Typing a forty-flag profile name preserves all forty graphemes even on the first edit after profile loading. | windows-x64, Chromium and WebKit | The previous editor truncated flags at twenty. The first repair still intermittently restored the old name before input on WebKit. Both engines passed 20 consecutive cases after hydration moved before paint. |
 
 | 2026-11-19 | L4 | The shared dialog assigns its initial focus before typing can begin in a second field. Escape uses the current close handler. | macos-arm64 diagnosis, Windows local | An [actual Mac Chromium run](https://github.com/miillehq/onda/actions/runs/44607484981/job/135857979835) saved the expansion at the end of the trigger. The focus lifecycle now runs before paint. |
-| 2026-11-19 | L1–L3 characterization | Native library suites preserve audio capture, verified worker and model policy, OAuth, storage and shortcut behavior after their owners were separated. | windows-x64, local | `cargo test --locked --workspace --exclude onda-app` passed 182 active cases in the refactored libraries. Conditional Windows, Linux and macOS paths also remain in the hosted jobs. |
 
+| 2026-11-19 | L1–L3 characterization | Native library suites preserve audio capture, verified worker and model policy, OAuth, storage and shortcut behavior after their owners were separated. | windows-x64, local | `cargo test --locked --workspace --exclude onda-app` passed 182 active cases in the refactored libraries. Conditional Windows, Linux and macOS paths also remain in the hosted jobs. |
 | 2026-11-19 | L1–L3, L6 characterization | The operation actor coordinates recording, recognition, provider choice, safe delivery, History and retry through their owning services. A retry preserves the original recipient and previews remain targetless. | windows-x64, local | The app crate passed 37 active tests, strict workspace Clippy passed, and all three WebView2 specification files passed after extraction. |
+| 2026-11-19 | L3 | Synthetic registration, models, responses, concurrent refresh and sign-out reached the macOS Keychain on both Intel and Apple Silicon after admitting macOS in the native store constructor. The same lifecycle and the separate key round trip reached Secret Service on Linux ARM64. | macOS x64 and ARM64, Linux ARM64 | The named synthetic account and key storage steps passed in [CI 44604289499](https://github.com/miillehq/onda/actions/runs/44604289499). |
+| 2026-11-19 | L3 | The release worker used Metal for the pinned public-domain speech fixture, and the CPU-only path explicitly disabled GPU use. | macOS Intel and Apple Silicon | Both [native worker jobs](https://github.com/miillehq/onda/actions/runs/44575355243) reported Metal with CPU recovery false. |
+| 2026-11-19 | L0 | Every target-conditioned Rust module and the renderer fit the documented source limits. A planted orphan Rust module and unused TypeScript file were detected. | windows-x64, local | `npm run lint` and `npm run test:tooling`. The initial structural read counted 3,566 lines for Runtime. The extracted root measures 371. |
+
+| 2026-11-19 | L0 | Qualified implementations attach to the correct same-named Rust type. A test-only method does not increase its production member count, and a module accessible only from tests is reported. Normal and production Knip checks cover the renderer exports independently. | windows-x64, local | The original checker reported zero members for both homonyms and accepted a test-only module. The corrected checker and both Knip modes pass across 181 production files. Dedicated ownership, configuration and Cargo-root fixtures cover the regressions in `tests/tooling/source-quality.test.mjs`. |
 
 ## Unverified
 
-- macOS: dictation into other apps on a real Mac. Accessibility paste is built and checked on the
-  runners but has never run against a real app: focused-field identity, password and secure-input
-  refusal, ⌘V, putting the pasteboard back, selected text for rewrites, apps that show no field,
-  the permission dialog, and the permission's reset after an unsigned update. Undo's span
-  selection is not implemented on macOS, and keyboard layouts that move V are untested. The
-  Keychain round trip is an ignored test. The Metal worker has not transcribed (no golden run on macOS). Signing and
-  notarization are deferred by the owner (PLAN.md, slice 15): the dmg is unsigned, so each user
-  allows Onda in System Settings once. That macOS and common apps leave the default dictation
-  chord Control+Shift+Space free is not checked on a real Mac; Onda reports a chord it could not
-  claim. The interface's Mac wording has been checked in a browser against the mock, not in
-  WKWebView on a Mac. macOS has no resource report (no process sampling). The runners hold the
-  Accessibility permission, so the tests' path for a Mac without it never runs in CI.
-- Every 0.3.0 package passed its installer test on a GitHub runner, a fresh virtual machine. None
-  has been installed on a Windows on ARM laptop, a Linux ARM64 machine or a real Mac. Nobody has
-  yet installed a file downloaded from the release page. The release publishes the installers
-  run's own artifacts, and their checksums match, but there is no post-release install run.
+- macOS physical sessions still cover third-party target identity and secure fields, non-US keyboard layouts, the Accessibility consent dialog, grant reset after an unsigned upgrade and shortcut conflicts. Span selection for Undo and native process resource reporting remain unavailable on macOS. Signing and notarization remain deferred by the owner. Hosted Keychain, Metal and WKWebView checks have separate evidence above.
+- Physical first installations by an end user on each OS and architecture remain manual. Hosted runners exercised downloaded public packages and in-place replacements on all six targets.
 - The release workflow's publish step takes the reviewed MPL archive since 2026-11-14; it has run
   only on a downloaded artifact and first runs for real at the next tag. 0.3.0's release page
   still carries the inline copy.
-- Upgrades: installing a new build over an older one on any OS has no run recorded; migrations
-  are tested at L3 only.
 - Windows NSIS: why the installed app's first start on a fresh profile takes 8 to 22 s on the
   runners is not investigated. Once it missed the 30 s limit (installers run 43524749021,
   windows-x64, branch `release/0.3.0-pipeline`) and passed in the next run; if it repeats, it gets
   an issue and one retry (L7).
 - L5 tier 3 catches rendering breakage, not small changes (PLAN.md ruling).
-- Linux: the keyring seal round trip and Secret Service key storage are ignored tests; they need a
-  desktop session. The real-model golden tests run in CI on Windows only, never on Linux or macOS
-  in this ledger. The Vulkan golden needs a GPU and stays ignored.
+- Dedicated vendor GPU hardware beyond the recorded Metal and CPU runs remains unverified. The Vulkan hardware test needs a compatible device.
 - Dictation into real applications, physical microphones and real provider accounts on any OS:
   the manual matrix in `docs/testing.md`, with no run recorded for 0.3.0.
 - Observed once, not reproduced: in 1 of 12 local real-shell runs (the first after a rebuild), the
@@ -182,3 +164,4 @@ with an identical tree.
 | 2026-11-21 | L1 | #48 Release evidence requires a complete first workflow attempt. The Mac installer launches with a private home and checks the database created there. | windows-x64, local release gate | node --test tests/tooling/release.test.mjs passed. Before the change a repeated attempt produced Missing expected exception. Mac Launch Services is exercised by hosted L7. |
 | 2026-11-21 | L1 | #51 Manual clipboard delivery checks the original and current targets, including secure input, immediately before the write. | windows-x64, local policy test | cargo test --locked -p onda-platform --lib a_manual_handoff passed after the unguarded path failed to return SecureField. |
 | 2026-11-21 | L1, L3, L4 | #52 Rewrites use a corrected model at the same endpoint, reject stale defaults before changing desktop settings, and check the bound account before announcing cloud use. Profile-name coverage reads the saved greeting. | windows-x64, Chromium and WebKit | The retry_route and default_rewrite Cargo cases passed. The retry initially returned first instead of second. With the blur save disconnected, the browser showed Good morning, Alex. Both engines passed with the save restored. |
+| 2026-11-21 | L0, L1 | #55 The required dependency-policy check consumes the source-quality result. The source scanner runs on Node versions predating import.meta.main. | windows-x64, local | npm run lint:source checked 181 files. Node 22.14 printed an empty findings array with the revised entry point. Eight source-quality and release tooling tests passed. |

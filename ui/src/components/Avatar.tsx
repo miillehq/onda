@@ -14,7 +14,7 @@ export function pictureUrl(base64: string | null | undefined): string | null {
 }
 
 /** First letters of up to two words, for the picture-less avatar. */
-export function initials(name: string | null | undefined): string {
+function initials(name: string | null | undefined): string {
   return (name ?? "")
     .split(" ")
     .filter(Boolean)

@@ -20,7 +20,7 @@ export function Mark({ height = 16, label }: { height?: number; label?: string }
   );
 }
 
-export function Wordmark({ height = 20 }: { height?: number }) {
+function Wordmark({ height = 20 }: { height?: number }) {
   return (
     <svg viewBox="0 0 727 217" width={(height * 727) / 217} height={height} aria-hidden="true">
       <path fill="currentColor" d={WORDMARK_PATH} />

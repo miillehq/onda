@@ -31,7 +31,7 @@ export function plural(count: number, one: string, many = `${one}s`): string {
   return `${formatInteger(count)} ${count === 1 ? one : many}`;
 }
 
-export function greeting(now = new Date()): string {
+function greeting(now = new Date()): string {
   const hour = now.getHours();
   if (hour < 5) return "Working late";
   if (hour < 12) return "Good morning";

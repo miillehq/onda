@@ -13,8 +13,8 @@ export interface StatsCard {
   picture: string | null;
 }
 
-export const CARD_WIDTH = 1200;
-export const CARD_HEIGHT = 630;
+const CARD_WIDTH = 1200;
+const CARD_HEIGHT = 630;
 const PADDING = 64;
 const FONT = '"Inter Variable", "Segoe UI", system-ui, sans-serif';
 // Brand graphite tile and the tile's text tiers (DESIGN.md, tokens.css).
@@ -90,26 +90,7 @@ export async function renderStatsImage(card: StatsCard, canvas = document.create
   context.font = `500 17px ${FONT}`;
   context.fillText(`As of ${formatDate(card.today)}`, CARD_WIDTH - PADDING, PADDING + 20);
 
-  // Heading: the chosen name and picture, or an anonymous title.
-  context.textAlign = "left";
-  let textX = PADDING;
-  const headingY = 168;
-  if (picture) {
-    const size = 64;
-    context.save();
-    context.beginPath();
-    context.arc(PADDING + size / 2, headingY - 22, size / 2, 0, Math.PI * 2);
-    context.clip();
-    context.drawImage(picture, PADDING, headingY - 22 - size / 2, size, size);
-    context.restore();
-    textX = PADDING + size + 20;
-  }
-  context.fillStyle = TEXT;
-  context.font = `720 38px ${FONT}`;
-  context.fillText(card.name ? card.name : "My dictation", textX, headingY - 14);
-  context.fillStyle = TEXT_2;
-  context.font = `500 19px ${FONT}`;
-  context.fillText(card.name ? "Dictating with Onda" : "with Onda", textX, headingY + 16);
+  drawCardHeading(context, card, picture);
 
   // Four headline numbers.
   const { summary } = card;
@@ -173,4 +154,28 @@ export async function renderStatsImage(card: StatsCard, canvas = document.create
 /** Base64 PNG for native code to save; the data-URL prefix is removed. */
 export function canvasBase64(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+}
+
+function drawCardHeading(context: CanvasRenderingContext2D, card: StatsCard, picture: HTMLImageElement | null): void {
+  // Heading: the chosen name and picture, or an anonymous title.
+  context.textAlign = "left";
+  let textX = PADDING;
+  const headingY = 168;
+  if (picture) {
+    const size = 64;
+    context.save();
+    context.beginPath();
+    context.arc(PADDING + size / 2, headingY - 22, size / 2, 0, Math.PI * 2);
+    context.clip();
+    context.drawImage(picture, PADDING, headingY - 22 - size / 2, size, size);
+    context.restore();
+    textX = PADDING + size + 20;
+  }
+  context.fillStyle = TEXT;
+  context.font = `720 38px ${FONT}`;
+  context.fillText(card.name ? card.name : "My dictation", textX, headingY - 14);
+  context.fillStyle = TEXT_2;
+  context.font = `500 19px ${FONT}`;
+  context.fillText(card.name ? "Dictating with Onda" : "with Onda", textX, headingY + 16);
+
 }

@@ -1,0 +1,6 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "entry": ["tests/**/*.{test,spec}.ts", "scripts/{asr-golden,contact-sheet,desktop-package,generate-notices,installer-upgrade,release-evidence,release-files,triage}.mjs", "scripts/readme-images/{capture,render}.mjs", "tests/tooling/*.test.mjs"],
+  "project": ["ui/src/**/*.{ts,tsx}!", "contracts/**/*.ts", "tests/**/*.ts", "scripts/**/*.mjs", "*.config.ts"],
+  "ignoreIssues": { "ui/src/generated/**": ["exports", "types"] }
+}

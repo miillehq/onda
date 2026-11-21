@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": ["ui/src/**/*.{ts,tsx}", "contracts/**/*.ts", "scripts/**/*.mjs", "tests/**/*.ts", "*.config.ts", "wdio.conf.ts", "!ui/src/generated/**"]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "none",
+      "correctness": {
+        "noConstAssign": "error",
+        "noInvalidUseBeforeDeclaration": "error",
+        "noUnreachable": "error",
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "useHookAtTopLevel": "error"
+      },
+      "suspicious": { "noDoubleEquals": "error", "noFallthroughSwitchClause": "error" },
+      "complexity": { "noExcessiveLinesPerFunction": { "level": "error", "options": { "maxLines": 80 } } },
+      "style": { "noExcessiveLinesPerFile": { "level": "error", "options": { "maxLines": 400 } } }
+    }
+  }
+}

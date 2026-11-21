@@ -23,7 +23,10 @@
     "desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1",
     "release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1",
     "readme:images": "node scripts/readme-images/render.mjs",
-    "quality": "cargo run -p onda-core --release --bin onda-quality"
+    "quality": "cargo run -p onda-core --release --bin onda-quality",
+    "lint": "npm run lint:source && cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings",
+    "lint:source": "tsc --noEmit && tsc -p tests/ui/tsconfig.json --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit && biome lint && knip && knip --production && node scripts/quality/architecture.mjs",
+    "triage": "node scripts/triage.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "5.3.0",
@@ -34,10 +37,12 @@
     "preact": "10.29.8"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "@cfworker/json-schema": "4.1.6",
     "@playwright/test": "1.65.0",
     "@tauri-apps/cli": "2.12.1",
     "@types/node": "24.19.2",
+    "@vscode/tree-sitter-wasm": "0.3.1",
     "@wdio/cli": "9.32.0",
     "@wdio/globals": "9.31.3",
     "@wdio/local-runner": "9.32.0",
@@ -49,6 +54,7 @@
     "cross-env": "10.1.0",
     "happy-dom": "21.0.4",
     "jsonc-parser": "3.3.1",
+    "knip": "6.46.1",
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vitest": "5.1.0"

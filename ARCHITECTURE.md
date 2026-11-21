@@ -99,6 +99,21 @@ insertion (`target.rs`, `clipboard.rs`), at-rest protection (`protect.rs`,
 `onda-cloud/src/keys.rs`), autostart and theme (`desktop.rs`), and process reports
 (`processes.rs`). See [ADR 007](docs/adr/007-platform-support.md).
 
+## Source limits and runtime ownership
+
+`npm run lint` enforces 400 code lines per file, 80 per function and 400 lines and 25 public members per type across implementations. Preact markup and the three compatibility surfaces have explicit limits and rationale. The scanner covers target-conditioned native code on every host. [ADR 008](docs/adr/008-source-budgets.md)
+
+| Owner | Responsibility |
+|---|---|
+| `OperationActor` | Queue, admitted operation, state transitions, cancellation and shutdown |
+| `MicrophoneSession`, `SpeechRecognition`, `ModelLibrary` | Capture device and meter, warm and active speech workers, verified models and downloads |
+| `RewriteEngine`, `ConnectedAccounts`, `ProviderAccess` | Selected provider, account sessions, pinned retry destination and model |
+| `TargetDelivery`, `OperationResults` | Native target, paste observation, result recovery and guarded undo |
+| `LocalData`, `HistoryService` | SQLite and dictionary index, sealed history and retention revisions |
+| `ShortcutSupervisor`, `Performance`, `Updates` | Platform registrations and helper lifetime, content-free measurements, update admission |
+
+Typed handlers in `src-tauri/src/runtime/commands/` call those owners. The renderer keeps signals, data queries and profile actions under `ui/src/lib/`. The mock is loaded only in development and validates incoming requests against the generated native schema.
+
 ## Ownership
 
 One maintainer with agents and outside contributors through pull requests. Contract changes
