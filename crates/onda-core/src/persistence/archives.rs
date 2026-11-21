@@ -13,6 +13,27 @@ struct InputArchive<'a> {
     entries: Records<'a>,
 }
 
+/// Version 1 uses string labels. Serde's additional map spelling for unit variants is outside
+/// the backup format. A remote derive checks this wire layout against the domain type at build time.
+#[derive(Deserialize)]
+#[serde(remote = "DictionaryEntry", deny_unknown_fields)]
+struct ArchiveEntry {
+    id: String,
+    #[serde(deserialize_with = "named_label")]
+    kind: DictionaryKind,
+    phrase: String,
+    replacement: Option<String>,
+    enabled: bool,
+    starred: bool,
+    #[serde(deserialize_with = "named_label")]
+    source: EntrySource,
+}
+
+fn named_label<'de, D: Deserializer<'de>, T: Deserialize<'de>>(input: D) -> Result<T, D::Error> {
+    use serde::de::IntoDeserializer;
+    T::deserialize(String::deserialize(input)?.into_deserializer())
+}
+
 struct Records<'a> {
     values: Vec<&'a RawValue>,
     count: usize,
@@ -93,8 +114,9 @@ impl Store {
             if !raw.get().starts_with('{') {
                 return Err(malformed());
             }
-            let mut entry: DictionaryEntry =
-                serde_json::from_str(raw.get()).map_err(|_| malformed())?;
+            let mut entry =
+                ArchiveEntry::deserialize(&mut serde_json::Deserializer::from_str(raw.get()))
+                    .map_err(|_| malformed())?;
             validate_dictionary_entry(&entry).map_err(|error| {
                 AppError::invalid(&format!(
                     "Dictionary entry {} at line {}. {}",
