@@ -94,6 +94,7 @@ pub(super) async fn copy_history_suggestion(
     let text = service
         .retention
         .history_entry(service, &id)?
+        .value
         .suggestion
         .clone()
         .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
@@ -105,26 +106,12 @@ pub(super) async fn copy_history_entry(
     service: &Arc<Runtime>,
     id: String,
 ) -> AppResult<ApiResponse> {
-    let text = service
-        .retention
-        .history_entry(service, &id)?
-        .output
-        .clone();
-    let usage = lock(&service.results.result)?
-        .as_ref()
-        .filter(|saved| saved.result.operation_id == id && saved.result.output == text)
-        .and_then(|saved| {
-            saved
-                .usage
-                .clone()
-                .map(|usage| (usage, saved.result.fallback_used))
-        });
+    let record = service.retention.history_entry(service, &id)?;
+    let text = &record.value.output;
     copy_text(text.clone()).await?;
-    if let Some((receipt, fallback)) = usage {
-        service.credit_delivery(Some(&receipt), fallback);
-    }
+    service.credit_delivery(record.usage.as_ref(), record.value.fallback_used);
     if let Some(current) = lock(&service.results.result)?.as_mut() {
-        if current.result.operation_id == id && current.result.output == text {
+        if current.result.operation_id == id && &current.result.output == text {
             current.copied = true;
         }
     }

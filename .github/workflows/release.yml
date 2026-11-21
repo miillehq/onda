@@ -65,7 +65,7 @@ jobs:
           for workflow in ci installers; do
             run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow.yml" --branch master --commit "$GITHUB_SHA" --limit 1 --json databaseId -q '.[0].databaseId')
             [ -n "$run" ] || { echo "::error::no $workflow evidence for $GITHUB_SHA"; exit 1; }
-            gh run view "$run" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha,databaseId,jobs |
+            gh run view "$run" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha,databaseId,attempt,jobs |
               node scripts/release-evidence.mjs "$workflow" "$GITHUB_SHA"
             echo "$workflow=$run" >> "$GITHUB_OUTPUT"
           done
@@ -199,9 +199,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Dependency policy failed' }
           npm audit --omit=dev --audit-level=high
           if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency advisory failed' }
-          # Test tooling never ships, so its advisories are reported, not gated (PLAN.md, slice 3).
           npm audit --audit-level=high
-          if ($LASTEXITCODE -ne 0) { '::warning::High advisories in test-only dependencies (PLAN.md slice 3)'; $global:LASTEXITCODE = 0 }
+          if ($LASTEXITCODE -ne 0) { throw 'Development dependency advisory failed' }
       - name: Build requested bundle without publishing
         env:
           BUILD_VULKAN: ${{ inputs.with_vulkan }}
