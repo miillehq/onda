@@ -594,8 +594,9 @@ export function createMockBackend(): Backend {
   console.info("[Onda] Using the development mock backend. Data is fictional.");
   let started = false;
   return {
-    call: async (request) => {
-      requireRequestShape(request);
+    call: async (received) => {
+      // Rust sees the JSON the bridge carried, so the mock checks and answers that same form.
+      const request = requireRequestShape(received);
       await wait(40);
       return respond(request);
     },

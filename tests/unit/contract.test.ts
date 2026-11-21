@@ -33,6 +33,12 @@ describe("the development mock on a fresh install", () => {
       }
     }
   });
+  it("checks the JSON the desktop bridge would carry, not the live object", async () => {
+    // JSON drops an undefined member: the bridge would carry a missing name, and an ordinary delete.
+    await expect(backend.call({ command: "setProfileName", args: { name: undefined } } as unknown as ApiRequest)).rejects.toMatchObject(shapeError);
+    await expect(backend.call({ command: "deleteSnippet", args: { id: "absent", extra: undefined } } as unknown as ApiRequest)).resolves.toEqual({ type: "unit" });
+    await expect(backend.call(undefined as unknown as ApiRequest)).rejects.toMatchObject(shapeError);
+  });
   // The mock answers as Onda on Windows, whichever OS runs this test.
   for (const example of examplesFor(false)) {
     it(example.name, async () => {
