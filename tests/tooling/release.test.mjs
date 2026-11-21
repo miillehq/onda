@@ -8,6 +8,12 @@ const platforms = { tier1: ["windows-x64"], tier2: ["macos-arm64"] };
 const job = (name, step) => ({ name, conclusion: "success", steps: [{ name: step, conclusion: "success" }] });
 const report = (jobs) => ({ attempt: 1, headSha: "fixture-sha", status: "completed", conclusion: "success", databaseId: 12, jobs });
 
+test("retaining an installer for diagnosis cannot satisfy a failed installed launch", () => {
+  const windows = job("installers windows-x64", "Upload reviewable installer and notices");
+  windows.steps.push({ name: "Install, probe the workers, launch, observe and uninstall (L7)", conclusion: "failure" });
+  assert.throws(() => requireReleaseEvidence("installers", "fixture-sha", report([windows]), { tier1: ["windows-x64"], tier2: [] }), /installers windows-x64/);
+});
+
 test("splitting Intel verification still requires its real workers, account lifecycle and default app tests", () => {
   const intel = { tier1: [], tier2: ["macos-x64"] };
   const core = job("native libraries macos-x64", "Crates without the app shell (L1, L3)");
