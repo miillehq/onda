@@ -153,3 +153,4 @@ with an identical tree.
 | Date | Level | Claim | Platforms | Evidence |
 |---|---|---|---|---|
 | 2026-11-21 | L1, L3 | #42 Refusing a future WAL preserves its uncheckpointed pages. An unreadable history table leaves session dictation available. | windows-x64, local | cargo test --locked -p onda-core --test profile_storage and cargo test --locked -p onda-app --lib runtime::history::tests passed. The regressions first reported “refusal checkpointed a newer database” and “history read failure prevented startup”. |
+| 2026-11-21 | L3 | #43 Archive kind and source must be scalar string labels. A bad second row rolls the transaction back. | windows-x64, local | cargo test --locked -p onda-core --test dictionary_archives and strict core Clippy passed. Without the archive decoder the importer returned accepted malformed archive row: 1. |
