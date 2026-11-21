@@ -121,7 +121,8 @@ jobs:
         run: |
           $installer = Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*setup.exe' | Select-Object -First 1
           . ./scripts/installed-log.ps1
-          $report = Invoke-InstalledAppCheck { ./scripts/installer-smoke.ps1 -InstallerPath $installer.FullName }
+          $appId = (Get-Content -Raw -LiteralPath src-tauri/tauri.conf.json | ConvertFrom-Json).identifier
+          $report = Invoke-InstalledAppCheck -ProfileParent $env:LOCALAPPDATA -ProfileName $appId -Attempt { ./scripts/installer-smoke.ps1 -InstallerPath $installer.FullName }
           $report | Select-Object status, cpuWorker, avx2Worker, startupSeconds, startupLogObserved, shell, helper, helperExitedOnParentClose, applicationDataPreserved, uninstallerExitCode | ConvertTo-Json -Depth 4
       - name: Upload the installed-app report
         if: always()

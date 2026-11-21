@@ -91,10 +91,27 @@ function Wait-InstalledStartupMarker {
 
 function Invoke-InstalledAppCheck {
     <# L7 permits one fresh install after this specific readiness timeout. Each attempt writes its own report. #>
-    param([Parameter(Mandatory)][scriptblock]$Attempt)
+    param(
+        [Parameter(Mandatory, Position=0)][scriptblock]$Attempt,
+        [Parameter(Mandatory)][string]$ProfileParent,
+        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$')][string]$ProfileName
+    )
+    $parentDirectory = Get-Item -LiteralPath $ProfileParent -ErrorAction Stop
+    if (-not ($parentDirectory -is [IO.DirectoryInfo])) { throw 'Expected the application data parent directory.' }
+    $ownedProfilePath = [IO.Path]::GetFullPath((Join-Path $parentDirectory.FullName $ProfileName))
+    # A newly reserved directory prevents either attempt from opening or migrating a real profile.
+    $null = New-Item -ItemType Directory -Path $ownedProfilePath -ErrorAction Stop
     try { & $Attempt; return }
     catch {
         if ($_.FullyQualifiedErrorId.Split(',')[0] -ne 'Onda.InstalledStartupTimeout') { throw }
+        $firstProfile = Get-Item -LiteralPath $ownedProfilePath -ErrorAction Stop
+        if (-not ($firstProfile -is [IO.DirectoryInfo]) -or $firstProfile.Parent.FullName -ne $parentDirectory.FullName -or
+            ($firstProfile.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'The installed application profile is no longer the reserved directory.'
+        }
+        $archiveName = $ProfileName + '.first-launch-' + [guid]::NewGuid().ToString('N')
+        Rename-Item -LiteralPath $firstProfile.FullName -NewName $archiveName -ErrorAction Stop
+        $null = New-Item -ItemType Directory -Path $ownedProfilePath -ErrorAction Stop
         Write-Warning 'The installed application missed its startup deadline. The first report is retained. Retrying once (Onda issue #63).'
     }
     & $Attempt

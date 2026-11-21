@@ -184,6 +184,6 @@ and identifies its process through Launch Services.
 
 ## Diagnosing an installed Windows startup
 
-The installer check records the shell PID, monotonic observation time, native setup milestones and the owned helper. Each attempt has a separate JSON report. A successful build keeps its candidate archive even if the L7 check later fails. Publication still requires successful same-revision native and installer steps.
+The installer check records the shell PID, monotonic observation time, native setup milestones and the owned helper. Each attempt has a separate JSON report. The hosted Windows check reserves an empty application-data directory. After a startup timeout it keeps that directory with the first launch evidence and starts the one permitted retry with empty SQLite and WebView2 storage. A successful build keeps its candidate archive even if the L7 check later fails. Publication still requires successful same-revision native and installer steps.
 
 To measure cold-start frequency, dispatch `installers.yml` with `windows_startup_run` set to a prior installer workflow run from this repository. Its Windows x64 candidate and original report must both be available. Thirty fresh hosted runners check the candidate digest against that report, install and launch it once and retain each result. This diagnostic form runs the samples without packaging a release.

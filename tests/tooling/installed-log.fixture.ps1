@@ -30,20 +30,37 @@ $legacy = @{ timestamp = '2025-01-01T00:00:00Z'; level = 'INFO'; fields = @{ sub
 if (-not (Get-InstalledStartupMarker -Directory $Directory -Checkpoint $beforeRotation -ProcessId 53)) { throw 'A new log file from an older candidate was ignored.' }
 
 $attempts = @{ count = 0 }
-$ready = Invoke-InstalledAppCheck {
+$candidateProfile = Join-Path $Directory 'candidate'
+$warm = Join-Path $candidateProfile 'first-launch.bin'
+$ready = Invoke-InstalledAppCheck -ProfileParent $Directory -ProfileName candidate -Attempt {
     $attempts.count++
-    if ($attempts.count -eq 1) { throw (New-InstalledStartupTimeout -ProcessId 52) }
+    if ($attempts.count -eq 1) {
+        [IO.Directory]::CreateDirectory($candidateProfile) | Out-Null
+        [IO.File]::WriteAllText($warm, 'first attempt')
+        throw (New-InstalledStartupTimeout -ProcessId 52)
+    }
+    if (Test-Path -LiteralPath $warm) { throw 'The retry reused the first launch profile.' }
     'ready'
 }
 if ($ready -ne 'ready' -or $attempts.count -ne 2) { throw 'A single startup retry did not run.' }
+$archives = @(Get-ChildItem -LiteralPath $Directory -Directory -Filter 'candidate.first-launch-*')
+if ($archives.Count -ne 1 -or [IO.File]::ReadAllText((Join-Path $archives[0].FullName 'first-launch.bin')) -ne 'first attempt') {
+    throw 'The first launch profile was not preserved.'
+}
+$protected = Join-Path $Directory 'existing-profile'
+[IO.Directory]::CreateDirectory($protected) | Out-Null
+$attempts.count = 0
+try { Invoke-InstalledAppCheck -ProfileParent $Directory -ProfileName existing-profile -Attempt { $attempts.count++ } } catch {}
+if ($attempts.count -ne 0 -or -not (Test-Path -LiteralPath $protected)) { throw 'A pre-existing profile was used.' }
+
 $attempts.count = 0
 $terminal = $false
-try { Invoke-InstalledAppCheck { $attempts.count++; throw 'Worker protocol mismatch.' } }
+try { Invoke-InstalledAppCheck -ProfileParent $Directory -ProfileName interrupted -Attempt { $attempts.count++; throw 'Worker protocol mismatch.' } }
 catch { $terminal = $_.Exception.Message -eq 'Worker protocol mismatch.' }
 if (-not $terminal -or $attempts.count -ne 1) { throw 'An unrelated installer failure must propagate on its first attempt.' }
 $attempts.count = 0
 $terminal = $false
-try { Invoke-InstalledAppCheck { $attempts.count++; throw (New-InstalledStartupTimeout -ProcessId 52) } }
+try { Invoke-InstalledAppCheck -ProfileParent $Directory -ProfileName repeated -Attempt { $attempts.count++; throw (New-InstalledStartupTimeout -ProcessId 52) } }
 catch { $terminal = $_.FullyQualifiedErrorId.Split(',')[0] -eq 'Onda.InstalledStartupTimeout' }
 if (-not $terminal -or $attempts.count -ne 2) { throw 'Two timeouts must fail the gate.' }
 
