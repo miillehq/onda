@@ -93,6 +93,7 @@ impl Store {
                 transaction.commit().map_err(|_| AppError::storage())?;
             }
         }
+        usage::repair_retained_streaks(&connection)?;
         let mut store = Self { connection };
         if store.transforms()?.is_empty() {
             for transform in crate::transforms::builtin_transforms() {
