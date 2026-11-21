@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { readdir, unlink } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const packageKey = (name, version, architecture) => [name, version, architecture].join("\n");
 
@@ -53,7 +54,7 @@ export async function verifyArchives(directory, lookup) {
   return { kept, discarded: archives.length - kept };
 }
 
-if (import.meta.main) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const temporary = process.env.RUNNER_TEMP;
   if (!temporary || !isAbsolute(temporary)) throw new Error("The Ubuntu package cache belongs under the runner's temporary directory.");
   const report = await verifyArchives(join(temporary, "onda-apt-archives"), (queries) => {

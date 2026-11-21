@@ -78,7 +78,7 @@ impl TargetSnapshot {
 pub(crate) fn validate_limit(limit: usize) -> Result<(), PlatformError> {
     if limit == 0 || limit > MAX_TEXT_CHARACTERS {
         return Err(PlatformError::InvalidParameter(
-            "text limit must be 1–100000 characters".into(),
+            "text limit must be 1â€“100000 characters".into(),
         ));
     }
     Ok(())
@@ -163,6 +163,22 @@ pub(crate) fn validate_identity(
             "target identity changed"
         );
         return Err(PlatformError::TargetChanged);
+    }
+    Ok(())
+}
+
+pub(super) fn validate_handoff(
+    expected: &TargetSnapshot,
+    actual: &TargetSnapshot,
+) -> Result<(), PlatformError> {
+    if expected.is_password || actual.is_password {
+        return Err(PlatformError::SecureField);
+    }
+    if !expected.focused_runtime_id.is_empty() {
+        return validate_identity(expected, actual);
+    }
+    if expected.window_handle != 0 {
+        return validate_frontmost_app(expected, actual);
     }
     Ok(())
 }
