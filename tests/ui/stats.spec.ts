@@ -4,6 +4,17 @@
 import { expect, test } from "@playwright/test";
 import { openMock } from "./visual";
 
+test("the shared card encodes a 1200 by 630 PNG", async ({ page }) => {
+  await openMock(page, "/#stats");
+  await page.getByRole("button", { name: "Share stats" }).click();
+  const canvas = page.getByRole("dialog").locator("canvas");
+  await expect.poll(async () => {
+    const encoded = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL("image/png").split(",")[1]!);
+    const png = Buffer.from(encoded, "base64");
+    return [png.readUInt32BE(16), png.readUInt32BE(20)];
+  }).toEqual([1200, 630]);
+});
+
 test("Stats keeps every month label on one row above the activity grid", async ({ page }) => {
   await openMock(page, "/#stats");
   const months = page.locator(".activity-months span");

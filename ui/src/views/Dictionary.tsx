@@ -1,11 +1,12 @@
 import { ArrowRight, Download, Mic, Pencil, Plus, Search, Sparkles, Star, Trash2, Upload } from "lucide-preact";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { ask, toAppError } from "../api";
 import { consumeEditorIntent, editorIntent } from "../app/intents";
 import { Button, Chip, IconButton, Segmented, Switch } from "../components/controls";
 import { EmptyState, Page } from "../components/layout";
 import type { DictionaryEntry, DictionaryKind } from "../generated/core";
 import { plural } from "../lib/format";
+import { readDictionaryArchive } from "../lib/dictionaryFile";
 import { dictionary, saveSettings, settings, toast, toastError } from "../lib/store";
 import { TeachWord } from "./TeachWord";
 
@@ -17,7 +18,8 @@ function Editor({ kind, draft, onCancel, onSaved }: { kind: DictionaryKind; draf
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const first = useRef<HTMLInputElement>(null);
-  useEffect(() => first.current?.focus(), []);
+  // Focus before paint so an edit already started in the other field keeps its caret.
+  useLayoutEffect(() => first.current?.focus(), []);
   const existing = draft.id ? dictionary.value.find((entry) => entry.id === draft.id) : undefined;
 
   const submit = async (event: Event) => {
@@ -29,8 +31,10 @@ function Editor({ kind, draft, onCancel, onSaved }: { kind: DictionaryKind; draf
     const entry: DictionaryEntry = {
       id: draft.id ?? crypto.randomUUID(),
       kind,
-      phrase: phrase.trim(),
-      replacement: kind === "replacement" ? replacement.trim() : null,
+      // A field the user left alone is saved exactly as stored. A typed phrase loses stray spaces
+      // around it, which a word would otherwise carry into every dictation.
+      phrase: phrase === draft.phrase ? phrase : phrase.trim(),
+      replacement: kind === "replacement" ? replacement : null,
       enabled: existing?.enabled ?? true,
       starred: existing?.starred ?? false,
       source: existing?.source ?? "manual",
@@ -58,7 +62,18 @@ function Editor({ kind, draft, onCancel, onSaved }: { kind: DictionaryKind; draf
             <ArrowRight size={18} class="entry-arrow" aria-hidden="true" />
             <label class="inline-field">
               <span class="field-label">Write</span>
-              <input class="input" value={replacement} onInput={(event) => setReplacement((event.currentTarget as HTMLInputElement).value)} placeholder="Kubernetes" aria-invalid={!!error} />
+              <textarea
+                class="input"
+                rows={1}
+                value={replacement}
+                onInput={(event) => setReplacement(event.currentTarget.value)}
+                // Enter saves, as in the field beside it. Shift+Enter adds a line to the replacement.
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) void submit(event);
+                }}
+                placeholder="Kubernetes"
+                aria-invalid={!!error}
+              />
             </label>
           </>
         )}
@@ -164,7 +179,7 @@ export function Dictionary() {
     input.value = "";
     if (!chosen) return;
     try {
-      const added = await ask({ command: "importDictionary", args: { json: await chosen.text() } }, "count");
+      const added = await ask({ command: "importDictionary", args: { json: await readDictionaryArchive(chosen) } }, "count");
       dictionary.value = await ask({ command: "getDictionary" }, "dictionary");
       toast({ tone: "ok", title: added ? `Imported ${plural(added, "entry", "entries")}` : "Nothing new to import" });
     } catch (error) {

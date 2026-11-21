@@ -1,12 +1,13 @@
 import { ArrowRight, AudioLines, Cloud, Computer, ExternalLink, FileText, KeyRound, LogOut, Plus, RefreshCw, ScanText, Server, Sparkles, Trash2, TriangleAlert, UserRound } from "lucide-preact";
 import { useEffect, useState } from "preact/hooks";
 import { ask } from "../../api";
+import { useCloudModels } from "../../lib/useCloudModels";
 import { Button, Chip, Select, Switch } from "../../components/controls";
 import { Callout, Card, Page, Row, Rows, Section } from "../../components/layout";
 import type { AccountInfo, CloudModel } from "../../generated/api";
 import { toAppError } from "../../api";
 import type { AiProvider, Settings } from "../../generated/core";
-import { activeProfile, aiReady, chatgptReady, cloudModels, isMac, isWindows, listProviderModels, oauthStatus, refresh, removeProviderKey, saveProviderKey, saveSettings, settings, snapshot, thisDevice, toast, toastError } from "../../lib/store";
+import { activeProfile, aiReady, chatgptReady, isMac, isWindows, listProviderModels, oauthStatus, refresh, removeProviderKey, saveProviderKey, saveSettings, settings, snapshot, thisDevice, toast, toastError } from "../../lib/store";
 
 async function act(label: string, request: Parameters<typeof ask>[0]): Promise<void> {
   try {
@@ -81,20 +82,6 @@ function AccountRow({ account }: { account: AccountInfo }) {
       </div>
     </div>
   );
-}
-
-/** The account's models, fetched once per window; the light one Onda uses by default is marked. */
-function useCloudModels(): { models: CloudModel[]; loading: boolean } {
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (!chatgptReady.value || cloudModels.value) return;
-    setLoading(true);
-    void ask({ command: "listAvailableModels" }, "cloudModels")
-      .then((models) => (cloudModels.value = models))
-      .catch(() => (cloudModels.value = []))
-      .finally(() => setLoading(false));
-  }, [chatgptReady.value]);
-  return { models: cloudModels.value ?? [], loading };
 }
 
 /** Why a light model is the right default, naming the one this account offers. */

@@ -97,18 +97,21 @@ function ShareDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [withPicture, setWithPicture] = useState(false);
   const [saving, setSaving] = useState(false);
   const report = usage.value;
+  const card = report && { summary: report.summary, days: report.days, today: report.today, name: withName ? name : null, picture: withPicture ? pictureUrl(picture) : null };
   useEffect(() => {
-    if (!open || !report || !canvas.current) return;
-    void renderStatsImage(
-      { summary: report.summary, days: report.days, today: report.today, name: withName ? name : null, picture: withPicture ? pictureUrl(picture) : null },
-      canvas.current,
-    );
+    if (!open || !card || !canvas.current) return;
+    const preview = new AbortController();
+    void renderStatsImage(card, canvas.current, preview.signal).catch((error) => {
+      if (!preview.signal.aborted) toastError(error, "Couldn't preview the image");
+    });
+    return () => preview.abort();
   }, [open, report, withName, withPicture, name, picture]);
   const save = async () => {
-    if (!canvas.current) return;
+    if (!card) return;
     setSaving(true);
     try {
-      const path = await saveStatsImage(canvasBase64(canvas.current));
+      // A previous preview may still be loading a picture the user has since switched off.
+      const path = await saveStatsImage(canvasBase64(await renderStatsImage(card)));
       if (path) {
         toast({ tone: "ok", title: "Image saved", body: path });
         onClose();
