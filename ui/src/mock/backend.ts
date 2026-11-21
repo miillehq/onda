@@ -12,9 +12,10 @@
  */
 import type { Backend } from "../api";
 import type { AccountInfo, ApiRequest, ApiResponse, CloudModel, ModelInfo, ResourceUsage, RuntimeEvent, Snapshot } from "../generated/api";
-import type { AiProvider, AppError, DailyUsage, DictionaryEntry, HistoryEntry, OperationResult, OperationState, Profile, Settings, Snippet, Transform, UsageSummary } from "../generated/core";
+import type { AiProvider, AppError, DailyUsage, HistoryEntry, OperationResult, OperationState, Profile, Settings, Snippet, Transform, UsageSummary } from "../generated/core";
 import { DEFAULT_SETTINGS, MACOS_DEFAULT_SETTINGS } from "../generated/core";
-import { DUPLICATE_TRIGGER, lookupKey, normalizeName, validateDictionaryEntry, validateSettings } from "./validate";
+import { normalizeName, validateSettings } from "./validate";
+import { createDictionary } from "./dictionary";
 
 const params = new URLSearchParams(window.location.search);
 const scenario = params.get("mock") ?? "default";
@@ -84,7 +85,7 @@ const rich = scenario === "default" || scenario === "error" || scenario === "ski
 const SKIPPED_TEXT = "Send the invoice for 1,200 by Friday and copy finance.";
 const SKIPPED_SUGGESTION = "Please send the invoice for 1,500 by Friday and copy the finance team.";
 const SKIPPED_ERROR = { code: "invalidEnhancement", message: "The AI model changed a number, link, email or code, so Onda kept your original words.", retryable: true } as const;
-let dictionary: DictionaryEntry[] = rich
+const dictionary = createDictionary(rich
   ? [
       { id: "d1", kind: "vocabulary", phrase: "Kubernetes", replacement: null, enabled: true, starred: true, source: "manual" },
       { id: "d2", kind: "vocabulary", phrase: "miille", replacement: null, enabled: true, starred: false, source: "manual" },
@@ -94,7 +95,7 @@ let dictionary: DictionaryEntry[] = rich
       { id: "d6", kind: "replacement", phrase: "cooper netties", replacement: "Kubernetes", enabled: true, starred: false, source: "autoLearned" },
       { id: "d7", kind: "replacement", phrase: "my email", replacement: "name@example.com", enabled: true, starred: false, source: "manual" },
     ]
-  : [];
+  : []);
 let snippets: Snippet[] = rich
   ? [
       { id: "s1", trigger: "my address", expansion: "221B Example Street\nLondon NW1 6XE", enabled: true },
@@ -407,22 +408,11 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       return { type: "settings", payload: structuredClone(settings) };
     }
     case "getDictionary":
-      return { type: "dictionary", payload: dictionary };
-    case "saveDictionaryEntry": {
-      const saved = request.args.entry;
-      const refusal = validateDictionaryEntry(saved);
-      if (refusal) throw refusal;
-      if (dictionary.some((entry) => entry.id !== saved.id && lookupKey(entry.phrase) === lookupKey(saved.phrase))) throw DUPLICATE_TRIGGER;
-      dictionary = [...dictionary.filter((entry) => entry.id !== saved.id), saved];
-      return { type: "dictionary", payload: dictionary };
-    }
+    case "saveDictionaryEntry":
     case "deleteDictionaryEntry":
-      dictionary = dictionary.filter((entry) => entry.id !== request.args.id);
-      return { type: "unit" };
     case "importDictionary":
-      return { type: "count", payload: 0 };
     case "exportDictionary":
-      return { type: "text", payload: JSON.stringify({ version: 1, entries: dictionary }, null, 2) };
+      return dictionary(request);
     case "getSnippets":
       return { type: "snippets", payload: snippets };
     case "saveSnippet":

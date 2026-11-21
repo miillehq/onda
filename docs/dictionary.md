@@ -2,6 +2,13 @@
 
 The dictionary has two independent concepts: vocabulary supplies canonical spelling, and replacement rules map an explicitly configured trigger to an output phrase. Snippets expand an explicit trigger into arbitrary text. All three work locally; cloud inference is optional. Persistence distinguishes manual, imported, and explicitly accepted auto-learned entries.
 
+## Backups
+
+The version 1 UTF-8 JSON archive can hold all 20,000 supported entries, including quotes and
+line breaks in replacements. Import keeps the existing entry for each normalized trigger.
+Reimporting the same backup adds zero entries. An invalid record cancels the entire import,
+and the error identifies the record and the line where it starts.
+
 ## Teaching a word by saying it
 
 Speech models take spelling hints, not pronunciations: vocabulary only nudges Whisper towards a spelling when the sound is close. For a word spelled unlike it sounds ("Miille", said "meal-le"), the Dictionary offers **Say it to teach Onda** on each vocabulary word. Each take calls `teachWord`, which records 2.5 seconds from the selected microphone and transcribes it with dictation's own model, language, execution preference and vocabulary prompt (`Runtime::transcription_options`). It returns what the model heard and what the current dictionary would write. Takes that differ from the word become proposed replacement rules (heard → word), which the user can untick before saving. Audio is discarded after each take, the text is never inserted or added to History, and only the replacements the user saves are stored. A phrase that is already a vocabulary word is never turned into a replacement.

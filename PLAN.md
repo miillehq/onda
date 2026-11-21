@@ -28,6 +28,7 @@ test has been seen red with its probe.
 | 18 | First release (0.3.0) | one version in `package.json`, Cargo and `tauri.conf.json`; `CHANGELOG.md`; a `v*` tag publishes a GitHub pre-release with exactly the eight packages one green `installers` run built and tested on the tagged `master` commit, with checksums, notices and the MPL source | L7 | done: `v0.3.0` published as a pre-release on 2026-11-14 from installers run 43605925048 (release run 43612292375; PRs #29, #35, #36, #37) |
 | 19 | Preserve settings on an incomplete update | The desktop bridge and development mock refuse malformed replacements. Stored preferences from earlier versions still acquire their defaults. | L1, L2, L6 | PR #41 |
 | 20 | Preserve local data on read, write and retention failures | A newer database stays byte-identical. Unreadable history remains recoverable, removed revisions cannot reappear, and a failed statistics export preserves the chosen file. | L1, L3 | In review |
+| 21 | Restore every supported dictionary backup | The store accepts its own large exports, identifies malformed records and rolls back the whole import. The development mock follows the same contract. | L2, L3, L6 | In review |
 
 Rulings:
 
