@@ -312,7 +312,7 @@ pub enum DictionaryKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DictionaryEntry {
     pub id: String,
     pub kind: DictionaryKind,
