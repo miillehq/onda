@@ -1,9 +1,11 @@
 use crate::contracts::{DiffKind, DiffSegment, Transform};
 
+pub const DEFAULT_TRANSFORM_ID: &str = "polish";
+
 /// User-editable defaults. Translation intentionally permits word/number representation changes.
 pub fn builtin_transforms() -> Vec<Transform> {
     [
-        ("polish", "Polish", "Polish this text while preserving its meaning and voice."),
+        (DEFAULT_TRANSFORM_ID, "Polish", "Polish this text while preserving its meaning and voice."),
         ("grammar", "Fix grammar", "Fix spelling, grammar and punctuation only."),
         ("concise", "Make concise", "Make this text concise while retaining every material point."),
         ("clearer", "Make clearer", "Improve clarity without inventing information."),

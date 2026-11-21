@@ -2,6 +2,7 @@
 mod archives;
 mod history;
 mod preferences;
+mod rewrite_defaults;
 mod usage;
 
 use crate::{
@@ -94,13 +95,8 @@ impl Store {
             }
         }
         usage::repair_retained_streaks(&connection)?;
-        let mut store = Self { connection };
-        if store.transforms()?.is_empty() {
-            for transform in crate::transforms::builtin_transforms() {
-                store.save_transform(&transform)?;
-            }
-        }
-        Ok(store)
+        rewrite_defaults::restore(&mut connection)?;
+        Ok(Self { connection })
     }
 
     pub fn dictionary(&self) -> AppResult<Vec<DictionaryEntry>> {
@@ -219,10 +215,7 @@ impl Store {
     }
 
     pub fn delete_transform(&mut self, id: &str) -> AppResult<()> {
-        self.connection
-            .execute("DELETE FROM transforms WHERE id=?1", [id])
-            .map_err(|_| AppError::storage())?;
-        Ok(())
+        rewrite_defaults::remove(&mut self.connection, id)
     }
 
     /// The name and the stored, already normalized PNG.

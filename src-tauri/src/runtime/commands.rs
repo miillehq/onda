@@ -61,7 +61,14 @@ impl Runtime {
                     ));
                 }
                 self.selected_model(&settings)?;
-                let config = shortcut_config(&settings, &lock(&self.store)?.transforms()?)?;
+                let transforms = lock(&self.store)?.transforms()?;
+                if !transforms
+                    .iter()
+                    .any(|item| item.id == settings.default_transform_id)
+                {
+                    return Err(AppError::invalid("Choose an existing default rewrite."));
+                }
+                let config = shortcut_config(&settings, &transforms)?;
                 self.cancel().await?;
                 let current = lock(&self.store)?.settings()?;
                 if current.launch_at_login != settings.launch_at_login {
@@ -1002,6 +1009,7 @@ impl Runtime {
         self.set_retry(
             &id,
             TransformRetry {
+                route: RetryRoute::capture(&active.settings),
                 instructions: transform_instruction(&transform.instruction),
                 preferred_model: transform.model_preference.clone(),
                 preserve_tokens: transform.preserve_protected_tokens,
@@ -1081,7 +1089,7 @@ impl Runtime {
         let retry = saved.retry.ok_or_else(|| {
             AppError::invalid("This result has no cloud transformation to retry.")
         })?;
-        let settings = lock(&self.store)?.settings()?;
+        let settings = retry.route.apply(lock(&self.store)?.settings()?)?;
         let id = self.begin_operation(OperationMode::Transform)?;
         let target = saved.target.clone();
         let active = ActiveOperation {

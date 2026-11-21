@@ -403,6 +403,9 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     case "updateSettings": {
       const refusal = validateSettings(request.args.settings);
       if (refusal) throw refusal;
+      if (!transforms.some((item) => item.id === request.args.settings.defaultTransformId)) {
+        throw { code: "invalidInput", message: "Choose an existing default rewrite.", retryable: false } satisfies AppError;
+      }
       Object.assign(settings, request.args.settings);
       snapshot.settings = settings;
       snapshot.selectedModelId = settings.qualityProfile === "custom" && settings.modelId ? settings.modelId : ({ fast: ["whisper-tiny-en", "whisper-tiny"], balanced: ["whisper-base-en-q5", "whisper-base-q5"], bestQuality: ["whisper-small-en-q5", "whisper-small-q5"], custom: ["whisper-tiny-en", "whisper-tiny"] } as const)[settings.qualityProfile][settings.language === "en" ? 0 : 1];
@@ -424,6 +427,15 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
       return { type: "unit" };
     case "getTransforms":
       return { type: "transforms", payload: transforms };
+    case "deleteTransform": {
+      const index = transforms.findIndex((item) => item.id === request.args.id);
+      if (transforms[index]?.builtIn) {
+        throw { code: "invalidInput", message: "Built-in rewrites can be edited but cannot be removed.", retryable: false } satisfies AppError;
+      }
+      if (index >= 0) transforms.splice(index, 1);
+      if (settings.defaultTransformId === request.args.id) settings.defaultTransformId = "polish";
+      return { type: "unit" };
+    }
     case "saveTransform": {
       const index = transforms.findIndex((transform) => transform.id === request.args.transform.id);
       if (index >= 0) transforms[index] = request.args.transform;
@@ -565,7 +577,6 @@ function respond(request: ApiRequest): ApiResponse | Promise<ApiResponse> {
     case "copyHistorySuggestion":
     case "copyResult":
     case "copySuggestion":
-    case "deleteTransform":
     case "dismissPill":
     case "enableChatgptPlanUsage":
     case "installUpdate":
