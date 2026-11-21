@@ -87,6 +87,8 @@ WKWebView journeys consume that archive in parallel. Native crate and private Ke
 independently. The release gate checks each lane and its named steps. For timing investigations,
 record both Actions wall time and time waiting for a hosted runner.
 
+Ubuntu runners cache only Debian archives. The action refreshes signed Ubuntu indexes, uses Ubuntu’s `apt-cache` to check restored files against their indexed version, architecture and SHA-256, and runs the ordinary APT install. Cache keys include the Ubuntu release, CPU architecture, package group and week. The browser and native test suites keep their own timing measurements.
+
 ## Deliberately not automated
 
 Physical microphones and hot-plug, typing into third-party apps (Notepad, browsers, Electron,
