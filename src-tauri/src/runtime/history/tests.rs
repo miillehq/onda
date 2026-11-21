@@ -25,7 +25,6 @@ fn unavailable_protection_preserves_unexpired_history_bytes() {
     let sealed = b"synthetic encrypted record";
     store.save_history(&entry.id, now, sealed).unwrap();
     assert!(History::load(&mut store, 3, now, |_| None)
-        .unwrap()
         .entries
         .is_empty());
     assert_eq!(
@@ -33,7 +32,7 @@ fn unavailable_protection_preserves_unexpired_history_bytes() {
         vec![(entry.id.clone(), now, sealed.to_vec())],
         "a temporary unlock failure removed stored history"
     );
-    let opened = History::load(&mut store, 3, now, |_| serde_json::to_vec(&entry).ok()).unwrap();
+    let opened = History::load(&mut store, 3, now, |_| serde_json::to_vec(&entry).ok());
     assert_eq!(opened.entry(&entry.id).unwrap().output, entry.output);
 }
 
@@ -41,7 +40,7 @@ fn unavailable_protection_preserves_unexpired_history_bytes() {
 fn late_writes_cannot_restore_deleted_replaced_or_session_only_history() {
     let mut store = Store::in_memory().unwrap();
     let now = now_ms();
-    let mut history = History::load(&mut store, 3, now, |_| None).unwrap();
+    let mut history = History::load(&mut store, 3, now, |_| None);
     let old = history.put(fixture(now), now);
     let current = history.put(fixture(now), now);
     history
@@ -74,7 +73,7 @@ fn late_writes_cannot_restore_deleted_replaced_or_session_only_history() {
 fn reading_history_after_an_idle_period_expires_memory_and_disk_together() {
     let mut store = Store::in_memory().unwrap();
     let now = now_ms();
-    let mut history = History::load(&mut store, 1, now, |_| None).unwrap();
+    let mut history = History::load(&mut store, 1, now, |_| None);
     let current = history.put(fixture(now), now);
     history
         .save_if_current(&mut store, &current, b"retained", now)
@@ -84,4 +83,31 @@ fn reading_history_after_an_idle_period_expires_memory_and_disk_together() {
     history.expire(&mut store, now + DAY_MS + 1).unwrap();
     assert!(history.entry(&current.id).is_none());
     assert!(store.history_since(0).unwrap().is_empty());
+}
+
+#[test]
+fn a_history_read_failure_leaves_dictation_available_and_durable_rows_intact() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("profile.db");
+    let mut store = Store::open(&path).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let now = now_ms();
+    db.execute(
+        "INSERT INTO history (id,created_at,payload) VALUES ('legacy',?1,'invalid storage type')",
+        [now],
+    )
+    .unwrap();
+    let mut history = History::load(&mut store, 3, now, |_| None);
+    let entry = history.put(fixture(now), now);
+    assert_eq!(history.entry(&entry.id).unwrap().output, "Test entry");
+    history
+        .save_if_current(&mut store, &entry, b"sealed", now)
+        .unwrap();
+    assert_eq!(
+        db.query_row("SELECT count(*) FROM history", [], |row| row
+            .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    assert!(history.notify_on_read);
 }
