@@ -15,6 +15,45 @@ interface RecorderProps {
  * conflicts and reserved keys; its message is shown inline under the keys.
  */
 export function ShortcutRecorder({ value, label, onSave, disabled = false }: RecorderProps) {
+  const { recording, held, problem, saving, box, onKeyDown, onKeyUp, stop, begin } = useShortcutRecording(value, onSave);
+  return (
+    <div class="recorder">
+      {recording ? (
+        <div
+          class="recorder-capture"
+          tabIndex={0}
+          ref={box}
+          role="textbox"
+          aria-label={`Press a new shortcut for ${label}. Escape cancels.`}
+          onKeyDown={onKeyDown}
+          onKeyUp={onKeyUp}
+          onBlur={() => !saving && stop()}
+        >
+          {held.length ? <Keys keys={held} size="md" /> : <span class="recorder-hint">Press the new keys…</span>}
+        </div>
+      ) : (
+        <div class="recorder-current">
+          <Keys keys={value} size="md" />
+          <Button
+            size="sm"
+            disabled={disabled}
+            onClick={begin}
+            aria-label={`Change ${label} shortcut`}
+          >
+            Change
+          </Button>
+        </div>
+      )}
+      {problem && (
+        <p class="field-error" role="alert">
+          {problem}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function useShortcutRecording(value: RecorderProps["value"], onSave: RecorderProps["onSave"]) {
   const [recording, setRecording] = useState(false);
   const [held, setHeld] = useState<number[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
@@ -82,42 +121,6 @@ export function ShortcutRecorder({ value, label, onSave, disabled = false }: Rec
     if (down.current.size === 0 && candidate.current.size > 0) void commit();
   };
 
-  return (
-    <div class="recorder">
-      {recording ? (
-        <div
-          class="recorder-capture"
-          tabIndex={0}
-          ref={box}
-          role="textbox"
-          aria-label={`Press a new shortcut for ${label}. Escape cancels.`}
-          onKeyDown={onKeyDown}
-          onKeyUp={onKeyUp}
-          onBlur={() => !saving && stop()}
-        >
-          {held.length ? <Keys keys={held} size="md" /> : <span class="recorder-hint">Press the new keys…</span>}
-        </div>
-      ) : (
-        <div class="recorder-current">
-          <Keys keys={value} size="md" />
-          <Button
-            size="sm"
-            disabled={disabled}
-            onClick={() => {
-              setProblem(null);
-              setRecording(true);
-            }}
-            aria-label={`Change ${label} shortcut`}
-          >
-            Change
-          </Button>
-        </div>
-      )}
-      {problem && (
-        <p class="field-error" role="alert">
-          {problem}
-        </p>
-      )}
-    </div>
-  );
+  const begin = () => { setProblem(null); setRecording(true); };
+  return { recording, held, problem, saving, box, onKeyDown, onKeyUp, stop, begin };
 }

@@ -31,59 +31,17 @@ function outcome(take: TeachTake, word: string): Outcome {
  */
 export function TeachWord({ entry, onClose }: { entry: DictionaryEntry; onClose: () => void }) {
   const word = entry.phrase;
-  const [takes, setTakes] = useState<TeachTake[]>([]);
-  const [stage, setStage] = useState<"ready" | "listening" | "writing">("ready");
-  const [error, setError] = useState<AppError | null>(null);
+  const {takes, stage, error, setError, record} = useTeachingCapture();
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
-  const open = useRef(true);
-  useEffect(
-    () => () => {
-      open.current = false;
-    },
-    [],
-  );
-
-  const variants = new Map<string, { heard: string; count: number; result: Outcome }>();
-  for (const take of takes) {
-    const key = keyOf(take.heard);
-    const known = variants.get(key);
-    if (known) known.count += 1;
-    else variants.set(key, { heard: take.heard, count: 1, result: outcome(take, word) });
-  }
+  const variants = groupTakes(takes, word);
   const fresh = [...variants.entries()].filter(([, variant]) => variant.result === "new");
   const chosen = fresh.filter(([key]) => !skipped.has(key));
 
-  const record = async () => {
-    setError(null);
-    setStage("listening");
-    // Recording and transcription are one native call; the label follows the recording time.
-    const writing = window.setTimeout(() => open.current && setStage("writing"), TAKE_MS);
-    try {
-      const take = await ask({ command: "teachWord", args: { durationMs: TAKE_MS } }, "teachTake");
-      if (open.current) setTakes((list) => [...list, take]);
-    } catch (failure) {
-      if (open.current) setError(toAppError(failure));
-    } finally {
-      window.clearTimeout(writing);
-      if (open.current) setStage("ready");
-    }
-  };
-
   const save = async () => {
     setSaving(true);
-    let saved = 0;
     try {
-      for (const [key, variant] of chosen) {
-        const existing = dictionary.value.find((item) => keyOf(item.phrase) === key);
-        // A phrase that is itself a dictionary word is left alone rather than rewritten.
-        if (existing?.kind === "vocabulary") continue;
-        const replacement: DictionaryEntry = existing
-          ? { ...existing, replacement: word, enabled: true }
-          : { id: crypto.randomUUID(), kind: "replacement", phrase: variant.heard, replacement: word, enabled: true, starred: false, source: "manual" };
-        dictionary.value = await ask({ command: "saveDictionaryEntry", args: { entry: replacement } }, "dictionary");
-        saved += 1;
-      }
+      const saved = await savePronunciations(chosen, word);
       const heard = chosen.map(([, variant]) => `“${variant.heard}”`);
       toast({ tone: "ok", title: saved ? `Onda will write “${word}” when it hears ${heard.join(" or ")}` : "Nothing new to add" }, 6000);
       onClose();
@@ -175,4 +133,61 @@ export function TeachWord({ entry, onClose }: { entry: DictionaryEntry; onClose:
       {fresh.length > 0 && <p class="footnote">Replacements apply everywhere you dictate, so untick anything you also say on purpose.</p>}
     </Dialog>
   );
+}
+
+function groupTakes(takes: TeachTake[], word: string) {
+  const variants = new Map<string, { heard: string; count: number; result: Outcome }>();
+  for (const take of takes) {
+    const key = keyOf(take.heard);
+    const known = variants.get(key);
+    if (known) known.count += 1;
+    else variants.set(key, { heard: take.heard, count: 1, result: outcome(take, word) });
+  }
+  return variants;
+}
+
+async function savePronunciations(chosen: ReadonlyArray<[string, {heard:string}]>, word: string): Promise<number> {
+let saved=0;
+      for (const [key, variant] of chosen) {
+        const existing = dictionary.value.find((item) => keyOf(item.phrase) === key);
+        // A phrase that is itself a dictionary word is left alone rather than rewritten.
+        if (existing?.kind === "vocabulary") continue;
+        const replacement: DictionaryEntry = existing
+          ? { ...existing, replacement: word, enabled: true }
+          : { id: crypto.randomUUID(), kind: "replacement", phrase: variant.heard, replacement: word, enabled: true, starred: false, source: "manual" };
+        dictionary.value = await ask({ command: "saveDictionaryEntry", args: { entry: replacement } }, "dictionary");
+        saved += 1;
+      }
+return saved;
+}
+
+function useTeachingCapture() {
+  const [takes, setTakes] = useState<TeachTake[]>([]);
+  const [stage, setStage] = useState<"ready" | "listening" | "writing">("ready");
+  const [error, setError] = useState<AppError | null>(null);
+  const open = useRef(true);
+  useEffect(
+    () => () => {
+      open.current = false;
+    },
+    [],
+  );
+
+  const record = async () => {
+    setError(null);
+    setStage("listening");
+    // Recording and transcription are one native call; the label follows the recording time.
+    const writing = window.setTimeout(() => open.current && setStage("writing"), TAKE_MS);
+    try {
+      const take = await ask({ command: "teachWord", args: { durationMs: TAKE_MS } }, "teachTake");
+      if (open.current) setTakes((list) => [...list, take]);
+    } catch (failure) {
+      if (open.current) setError(toAppError(failure));
+    } finally {
+      window.clearTimeout(writing);
+      if (open.current) setStage("ready");
+    }
+  };
+
+return { takes, stage, error, setError, record };
 }

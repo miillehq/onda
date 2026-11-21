@@ -1,7 +1,7 @@
 import type { DailyUsage } from "../generated/core";
 
 /** One day in the activity grid. `level` is 0 (no dictation) to 4 (the busiest days). */
-export interface ActivityDay {
+interface ActivityDay {
   key: string;
   date: Date;
   words: number;

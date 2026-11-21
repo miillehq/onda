@@ -2,7 +2,7 @@ import type { ReadonlySignal } from "@preact/signals";
 import { useEffect, useId, useRef } from "preact/hooks";
 import { Smoother, wavePath } from "../lib/level";
 
-export type WaveMode = "live" | "settle" | "still";
+type WaveMode = "live" | "settle" | "still";
 
 interface WaveProps {
   /** 0–1 input level; only read in `live` mode. */

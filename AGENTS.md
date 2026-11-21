@@ -13,8 +13,8 @@ design in `DESIGN.md`.
 - setup: `npm ci`, then `./scripts/prepare.ps1` (Windows) or `scripts/prepare.sh` (Linux, macOS). It
   builds the real speech and shortcut workers that Tauri embeds; never substitute placeholders.
   On Windows, dot-source `./scripts/toolchain.ps1` first so CMake and libclang are found.
-- lint (L0): `cargo fmt --all --check`; `cargo clippy --locked --workspace --all-targets -- -D warnings`;
-  `cargo clippy --locked -p onda-asr --features native-asr --all-targets -- -D warnings`; `npx tsc --noEmit`
+- Run `npm run lint` for L0. It checks Rust formatting and Clippy, TypeScript, Biome, Knip, and source size and reachability across desktop targets. Windows also checks the native ASR feature with Clippy.
+- Read the CI job and step digest with `npm run triage -- <run-id>`.
 - unit and integration (L1, L3): `cargo test --locked --workspace`; `npm run test:unit` (Vitest)
 - contracts (L2): `npm run contracts:check` and `npm run test:unit`; regenerate with `npm run contracts`
 - real-shell journeys (L6): `npm run build:e2e`, then `npm run test:e2e`. The suite launches the debug
@@ -27,8 +27,7 @@ design in `DESIGN.md`.
 - UI against the labelled mock: `npm run dev`, then http://127.0.0.1:1420 (`?mock=empty|onboarding|error`,
   `?theme=dark`, `?platform=linux|macos`, `/pill.html?pill=listening`)
 - the app: `npm run desktop` (Windows); `npm run tauri dev` after `scripts/prepare.sh` (Linux, macOS)
-- packages: `npm run release` (Windows NSIS); `scripts/build.sh --bundles deb,appimage` (Linux) or
-  `--bundles app,dmg` (macOS), then `scripts/installer-test.sh` installs, launches and removes them (L7)
+- Build the native package with `npm run package:desktop` and exercise it with `npm run test:installers`. Release and upgrade evidence belongs to the platform runner that installed the exact artifact.
 - a failed CI run: `node scripts/triage.mjs <run-id>`. The `shell-contact-sheet` artifact contains the real-shell screenshots.
 
 ## Layout

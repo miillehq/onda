@@ -8,7 +8,7 @@
     "tier3": ["fedora", "debian", "arch"]
   },
   "commands": {
-    "lint": "cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings && npx tsc --noEmit",
+    "lint": "npm run lint",
     "unit": "cargo test --locked --workspace && npm run test:unit",
     "contracts": "npm run contracts:check && npm run test:unit",
     "integration": "cargo test --locked --workspace",

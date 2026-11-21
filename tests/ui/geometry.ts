@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Page } from "@playwright/test";
 
-export type Box = { x: number; y: number; w: number; h: number };
+type Box = { x: number; y: number; w: number; h: number };
 export type Geometry = Record<string, Box>;
 
 export async function captureGeometry(page: Page): Promise<Geometry> {
@@ -26,9 +26,9 @@ export async function captureGeometry(page: Page): Promise<Geometry> {
   });
 }
 
-export type GeometryDiff = { key: string; field: keyof Box; expected: number; actual: number }[];
+type GeometryDiff = { key: string; field: keyof Box; expected: number; actual: number }[];
 
-export function compareGeometry(expected: Geometry, actual: Geometry, tolerance: number): GeometryDiff {
+function compareGeometry(expected: Geometry, actual: Geometry, tolerance: number): GeometryDiff {
   const diffs: GeometryDiff = [];
   for (const key of Object.keys(expected)) {
     const e = expected[key];
