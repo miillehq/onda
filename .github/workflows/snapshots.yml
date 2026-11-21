@@ -26,19 +26,16 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - name: Linux browser system dependencies
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-ubuntu-packages
+        with: { profile: browser }
       - name: Playwright browsers
-        timeout-minutes: 12
-        shell: bash
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
-        run: |
-          bound=""; command -v timeout >/dev/null && bound="timeout 420"
-          for attempt in 1 2; do
-            $bound npx playwright install --with-deps chromium webkit && exit 0
-            echo "attempt $attempt failed or stalled; retrying"
-          done
-          exit 1
+        if: runner.os == 'Linux'
+        run: npx --no-install playwright install chromium webkit
+      - name: Playwright browsers and host dependencies
+        if: runner.os != 'Linux'
+        run: npx --no-install playwright install --with-deps chromium webkit
       - name: Capture baselines
         env:
           CI: "1"
