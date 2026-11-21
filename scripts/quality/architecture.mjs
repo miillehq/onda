@@ -3,6 +3,9 @@ import { extname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { aggregateTypes, createParsers, measureSource } from "./source-metrics.mjs";
 import { orphanRust } from "./rust-modules.mjs";
+import { measureStyles, orphanMigrations, orphanStyles } from "./styles.mjs";
+import { measureDocument } from "./documents.mjs";
+import { rendererInputs } from "./renderer-inputs.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const limits = { file: 400, function: 80, type: 400, members: 25 };
@@ -23,6 +26,8 @@ async function filesUnder(directory, parsers) {
     const path = relative(root, child).split(sep).join("/");
     if (entry.isDirectory()) {
       if (!["tests", "fixtures", "generated", "mock"].includes(entry.name)) files.push(...await filesUnder(child, parsers));
+    } else if (extname(child) === ".css") {
+      files.push(measureStyles(path, await readFile(child, "utf8")));
     } else if (parsers.has(extname(child)) && !/(?:^|_)tests\.rs$/.test(entry.name) && !tooling.has(path)) {
       files.push(measureSource(path, await readFile(child, "utf8"), parsers.get(extname(child))));
     }
@@ -58,11 +63,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const roots = ["ui/src", "src-tauri/src", ...crates.map(({ name }) => `crates/${name}/src`)];
   const files = [];
   for (const directory of roots) files.push(...await filesUnder(join(root, directory), parsers));
+  const migrations = "crates/onda-core/migrations";
+  const { pages, styles } = await rendererInputs(root);
+  const documents = [...pages, ...(await readdir(join(root, migrations)))
+    .filter((name) => name.endsWith(".sql")).map((name) => migrations + "/" + name)];
+  for (const path of documents) files.push(measureDocument(path, await readFile(join(root, path), "utf8")));
   const unreachable = await orphanRust(root, files, parsers.get(".rs"), tooling);
   const findings = violations(files);
   for (const path of unreachable) {
     findings.push({ kind: "unreachable Rust module", path, line: 1, name: "", actual: 1, limit: 0 });
   }
+  for (const path of orphanStyles(files, styles)) findings.push({ kind: "unreachable stylesheet", path, line: 1, name: "", actual: 1, limit: 0 });
+  for (const path of orphanMigrations(files)) findings.push({ kind: "unreferenced migration", path, line: 1, name: "", actual: 1, limit: 0 });
   if (process.argv.includes("--stats")) {
     const types = aggregateTypes(files);
     const largest = files.toSorted((a, b) => b.lines - a.lines)[0];

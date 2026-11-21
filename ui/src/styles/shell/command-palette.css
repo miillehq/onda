@@ -1,0 +1,62 @@
+/* ------------------------------------------------------------------ palette */
+.palette-layer {
+  place-items: start center;
+  padding-top: 12vh;
+}
+.palette {
+  width: min(560px, 100%);
+  border-radius: 16px;
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  animation: rise-in var(--dur-base) var(--ease-out);
+}
+.palette-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: 54px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-3);
+}
+.palette-input input {
+  flex: 1;
+  border: 0;
+  background: none;
+  font-size: 17px;
+  color: var(--fg);
+  outline: none;
+}
+.palette-input input:focus-visible {
+  box-shadow: none;
+}
+.palette-list {
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+.palette-group {
+  padding: 10px 10px 4px;
+  color: var(--fg-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: var(--text-md);
+}
+.palette-item.is-active {
+  background: var(--hover);
+}
+.palette-empty {
+  padding: 18px 12px;
+  color: var(--fg-2);
+}

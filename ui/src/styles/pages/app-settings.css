@@ -1,0 +1,95 @@
+.app-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.app-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-1);
+}
+.app-card-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+.app-card-head .mono {
+  font-size: var(--text-xs);
+}
+.app-card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+}
+
+.privacy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.privacy-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.privacy-never {
+  margin-top: 18px;
+}
+.ticks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+}
+.ticks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.45;
+}
+.ticks svg {
+  margin-top: 2px;
+  color: var(--ok);
+}
+.ticks.is-never svg {
+  color: var(--fg-3);
+}
+
+.about {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 8px;
+}
+.cheats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  background: var(--panel);
+}
+.cheats li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 10px 20px;
+  font-size: var(--text-md);
+}
+.cheats li + li {
+  border-top: 1px solid var(--line);
+}

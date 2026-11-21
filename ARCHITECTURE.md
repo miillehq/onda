@@ -114,6 +114,8 @@ insertion (`target.rs`, `clipboard.rs`), at-rest protection (`protect.rs`,
 
 Typed handlers in `src-tauri/src/runtime/commands/` call those owners. The renderer keeps signals, data queries and profile actions under `ui/src/lib/`. The mock is loaded only in development and validates incoming requests against the generated native schema.
 
+The renderer loads `styles/controls.css`, `styles/shell.css` and `styles/pages.css` as ordered entry points. Each entry imports the relevant component or feature files from its matching directory. L0 follows those imports, Vite’s actual HTML entries and the compiled SQL migration paths.
+
 ## Ownership
 
 One maintainer with agents and outside contributors through pull requests. Contract changes
