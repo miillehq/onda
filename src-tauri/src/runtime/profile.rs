@@ -11,162 +11,6 @@ const MAX_EXPORT_DIMENSION: u32 = 4096;
 /// Two samples this far apart give a CPU share without keeping the report waiting long.
 const RESOURCE_SAMPLE: Duration = Duration::from_millis(500);
 
-impl Runtime {
-    pub(super) fn profile(&self) -> AppResult<Profile> {
-        let (name, picture) = lock(&self.store)?.profile()?;
-        Ok(Profile {
-            name,
-            picture: picture.map(|bytes| STANDARD.encode(bytes)),
-        })
-    }
-
-    pub(super) fn set_profile_name(&self, raw: Option<&str>) -> AppResult<Profile> {
-        let name = onda_core::profile::normalize_name(raw.unwrap_or_default())?;
-        lock(&self.store)?.set_profile_name(name.as_deref())?;
-        self.profile()
-    }
-
-    /// Opens the system picker natively; a cancelled picker leaves the profile unchanged.
-    pub(super) async fn choose_profile_picture(&self) -> AppResult<Profile> {
-        let (sender, receiver) = oneshot::channel();
-        self.app
-            .dialog()
-            .file()
-            .set_title("Choose a profile picture")
-            .add_filter("Pictures", &["png", "jpg", "jpeg", "webp"])
-            .pick_file(move |path| {
-                let _ = sender.send(path);
-            });
-        let Some(path) = receiver.await.ok().flatten() else {
-            return self.profile();
-        };
-        let path = path
-            .into_path()
-            .map_err(|_| AppError::invalid("Choose a picture file on this computer."))?;
-        let picture = tokio::task::spawn_blocking(move || -> AppResult<Vec<u8>> {
-            let size = std::fs::metadata(&path)
-                .map_err(|_| AppError::invalid("The picture could not be opened."))?
-                .len();
-            if size > onda_core::profile::MAX_PICTURE_INPUT_BYTES as u64 {
-                return Err(AppError::invalid("Choose a picture smaller than 10 MB."));
-            }
-            let bytes = std::fs::read(&path)
-                .map_err(|_| AppError::invalid("The picture could not be opened."))?;
-            onda_core::profile::normalize_picture(&bytes)
-        })
-        .await
-        .map_err(|_| AppError::new(ErrorCode::Internal, "Picture worker stopped.", true))??;
-        lock(&self.store)?.set_profile_picture(Some(&picture))?;
-        self.profile()
-    }
-
-    pub(super) fn remove_profile_picture(&self) -> AppResult<Profile> {
-        lock(&self.store)?.set_profile_picture(None)?;
-        self.profile()
-    }
-
-    pub(super) fn usage_report(&self, days: u32) -> AppResult<UsageReport> {
-        let today = onda_platform::local_date();
-        let store = lock(&self.store)?;
-        let days = store.daily_usage(days)?;
-        let summary = store.usage_summary(&today)?;
-        Ok(UsageReport {
-            today,
-            days,
-            summary,
-        })
-    }
-
-    /// Asks where to save the statistics image and writes it; `None` when cancelled.
-    pub(super) async fn save_stats_image(&self, encoded: String) -> AppResult<Option<String>> {
-        let png = tokio::task::spawn_blocking(move || decode_stats_image(&encoded))
-            .await
-            .map_err(|_| AppError::new(ErrorCode::Internal, "Image worker stopped.", true))??;
-        let (sender, receiver) = oneshot::channel();
-        let mut dialog = self
-            .app
-            .dialog()
-            .file()
-            .set_title("Save your Onda stats")
-            .set_file_name(format!(
-                "{} stats {}.png",
-                onda_core::APP_NAME,
-                onda_platform::local_date()
-            ))
-            .add_filter("PNG image", &["png"]);
-        if let Ok(pictures) = self.app.path().picture_dir() {
-            dialog = dialog.set_directory(pictures);
-        }
-        dialog.save_file(move |path| {
-            let _ = sender.send(path);
-        });
-        let Some(path) = receiver.await.ok().flatten() else {
-            return Ok(None);
-        };
-        let path = path
-            .into_path()
-            .map_err(|_| AppError::invalid("Choose a folder on this computer."))?;
-        let path = tokio::task::spawn_blocking(move || {
-            use std::io::Write;
-            super::stats_export::write_png(&path, |file| file.write_all(&png))
-        })
-        .await
-        .map_err(|_| AppError::new(ErrorCode::Internal, "Save worker stopped.", true))?
-        .map_err(|error| {
-            AppError::invalid(match error.kind() {
-                std::io::ErrorKind::AlreadyExists => {
-                    "That PNG already exists. Select it in the save dialog to replace it."
-                }
-                std::io::ErrorKind::InvalidInput => "Choose a filename ending in .png.",
-                _ => "The image could not be saved there.",
-            })
-        })?;
-        Ok(Some(path.to_string_lossy().into_owned()))
-    }
-
-    /// Onda's process and everything it started, measured twice for a CPU share.
-    pub(super) async fn resource_usage(&self) -> AppResult<ResourceUsage> {
-        let root = std::process::id();
-        let first = sample_tree(root).await?;
-        tokio::time::sleep(RESOURCE_SAMPLE).await;
-        let (samples, measure) = sample_tree(root).await?;
-        let elapsed = RESOURCE_SAMPLE.as_secs_f64();
-        let cpus = self.asr.hardware().logical_cpus.max(1) as f64;
-        let before: HashMap<u32, Duration> = first
-            .0
-            .iter()
-            .map(|sample| (sample.pid, sample.cpu_time))
-            .collect();
-        let processes: Vec<ProcessUsage> = samples
-            .iter()
-            .map(|sample| {
-                let used = before.get(&sample.pid).map_or(Duration::ZERO, |earlier| {
-                    sample.cpu_time.saturating_sub(*earlier)
-                });
-                ProcessUsage {
-                    pid: sample.pid,
-                    name: sample.name.clone(),
-                    role: process_role(root, sample).into(),
-                    memory_bytes: sample.memory_bytes as f64,
-                    cpu_percent: used.as_secs_f64() / elapsed / cpus * 100.0,
-                }
-            })
-            .collect();
-        Ok(ResourceUsage {
-            total_memory_bytes: processes.iter().map(|process| process.memory_bytes).sum(),
-            total_cpu_percent: processes.iter().map(|process| process.cpu_percent).sum(),
-            processes,
-            memory_measure: match measure {
-                onda_platform::MemoryMeasure::PrivateWorkingSet => "privateWorkingSet",
-                onda_platform::MemoryMeasure::PrivateCommit => "privateCommit",
-                onda_platform::MemoryMeasure::PrivateResident => "privateResident",
-            }
-            .into(),
-            sample_ms: RESOURCE_SAMPLE.as_millis() as u32,
-        })
-    }
-}
-
 async fn sample_tree(
     root: u32,
 ) -> AppResult<(
@@ -217,6 +61,168 @@ fn decode_stats_image(encoded: &str) -> AppResult<Vec<u8>> {
     while image.next_row().map_err(|_| invalid())?.is_some() {}
     image.finish().map_err(|_| invalid())?;
     Ok(png)
+}
+
+impl LocalData {
+    pub(super) fn profile(&self) -> AppResult<Profile> {
+        let (name, picture) = lock(&self.store)?.profile()?;
+        Ok(Profile {
+            name,
+            picture: picture.map(|bytes| STANDARD.encode(bytes)),
+        })
+    }
+
+    pub(super) fn set_profile_name(&self, raw: Option<&str>) -> AppResult<Profile> {
+        let name = onda_core::profile::normalize_name(raw.unwrap_or_default())?;
+        lock(&self.store)?.set_profile_name(name.as_deref())?;
+        self.profile()
+    }
+
+    /// Opens the system picker natively; a cancelled picker leaves the profile unchanged.
+    pub(super) async fn choose_profile_picture(&self, host: &Runtime) -> AppResult<Profile> {
+        let (sender, receiver) = oneshot::channel();
+        host.app
+            .dialog()
+            .file()
+            .set_title("Choose a profile picture")
+            .add_filter("Pictures", &["png", "jpg", "jpeg", "webp"])
+            .pick_file(move |path| {
+                let _ = sender.send(path);
+            });
+        let Some(path) = receiver.await.ok().flatten() else {
+            return self.profile();
+        };
+        let path = path
+            .into_path()
+            .map_err(|_| AppError::invalid("Choose a picture file on this computer."))?;
+        let picture = tokio::task::spawn_blocking(move || -> AppResult<Vec<u8>> {
+            let size = std::fs::metadata(&path)
+                .map_err(|_| AppError::invalid("The picture could not be opened."))?
+                .len();
+            if size > onda_core::profile::MAX_PICTURE_INPUT_BYTES as u64 {
+                return Err(AppError::invalid("Choose a picture smaller than 10 MB."));
+            }
+            let bytes = std::fs::read(&path)
+                .map_err(|_| AppError::invalid("The picture could not be opened."))?;
+            onda_core::profile::normalize_picture(&bytes)
+        })
+        .await
+        .map_err(|_| AppError::new(ErrorCode::Internal, "Picture worker stopped.", true))??;
+        lock(&self.store)?.set_profile_picture(Some(&picture))?;
+        self.profile()
+    }
+
+    pub(super) fn remove_profile_picture(&self) -> AppResult<Profile> {
+        lock(&self.store)?.set_profile_picture(None)?;
+        self.profile()
+    }
+
+    pub(super) fn usage_report(&self, days: u32) -> AppResult<UsageReport> {
+        let today = onda_platform::local_date();
+        let store = lock(&self.store)?;
+        let days = store.daily_usage(days)?;
+        let summary = store.usage_summary(&today)?;
+        Ok(UsageReport {
+            today,
+            days,
+            summary,
+        })
+    }
+
+    /// Asks where to save the statistics image and writes it; `None` when cancelled.
+    pub(super) async fn save_stats_image(
+        &self,
+        host: &Runtime,
+        encoded: String,
+    ) -> AppResult<Option<String>> {
+        let png = tokio::task::spawn_blocking(move || decode_stats_image(&encoded))
+            .await
+            .map_err(|_| AppError::new(ErrorCode::Internal, "Image worker stopped.", true))??;
+        let (sender, receiver) = oneshot::channel();
+        let mut dialog = host
+            .app
+            .dialog()
+            .file()
+            .set_title("Save your Onda stats")
+            .set_file_name(format!(
+                "{} stats {}.png",
+                onda_core::APP_NAME,
+                onda_platform::local_date()
+            ))
+            .add_filter("PNG image", &["png"]);
+        if let Ok(pictures) = host.app.path().picture_dir() {
+            dialog = dialog.set_directory(pictures);
+        }
+        dialog.save_file(move |path| {
+            let _ = sender.send(path);
+        });
+        let Some(path) = receiver.await.ok().flatten() else {
+            return Ok(None);
+        };
+        let path = path
+            .into_path()
+            .map_err(|_| AppError::invalid("Choose a folder on this computer."))?;
+        let path = tokio::task::spawn_blocking(move || {
+            use std::io::Write;
+            super::stats_export::write_png(&path, |file| file.write_all(&png))
+        })
+        .await
+        .map_err(|_| AppError::new(ErrorCode::Internal, "Save worker stopped.", true))?
+        .map_err(|error| {
+            AppError::invalid(match error.kind() {
+                std::io::ErrorKind::AlreadyExists => {
+                    "That PNG already exists. Select it in the save dialog to replace it."
+                }
+                std::io::ErrorKind::InvalidInput => "Choose a filename ending in .png.",
+                _ => "The image could not be saved there.",
+            })
+        })?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    }
+}
+
+impl Performance {
+    /// Onda's process and everything it started, measured twice for a CPU share.
+    pub(super) async fn resource_usage(&self, host: &Runtime) -> AppResult<ResourceUsage> {
+        let root = std::process::id();
+        let first = sample_tree(root).await?;
+        tokio::time::sleep(RESOURCE_SAMPLE).await;
+        let (samples, measure) = sample_tree(root).await?;
+        let elapsed = RESOURCE_SAMPLE.as_secs_f64();
+        let cpus = host.recognition.asr.hardware().logical_cpus.max(1) as f64;
+        let before: HashMap<u32, Duration> = first
+            .0
+            .iter()
+            .map(|sample| (sample.pid, sample.cpu_time))
+            .collect();
+        let processes: Vec<ProcessUsage> = samples
+            .iter()
+            .map(|sample| {
+                let used = before.get(&sample.pid).map_or(Duration::ZERO, |earlier| {
+                    sample.cpu_time.saturating_sub(*earlier)
+                });
+                ProcessUsage {
+                    pid: sample.pid,
+                    name: sample.name.clone(),
+                    role: process_role(root, sample).into(),
+                    memory_bytes: sample.memory_bytes as f64,
+                    cpu_percent: used.as_secs_f64() / elapsed / cpus * 100.0,
+                }
+            })
+            .collect();
+        Ok(ResourceUsage {
+            total_memory_bytes: processes.iter().map(|process| process.memory_bytes).sum(),
+            total_cpu_percent: processes.iter().map(|process| process.cpu_percent).sum(),
+            processes,
+            memory_measure: match measure {
+                onda_platform::MemoryMeasure::PrivateWorkingSet => "privateWorkingSet",
+                onda_platform::MemoryMeasure::PrivateCommit => "privateCommit",
+                onda_platform::MemoryMeasure::PrivateResident => "privateResident",
+            }
+            .into(),
+            sample_ms: RESOURCE_SAMPLE.as_millis() as u32,
+        })
+    }
 }
 
 #[cfg(test)]

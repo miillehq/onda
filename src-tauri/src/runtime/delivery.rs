@@ -9,152 +9,6 @@ const PASTE_KEYS: &str = if cfg!(target_os = "macos") {
 };
 const PRECEDING_CHARACTERS: usize = 2;
 
-impl Runtime {
-    pub(super) async fn insert(
-        self: &Arc<Self>,
-        active: &ActiveOperation,
-        output: &str,
-        fallback: bool,
-    ) -> AppResult<()> {
-        if cfg!(not(windows)) {
-            let target = active.insertion_target()?.clone();
-            let typeable =
-                tokio::task::spawn_blocking(move || WindowsTargetService::new().can_type(&target))
-                    .await
-                    .map_err(|_| {
-                        AppError::new(ErrorCode::Internal, "Target check stopped.", true)
-                    })?;
-            if !typeable {
-                return self.hand_off_to_clipboard(active, output, fallback).await;
-            }
-        }
-        let target = active.insertion_target()?.clone();
-        let text = output.to_owned();
-        let selection = active.selection.clone();
-        let observe_document = selection.is_some() || active.settings.learning_enabled;
-        let shortcut = paste_shortcut(&active.settings, &target.executable_name);
-        let cancellation = active.cancellation.clone();
-        let started = Instant::now();
-        let native = tokio::task::spawn_blocking(move || {
-            if cancellation.is_cancelled() {
-                return Err((
-                    AppError::new(ErrorCode::Cancelled, "Operation cancelled.", false),
-                    false,
-                ));
-            }
-            let targets = WindowsTargetService::new();
-            let outcome = if let Some(original) = &selection {
-                targets.replace_selection_guarded(&target, original, &text, shortcut, || {
-                    cancellation.is_cancelled()
-                })
-            } else {
-                // Two characters tell a closing quote from an opening one; a field that
-                // exposes no caret simply gets the text as dictated.
-                let before = targets
-                    .preceding_text(&target, PRECEDING_CHARACTERS)
-                    .unwrap_or_default();
-                let spaced = onda_core::text::space_after_previous_text(&before, &text);
-                targets.paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
-            }
-            .map_err(errors::platform)
-            .map_err(|error| {
-                if selection.is_some() {
-                    (error, false)
-                } else {
-                    copy_untyped(error, &text, &cancellation)
-                }
-            })?;
-            if !outcome.input_injected || !outcome.clipboard_read_observed {
-                return Err((AppError::new(
-                    ErrorCode::Insertion,
-                    "Onda could not confirm the paste. Check the field before copying or retrying.",
-                    true,
-                ), false));
-            }
-            let document = if observe_document {
-                targets.field_text(&target, LEARNING_CHARACTERS).ok()
-            } else {
-                None
-            };
-            Ok(document)
-        })
-        .await
-        .map_err(|_| AppError::new(ErrorCode::Internal, "Insertion worker stopped.", true))?;
-        self.metric(&active.id, "paste", started, native.is_ok());
-        let document = match native {
-            Ok(document) => document,
-            Err((error, copied)) => {
-                if copied {
-                    self.credit_delivery(active.usage.as_ref(), fallback);
-                    if let Ok(mut saved) = lock(&self.result) {
-                        if let Some(saved) = saved
-                            .as_mut()
-                            .filter(|saved| saved.result.operation_id == active.id)
-                        {
-                            saved.copied = true;
-                        }
-                    }
-                }
-                return Err(error);
-            }
-        };
-        self.credit_delivery(active.usage.as_ref(), fallback);
-        let original = lock(&self.result)?
-            .as_ref()
-            .map(|result| result.result.original.clone())
-            .unwrap_or_else(|| output.into());
-        self.save_result(active, &original, output, true, fallback, document.clone())?;
-        if active.settings.learning_enabled && active.mode == OperationMode::Dictation {
-            if let Some(document) = document {
-                self.start_learning(active, document, output.to_owned());
-            }
-        }
-        Ok(())
-    }
-
-    /// Where Onda cannot type into the focused app (Linux, without the paste permission or a
-    /// field it can edit), a dictation completes by putting the words on the clipboard with the
-    /// privacy markers; the pill and Home say to press Ctrl+V.
-    async fn hand_off_to_clipboard(
-        self: &Arc<Self>,
-        active: &ActiveOperation,
-        output: &str,
-        fallback: bool,
-    ) -> AppResult<()> {
-        let target = active.insertion_target()?.clone();
-        let replacing_selection = active.selection.is_some();
-        let text = output.to_owned();
-        let started = Instant::now();
-        let cancellation = active.cancellation.clone();
-        let copied = tokio::task::spawn_blocking(move || {
-            WindowsTargetService::new().check_clipboard_handoff(&target)?;
-            if replacing_selection {
-                return Err(onda_platform::PlatformError::SelectionUnavailable);
-            }
-            copy_while_active(&cancellation, || {
-                onda_platform::copy_text_to_clipboard(&text)
-            })
-        })
-        .await
-        .map_err(|_| AppError::new(ErrorCode::Internal, "Clipboard worker stopped.", true))?;
-        self.metric(&active.id, "clipboard", started, copied.is_ok());
-        copied.map_err(errors::platform)?;
-        self.credit_delivery(active.usage.as_ref(), fallback);
-        let original = lock(&self.result)?
-            .as_ref()
-            .map(|result| result.result.original.clone())
-            .unwrap_or_else(|| output.into());
-        self.save_result(active, &original, output, false, fallback, None)?;
-        if let Some(saved) = lock(&self.result)?
-            .as_mut()
-            .filter(|saved| saved.result.operation_id == active.id)
-        {
-            saved.copied = true;
-        }
-        Ok(())
-    }
-}
-
 /// When Onda could not type, put the words on the clipboard so they paste wherever the user is
 /// now, instead of leaving whatever was copied before; the message says which happened. Password
 /// fields and clipboards Onda must not overwrite are left alone.
@@ -205,6 +59,182 @@ fn copy_while_active(
         return Err(onda_platform::PlatformError::Cancelled);
     }
     copy()
+}
+
+impl TargetDelivery {
+    pub(super) async fn insert(
+        &self,
+        host: &Arc<Runtime>,
+        active: &ActiveOperation,
+        output: &str,
+        fallback: bool,
+    ) -> AppResult<()> {
+        let targets = self.target_service;
+        if cfg!(not(windows)) {
+            let target = active.insertion_target()?.clone();
+            let typeable = tokio::task::spawn_blocking(move || targets.can_type(&target))
+                .await
+                .map_err(|_| AppError::new(ErrorCode::Internal, "Target check stopped.", true))?;
+            if !typeable {
+                return self
+                    .hand_off_to_clipboard(host, active, output, fallback)
+                    .await;
+            }
+        }
+        let started = Instant::now();
+        let native = deliver_to_target(targets, active, output).await?;
+        host.performance
+            .metric(host, &active.id, "paste", started, native.is_ok());
+        let document = match native {
+            Ok(document) => document,
+            Err((error, copied)) => {
+                if copied {
+                    host.credit_delivery(active.usage.as_ref(), fallback);
+                    if let Ok(mut saved) = lock(&host.results.result) {
+                        if let Some(saved) = saved
+                            .as_mut()
+                            .filter(|saved| saved.result.operation_id == active.id)
+                        {
+                            saved.copied = true;
+                        }
+                    }
+                }
+                return Err(error);
+            }
+        };
+        host.credit_delivery(active.usage.as_ref(), fallback);
+        let original = lock(&host.results.result)?
+            .as_ref()
+            .map(|result| result.result.original.clone())
+            .unwrap_or_else(|| output.into());
+        host.results.save_result(
+            host,
+            active,
+            &original,
+            output,
+            RecordedDelivery::Inserted(document.clone()),
+            fallback,
+        )?;
+        if active.settings.learning_enabled && active.mode == OperationMode::Dictation {
+            if let Some(document) = document {
+                host.results
+                    .start_learning(host, active, document, output.to_owned());
+            }
+        }
+        Ok(())
+    }
+
+    /// Where Onda cannot type into the focused app (Linux, without the paste permission or a
+    /// field it can edit), a dictation completes by putting the words on the clipboard with the
+    /// privacy markers; the pill and Home say to press Ctrl+V.
+    pub(super) async fn hand_off_to_clipboard(
+        &self,
+        host: &Arc<Runtime>,
+        active: &ActiveOperation,
+        output: &str,
+        fallback: bool,
+    ) -> AppResult<()> {
+        let targets = self.target_service;
+        let target = active.insertion_target()?.clone();
+        let replacing_selection = active.selection.is_some();
+        let text = output.to_owned();
+        let started = Instant::now();
+        let cancellation = active.cancellation.clone();
+        let copied = tokio::task::spawn_blocking(move || {
+            targets.check_clipboard_handoff(&target)?;
+            if replacing_selection {
+                return Err(onda_platform::PlatformError::SelectionUnavailable);
+            }
+            copy_while_active(&cancellation, || {
+                onda_platform::copy_text_to_clipboard(&text)
+            })
+        })
+        .await
+        .map_err(|_| AppError::new(ErrorCode::Internal, "Clipboard worker stopped.", true))?;
+        host.performance
+            .metric(host, &active.id, "clipboard", started, copied.is_ok());
+        copied.map_err(errors::platform)?;
+        host.credit_delivery(active.usage.as_ref(), fallback);
+        let original = lock(&host.results.result)?
+            .as_ref()
+            .map(|result| result.result.original.clone())
+            .unwrap_or_else(|| output.into());
+        host.results.save_result(
+            host,
+            active,
+            &original,
+            output,
+            RecordedDelivery::Pending,
+            fallback,
+        )?;
+        if let Some(saved) = lock(&host.results.result)?
+            .as_mut()
+            .filter(|saved| saved.result.operation_id == active.id)
+        {
+            saved.copied = true;
+        }
+        Ok(())
+    }
+}
+
+/// Capture one target identity, cancellation token and paste receipt for the native worker.
+async fn deliver_to_target(
+    targets: WindowsTargetService,
+    active: &ActiveOperation,
+    output: &str,
+) -> AppResult<Result<Option<String>, (AppError, bool)>> {
+    let target = active.insertion_target()?.clone();
+    let text = output.to_owned();
+    let selection = active.selection.clone();
+    let observe_document = selection.is_some() || active.settings.learning_enabled;
+    let shortcut = paste_shortcut(&active.settings, &target.executable_name);
+    let cancellation = active.cancellation.clone();
+    let native =
+        tokio::task::spawn_blocking(move || {
+            if cancellation.is_cancelled() {
+                return Err((
+                    AppError::new(ErrorCode::Cancelled, "Operation cancelled.", false),
+                    false,
+                ));
+            }
+            let outcome = if let Some(original) = &selection {
+                targets.replace_selection_guarded(&target, original, &text, shortcut, || {
+                    cancellation.is_cancelled()
+                })
+            } else {
+                // Two characters tell a closing quote from an opening one; a field that
+                // exposes no caret simply gets the text as dictated.
+                let before = targets
+                    .preceding_text(&target, PRECEDING_CHARACTERS)
+                    .unwrap_or_default();
+                let spaced = onda_core::text::space_after_previous_text(&before, &text);
+                targets.paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
+            }
+            .map_err(errors::platform)
+            .map_err(|error| {
+                if selection.is_some() {
+                    (error, false)
+                } else {
+                    copy_untyped(error, &text, &cancellation)
+                }
+            })?;
+            if !outcome.input_injected || !outcome.clipboard_read_observed {
+                return Err((AppError::new(
+                    ErrorCode::Insertion,
+                    "Onda could not confirm the paste. Check the field before copying or retrying.",
+                    true,
+                ), false));
+            }
+            let document = if observe_document {
+                targets.field_text(&target, LEARNING_CHARACTERS).ok()
+            } else {
+                None
+            };
+            Ok(document)
+        })
+        .await
+        .map_err(|_| AppError::new(ErrorCode::Internal, "Insertion worker stopped.", true))?;
+    Ok(native)
 }
 
 #[cfg(test)]
