@@ -168,3 +168,14 @@ with an identical tree.
   runs, no diagnosis yet ([issue #25](https://github.com/miillehq/onda/issues/25)). The step now
   retries once after a timeout (L6 only); each retry's warning goes into the issue, and two
   timeouts in one run fail the job. If retries keep coming, the step is quarantined.
+
+## Per-PR review verification
+
+| Date | Level | Claim | Platforms | Evidence |
+|---|---|---|---|---|
+| 2026-11-21 | L1, L3 | #42 Refusing a future WAL preserves its uncheckpointed pages. An unreadable history table leaves session dictation available. | windows-x64, local | cargo test --locked -p onda-core --test profile_storage and cargo test --locked -p onda-app --lib runtime::history::tests passed. The regressions first reported “refusal checkpointed a newer database” and “history read failure prevented startup”. |
+| 2026-11-21 | L1 | #46 An in-place edit can preserve a rich clipboard. Qt uses the correct length and caret for non-ASCII insertion. An unconfirmed shortcut asks the user to check the field before retrying. | windows-x64, local policy tests | cargo test --locked -p onda-platform --lib and cargo test --locked -p onda-app --lib runtime::delivery::tests passed. The new cases first reported ClipboardNotPreservable and Qt (6, 2) versus (3, 3). Physical target behavior requires a desktop session. |
+| 2026-11-21 | L1, L3 | #47 History copy retains its one-time usage credit during the session. Opening an upgraded profile repairs streaks from the retained calendar. | windows-x64, local | cargo test --locked -p onda-app --lib runtime::history::tests and cargo test --locked -p onda-core --test usage_calendar passed. The regressions first lost the pending delivery credit and reported streaks (1, 2) instead of (3, 3). |
+| 2026-11-21 | L1 | #48 Release evidence requires a complete first workflow attempt. The Mac installer launches with a private home and checks the database created there. | windows-x64, local release gate | node --test tests/tooling/release.test.mjs passed. Before the change a repeated attempt produced Missing expected exception. Mac Launch Services is exercised by hosted L7. |
+| 2026-11-21 | L1 | #51 Manual clipboard delivery checks the original and current targets, including secure input, immediately before the write. | windows-x64, local policy test | cargo test --locked -p onda-platform --lib a_manual_handoff passed after the unguarded path failed to return SecureField. |
+| 2026-11-21 | L1, L3, L4 | #52 Rewrites use a corrected model at the same endpoint, reject stale defaults before changing desktop settings, and check the bound account before announcing cloud use. Profile-name coverage reads the saved greeting. | windows-x64, Chromium and WebKit | The retry_route and default_rewrite Cargo cases passed. The retry initially returned first instead of second. With the blur save disconnected, the browser showed Good morning, Alex. Both engines passed with the save restored. |

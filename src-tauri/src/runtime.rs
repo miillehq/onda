@@ -197,7 +197,7 @@ impl Runtime {
         let settings = store.settings()?;
         let history = History::load(&mut store, settings.history_days, now_ms(), |bytes| {
             onda_platform::unprotect_user_data(bytes).ok()
-        })?;
+        });
         let index = DictionaryIndex::build(&store.dictionary()?, &store.snippets()?)?;
         let helper_config = shortcut_config(&settings, &store.transforms()?)?;
         let cloud_result = ChatGptService::new(CloudConfig {
@@ -1514,8 +1514,6 @@ impl Runtime {
         instructions: &str,
         preferred: Option<&str>,
     ) -> AppResult<String> {
-        lock(&self.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
-        self.emit_state();
         let profiles = self.cloud()?.list_profiles().await.map_err(errors::cloud)?;
         let profile = profiles
             .iter()
@@ -1539,6 +1537,8 @@ impl Runtime {
             &profile.id,
             profile.preferred_model.as_deref(),
         )?;
+        lock(&self.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
+        self.emit_state();
         let models = self.account_models(&profile.id).await?;
         let selected_model = AccountModel::bind(
             &mut *lock(&account)?,

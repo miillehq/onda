@@ -6,14 +6,19 @@ import Foundation
 @main
 struct InstallerLaunchCheck {
     private static let startupSeconds: UInt64 = 6
+    private static let profileWaitSeconds: TimeInterval = 24
     private static let terminationPolls = 50
     private static let pollNanoseconds: UInt64 = 100_000_000
 
     @MainActor
     static func main() async throws {
-        guard CommandLine.arguments.count == 2 else { throw failure("Expected an installed app path.") }
+        guard CommandLine.arguments.count == 3 else { throw failure("Expected an installed app and a private home directory.") }
         let bundle = URL(fileURLWithPath: CommandLine.arguments[1]).resolvingSymlinksInPath().standardizedFileURL
+        let home = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+        guard let identifier = Bundle(url: bundle)?.bundleIdentifier else { throw failure("Missing bundle identifier.") }
+        let database = home.appendingPathComponent("Library/Application Support").appendingPathComponent(identifier).appendingPathComponent("onda.db")
         let configuration = NSWorkspace.OpenConfiguration()
+        configuration.environment = ["HOME": home.path, "CFFIXED_USER_HOME": home.path]
         configuration.createsNewApplicationInstance = true
         let app = try await NSWorkspace.shared.openApplication(at: bundle, configuration: configuration)
         guard app.bundleURL?.resolvingSymlinksInPath().standardizedFileURL.path == bundle.path else {
@@ -29,6 +34,14 @@ struct InstallerLaunchCheck {
         defer { if installedProcessExists() { _ = kill(pid, SIGKILL) } }
         try await Task.sleep(nanoseconds: startupSeconds * 1_000_000_000)
         guard installedProcessExists() else { throw failure("The installed application exited during startup.") }
+        // Verify that this launch initialized the disposable profile before accepting startup.
+        let deadline = ProcessInfo.processInfo.systemUptime + profileWaitSeconds
+        while !FileManager.default.fileExists(atPath: database.path) {
+            guard installedProcessExists(), ProcessInfo.processInfo.systemUptime < deadline else {
+                throw failure("The installed application did not initialize its private profile.")
+            }
+            try await Task.sleep(nanoseconds: pollNanoseconds)
+        }
         print("Launched the installed bundle at \(bundle.path), pid \(pid).")
         // A menu-bar app can decline the Apple-event quit request. Installer cleanup owns
         // this exact pid and bundle, so it can also terminate the process directly.

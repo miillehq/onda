@@ -3280,6 +3280,7 @@ dependencies = [
  "onda-input",
  "onda-platform",
  "png 0.18.1",
+ "rusqlite",
  "schemars 1.2.2",
  "serde",
  "serde_json",
