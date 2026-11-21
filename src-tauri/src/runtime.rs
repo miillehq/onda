@@ -14,7 +14,7 @@ use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex, MutexGuard,
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -23,8 +23,11 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 mod commands;
+mod history;
+use history::History;
 mod profile;
 mod providers;
+mod stats_export;
 
 const ACTION_QUEUE_CAPACITY: usize = 64;
 const MAX_METRICS: usize = 512;
@@ -44,8 +47,6 @@ const PRECEDING_CHARACTERS: usize = 2;
 /// Words in a model's display name that mark a lighter, faster model; Luna is the light
 /// model in the GPT-6 family.
 const FAST_MODEL_NAME_HINTS: &[&str] = &["fast", "mini", "nano", "luna"];
-const MAX_HISTORY_ENTRIES: usize = 2000;
-const DAY_MS: i64 = 86_400_000;
 /// A hold-to-talk recording shorter than 0.6 s with no speech was a tap, not a hold.
 const SHORT_PRESS_SAMPLES: usize = onda_platform::OUTPUT_SAMPLE_RATE as usize * 3 / 5;
 /// How long an account's model list is reused before polish asks ChatGPT again.
@@ -139,10 +140,8 @@ pub struct Runtime {
     result: Mutex<Option<SavedResult>>,
     proposal: Mutex<Option<LearningProposal>>,
     /// Newest first. Decrypted only in memory; the store holds DPAPI-sealed copies.
-    history: Mutex<VecDeque<HistoryEntry>>,
+    history: Mutex<History>,
     warm: Mutex<Option<WarmWorker>>,
-    /// Retention in days; 0 keeps history only until Onda quits.
-    history_days: AtomicU32,
     cloud: Option<ChatGptService>,
     cloud_error: Option<AppError>,
     cloud_models: Mutex<Option<CachedModels>>,
@@ -181,7 +180,9 @@ impl Runtime {
     ) -> AppResult<Arc<Self>> {
         let mut store = Store::open(&data_directory.join("onda.db"))?;
         let settings = store.settings()?;
-        let history = load_history(&mut store, settings.history_days);
+        let history = History::load(&mut store, settings.history_days, now_ms(), |bytes| {
+            onda_platform::unprotect_user_data(bytes).ok()
+        });
         let index = DictionaryIndex::build(&store.dictionary()?, &store.snippets()?)?;
         let helper_config = shortcut_config(&settings, &store.transforms()?)?;
         let cloud_result = ChatGptService::new(CloudConfig {
@@ -216,7 +217,6 @@ impl Runtime {
             proposal: Mutex::new(None),
             history: Mutex::new(history),
             warm: Mutex::new(None),
-            history_days: AtomicU32::new(settings.history_days),
             cloud,
             cloud_error,
             cloud_models: Mutex::new(None),
@@ -243,6 +243,7 @@ impl Runtime {
             pill,
         });
         let actor = service.clone();
+        Self::start_history_expiry(&service);
         tauri::async_runtime::spawn(async move {
             actor.action_loop(receiver).await;
         });
@@ -363,7 +364,7 @@ impl Runtime {
     /// history is lost on restart, so an update must not discard text never typed or copied,
     /// even after the error was dismissed.
     fn ensure_recovery_resolved(&self) -> AppResult<()> {
-        if self.history_days.load(Ordering::Acquire) == 0
+        if lock(&self.history)?.days == 0
             && lock(&self.result)?.as_ref().is_some_and(|saved| {
                 saved.failed
                     && saved.target.is_some()
@@ -1426,122 +1427,6 @@ impl Runtime {
         self.record_history(active, &result, route);
     }
 
-    /// Keep what was said findable after the next operation replaces the visible result.
-    fn record_history(&self, active: &ActiveOperation, result: &OperationResult, route: DataRoute) {
-        let unchanged_edit = active.mode == OperationMode::Transform
-            && result.output == result.original
-            && result.suggestion.is_none();
-        if !active.history || unchanged_edit || result.output.trim().is_empty() {
-            return;
-        }
-        let days = self.history_days.load(Ordering::Acquire);
-        let entry = {
-            let Ok(mut history) = lock(&self.history) else {
-                return;
-            };
-            let created_at = history
-                .iter()
-                .find(|entry| entry.id == active.id)
-                .map(|entry| entry.created_at)
-                .unwrap_or_else(|| now_ms() as f64);
-            let entry = HistoryEntry {
-                id: active.id.clone(),
-                created_at,
-                mode: active.mode.clone(),
-                route,
-                original: result.original.clone(),
-                output: result.output.clone(),
-                command_text: result.command_text.clone(),
-                inserted: result.inserted,
-                fallback_used: result.fallback_used,
-                error_code: None,
-                app: Some(active.target.executable_name.clone()).filter(|name| !name.is_empty()),
-                suggestion: result.suggestion.clone(),
-            };
-            history.retain(|existing| existing.id != entry.id);
-            history.push_front(entry.clone());
-            retain_recent(&mut history, days);
-            entry
-        };
-        self.persist_history(&entry);
-        self.event(RuntimeEvent::HistoryUpdated { entry });
-    }
-
-    fn update_history(&self, id: &str, change: impl FnOnce(&mut HistoryEntry)) {
-        let entry = {
-            let Ok(mut history) = lock(&self.history) else {
-                return;
-            };
-            let Some(entry) = history.iter_mut().find(|entry| entry.id == id) else {
-                return;
-            };
-            change(entry);
-            entry.clone()
-        };
-        self.persist_history(&entry);
-        self.event(RuntimeEvent::HistoryUpdated { entry });
-    }
-
-    fn mark_history_failed(&self, id: &str, code: ErrorCode) {
-        self.update_history(id, |entry| {
-            if !entry.inserted {
-                entry.error_code = Some(code);
-            }
-        });
-    }
-
-    /// Seal and store one entry unless history is session-only. Failures are logged without content.
-    fn persist_history(&self, entry: &HistoryEntry) {
-        let days = self.history_days.load(Ordering::Acquire);
-        if days == 0 {
-            return;
-        }
-        let sealed = serde_json::to_vec(entry)
-            .ok()
-            .and_then(|plain| onda_platform::protect_user_data(&plain).ok());
-        let saved = sealed.is_some_and(|sealed| {
-            lock(&self.store).is_ok_and(|mut store| {
-                store
-                    .save_history(&entry.id, entry.created_at as i64, &sealed)
-                    .and_then(|_| store.prune_history(history_cutoff(days)))
-                    .is_ok()
-            })
-        });
-        if !saved {
-            tracing::warn!(
-                subsystem = "history",
-                operation_id = entry.id,
-                "history entry was not saved"
-            );
-        }
-    }
-
-    /// Apply a retention change: trim to the new window, drop the disk copy for session-only
-    /// history, and write session entries out when retention is turned back on.
-    pub(crate) fn set_history_days(&self, days: u32) -> AppResult<()> {
-        let previous = self.history_days.swap(days, Ordering::AcqRel);
-        if previous == days {
-            return Ok(());
-        }
-        let entries = {
-            let mut history = lock(&self.history)?;
-            retain_recent(&mut history, days);
-            history.clone()
-        };
-        if days == 0 {
-            lock(&self.store)?.prune_history(i64::MAX)?;
-        } else {
-            lock(&self.store)?.prune_history(history_cutoff(days))?;
-            if previous == 0 {
-                for entry in entries.iter().rev() {
-                    self.persist_history(entry);
-                }
-            }
-        }
-        self.event(RuntimeEvent::HistoryReset);
-        Ok(())
-    }
-
     /// The account's models, fetched at most every half hour so polish can start at once.
     async fn account_models(&self, profile_id: &str) -> AppResult<Vec<onda_cloud::ModelChoice>> {
         if let Some(cached) = lock(&self.cloud_models)?.as_ref().filter(|cached| {
@@ -2122,66 +2007,6 @@ fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0)
-}
-
-fn history_cutoff(days: u32) -> i64 {
-    now_ms().saturating_sub(i64::from(days) * DAY_MS)
-}
-
-/// Bound the newest-first list by count and, when retained on disk, by age.
-fn retain_recent(history: &mut VecDeque<HistoryEntry>, days: u32) {
-    if days > 0 {
-        let cutoff = history_cutoff(days) as f64;
-        history.retain(|entry| entry.created_at >= cutoff);
-    }
-    history.truncate(MAX_HISTORY_ENTRIES);
-}
-
-/// Decrypt retained history. Rows that no longer open (another Windows user, a reset profile)
-/// are removed; failures are logged without content.
-fn load_history(store: &mut Store, days: u32) -> VecDeque<HistoryEntry> {
-    let cutoff = if days == 0 {
-        i64::MAX
-    } else {
-        history_cutoff(days)
-    };
-    if store.prune_history(cutoff).is_err() {
-        tracing::warn!(subsystem = "history", "expired history was not removed");
-    }
-    if days == 0 {
-        return VecDeque::new();
-    }
-    let rows = match store.history_since(cutoff) {
-        Ok(rows) => rows,
-        Err(_) => {
-            tracing::warn!(subsystem = "history", "history could not be read");
-            return VecDeque::new();
-        }
-    };
-    let mut history = VecDeque::with_capacity(rows.len());
-    let mut unreadable = 0usize;
-    for (id, _, payload) in rows {
-        let entry = onda_platform::unprotect_user_data(&payload)
-            .ok()
-            .and_then(|plain| serde_json::from_slice::<HistoryEntry>(&plain).ok())
-            .filter(|entry| entry.id == id);
-        match entry {
-            Some(entry) => history.push_back(entry),
-            None => {
-                unreadable += 1;
-                let _ = store.delete_history(&id);
-            }
-        }
-    }
-    if unreadable > 0 {
-        tracing::warn!(
-            subsystem = "history",
-            unreadable,
-            "unreadable history entries removed"
-        );
-    }
-    retain_recent(&mut history, days);
-    history
 }
 
 /// When Onda could not type, put the words on the clipboard so they paste wherever the user is
