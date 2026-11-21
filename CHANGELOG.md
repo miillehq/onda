@@ -18,6 +18,10 @@ which platform and by which run is recorded in [VERIFICATION.md](VERIFICATION.md
 
 Dictionary imports retain one rule per normalized trigger. Repeated spellings in a single backup coalesce, and importing that backup a second time adds zero entries. [Audit details](docs/KEEL-AUDIT.md)
 
+### Known defects
+
+- The Linux desktop uses GTK 3 and GLib 0.18.5. RustSec reports an upstream soundness warning for GLib’s string-array iterator. Onda’s source has no direct calls to that iterator. GTK 3 currently requires the older GLib series. [Dependency audit](docs/third-party-licenses.md)
+
 ## [0.3.0] - 2026-11-14
 
 The first release with installers for every platform: Windows and Linux on x64 and ARM64, and

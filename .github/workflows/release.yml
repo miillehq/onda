@@ -195,8 +195,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Deterministic quality regression' }
           cargo install cargo-deny --version 0.19.7 --locked
           if ($LASTEXITCODE -ne 0) { throw 'cargo-deny installation failed' }
-          cargo deny --locked check licenses advisories sources
+          cargo deny --locked --workspace check licenses advisories sources
           if ($LASTEXITCODE -ne 0) { throw 'Dependency policy failed' }
+          cargo install cargo-audit --version 0.22.2 --locked
+          if ($LASTEXITCODE -ne 0) { throw 'cargo-audit installation failed' }
+          cargo audit --file Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw 'Cargo lockfile advisory failed' }
           npm audit --omit=dev --audit-level=high
           if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency advisory failed' }
           npm audit --audit-level=high
