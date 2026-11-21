@@ -192,11 +192,12 @@ impl Runtime {
                 let Some(service) = service.upgrade() else {
                     return;
                 };
-                if service.shutdown.load(Ordering::Acquire) {
+                if service.operations.shutdown.load(Ordering::Acquire) {
                     return;
                 }
-                let expired = lock(&service.history)
-                    .and_then(|mut history| history.expire(&mut *lock(&service.store)?, now_ms()));
+                let expired = lock(&service.retention.history).and_then(|mut history| {
+                    history.expire(&mut *lock(&service.data.store)?, now_ms())
+                });
                 match expired {
                     Ok(true) => service.event(RuntimeEvent::HistoryReset),
                     Err(_) => {
@@ -207,10 +208,31 @@ impl Runtime {
             }
         });
     }
+}
 
+/// An unchanged selected-text draft is provisional. A completed preview has no selection
+/// and is a result the user can revisit even when the provider kept their wording.
+fn recordable(
+    keep: bool,
+    mode: &OperationMode,
+    stage: HistoryStage,
+    result: &OperationResult,
+) -> bool {
+    keep && !result.output.trim().is_empty()
+        && (*mode != OperationMode::Transform
+            || stage == HistoryStage::CompletedPreview
+            || result.output != result.original
+            || result.suggestion.is_some())
+}
+
+#[cfg(test)]
+mod tests;
+
+impl HistoryService {
     /// Keep a completed result findable after the next operation replaces the visible one.
     pub(super) fn record_history(
         &self,
+        host: &Runtime,
         active: &ActiveOperation,
         result: &OperationResult,
         route: DataRoute,
@@ -249,17 +271,22 @@ impl Runtime {
                 active.usage.clone(),
                 now,
             );
-            self.event(RuntimeEvent::HistoryUpdated {
+            host.event(RuntimeEvent::HistoryUpdated {
                 entry: entry.as_ref().clone(),
             });
             (entry, history.days != 0 && !history.storage_unavailable)
         };
         if persist {
-            self.persist_history(&entry);
+            self.persist_history(host, &entry);
         }
     }
 
-    pub(super) fn update_history(&self, id: &str, change: impl FnOnce(&mut HistoryEntry)) {
+    pub(super) fn update_history(
+        &self,
+        host: &Runtime,
+        id: &str,
+        change: impl FnOnce(&mut HistoryEntry),
+    ) {
         let (entry, persist) = {
             let Ok(mut history) = lock(&self.history) else {
                 return;
@@ -268,12 +295,12 @@ impl Runtime {
                 .entries
                 .iter_mut()
                 .find(|entry| entry.value.id == id)
-                .map(|record| &mut record.value)
+                .map(|entry| &mut entry.value)
             else {
                 return;
             };
             change(Arc::make_mut(entry));
-            self.event(RuntimeEvent::HistoryUpdated {
+            host.event(RuntimeEvent::HistoryUpdated {
                 entry: entry.as_ref().clone(),
             });
             (
@@ -282,25 +309,25 @@ impl Runtime {
             )
         };
         if persist {
-            self.persist_history(&entry);
+            self.persist_history(host, &entry);
         }
     }
 
-    pub(super) fn mark_history_failed(&self, id: &str, code: ErrorCode) {
-        self.update_history(id, |entry| {
+    pub(super) fn mark_history_failed(&self, host: &Runtime, id: &str, code: ErrorCode) {
+        self.update_history(host, id, |entry| {
             if !entry.inserted {
                 entry.error_code = Some(code);
             }
         });
     }
 
-    fn persist_history(&self, entry: &Arc<HistoryEntry>) {
+    pub(super) fn persist_history(&self, host: &Runtime, entry: &Arc<HistoryEntry>) {
         let sealed = serde_json::to_vec(entry.as_ref())
             .ok()
             .and_then(|plain| onda_platform::protect_user_data(&plain).ok());
         let saved = sealed.is_some_and(|bytes| {
             lock(&self.history).is_ok_and(|history| {
-                lock(&self.store).is_ok_and(|mut store| {
+                lock(&host.data.store).is_ok_and(|mut store| {
                     history
                         .save_if_current(&mut store, entry, &bytes, now_ms())
                         .is_ok()
@@ -313,11 +340,11 @@ impl Runtime {
     }
 
     /// Hold history before the store wherever both are needed. Sealing happens outside both.
-    pub(super) fn save_preferences(&self, settings: &Settings) -> AppResult<()> {
+    pub(super) fn save_preferences(&self, host: &Runtime, settings: &Settings) -> AppResult<()> {
         let to_persist = {
             let mut history = lock(&self.history)?;
             let previous = history.days;
-            lock(&self.store)?.save_settings(settings)?;
+            lock(&host.data.store)?.save_settings(settings)?;
             if previous == settings.history_days {
                 return Ok(());
             }
@@ -335,27 +362,27 @@ impl Runtime {
             }
         };
         for entry in to_persist.iter().rev() {
-            self.persist_history(&entry.value);
+            self.persist_history(host, &entry.value);
         }
-        self.event(RuntimeEvent::HistoryReset);
+        host.event(RuntimeEvent::HistoryReset);
         Ok(())
     }
 
-    fn visible_history(&self) -> AppResult<MutexGuard<'_, History>> {
+    pub(super) fn visible_history(&self, host: &Runtime) -> AppResult<MutexGuard<'_, History>> {
         let mut history = lock(&self.history)?;
-        history.expire(&mut *lock(&self.store)?, now_ms())?;
+        history.expire(&mut *lock(&host.data.store)?, now_ms())?;
         Ok(history)
     }
 
-    pub(super) fn history_entries(&self) -> AppResult<Vec<HistoryEntry>> {
-        let mut history = self.visible_history()?;
+    pub(super) fn history_entries(&self, host: &Runtime) -> AppResult<Vec<HistoryEntry>> {
+        let mut history = self.visible_history(host)?;
         if std::mem::take(&mut history.notify_on_read) {
             let message = if history.storage_unavailable {
                 "Saved history could not be opened. New entries are kept for this session. Reopen Onda to try again."
             } else {
                 "Some saved history could not be opened. Its encrypted records are retained. If your system key store was locked, unlock it and reopen Onda."
             };
-            self.domain(AppEvent::Error(AppError::new(
+            host.domain(AppEvent::Error(AppError::new(
                 ErrorCode::Storage,
                 message,
                 true,
@@ -368,32 +395,18 @@ impl Runtime {
             .collect())
     }
 
-    pub(super) fn history_entry(&self, id: &str) -> AppResult<RetainedEntry> {
-        self.visible_history()?
+    pub(super) fn history_entry(&self, host: &Runtime, id: &str) -> AppResult<RetainedEntry> {
+        self.visible_history(host)?
             .record(id)
             .cloned()
             .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))
     }
 
-    pub(super) fn delete_retained_history(&self, id: Option<&str>) -> AppResult<()> {
-        lock(&self.history)?.delete(&mut *lock(&self.store)?, id)
+    pub(super) fn delete_retained_history(
+        &self,
+        host: &Runtime,
+        id: Option<&str>,
+    ) -> AppResult<()> {
+        lock(&self.history)?.delete(&mut *lock(&host.data.store)?, id)
     }
 }
-
-/// An unchanged selected-text draft is provisional. A completed preview has no selection
-/// and is a result the user can revisit even when the provider kept their wording.
-fn recordable(
-    keep: bool,
-    mode: &OperationMode,
-    stage: HistoryStage,
-    result: &OperationResult,
-) -> bool {
-    keep && !result.output.trim().is_empty()
-        && (*mode != OperationMode::Transform
-            || stage == HistoryStage::CompletedPreview
-            || result.output != result.original
-            || result.suggestion.is_some())
-}
-
-#[cfg(test)]
-mod tests;

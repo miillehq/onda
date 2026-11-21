@@ -4,14 +4,32 @@ use super::*;
 const MAX_OBSERVATIONS: u32 = 3;
 const OBSERVATION_WINDOW: Duration = Duration::from_secs(12);
 
-impl Runtime {
+#[derive(Clone, Copy)]
+struct LearningWindow(Instant);
+
+impl LearningWindow {
+    fn deadline(self) -> Instant {
+        self.0 + OBSERVATION_WINDOW
+    }
+
+    fn slot(self, index: u32) -> Instant {
+        self.0 + (OBSERVATION_WINDOW / (MAX_OBSERVATIONS + 1)) * (index + 1)
+    }
+
+    fn allows(self, now: Instant) -> bool {
+        now < self.deadline()
+    }
+}
+
+impl OperationResults {
     pub(super) fn start_learning(
-        self: &Arc<Self>,
+        &self,
+        host: &Arc<Runtime>,
         active: &ActiveOperation,
         baseline: String,
         inserted: String,
     ) {
-        let service = self.clone();
+        let service = host.clone();
         let active = active.clone();
         let window = LearningWindow(Instant::now());
         tauri::async_runtime::spawn(async move {
@@ -21,7 +39,7 @@ impl Runtime {
                     return;
                 }
                 if active.cancellation.is_cancelled()
-                    || lock(&service.state)
+                    || lock(&service.operations.state)
                         .map(|state| state.snapshot().operation_id.as_deref() != Some(&active.id))
                         .unwrap_or(true)
                 {
@@ -45,7 +63,7 @@ impl Runtime {
                     return;
                 };
                 if let Some(proposal) = onda_core::learning::propose_correction(&inserted, scope) {
-                    let Ok(state) = lock(&service.state) else {
+                    let Ok(state) = lock(&service.operations.state) else {
                         return;
                     };
                     if !window.allows(Instant::now())
@@ -54,7 +72,7 @@ impl Runtime {
                     {
                         return;
                     }
-                    if let Ok(mut saved) = lock(&service.proposal) {
+                    if let Ok(mut saved) = lock(&service.results.proposal) {
                         *saved = Some(proposal.clone());
                     }
                     service.domain(AppEvent::LearningProposed(proposal));
@@ -63,23 +81,6 @@ impl Runtime {
                 }
             }
         });
-    }
-}
-
-#[derive(Clone, Copy)]
-struct LearningWindow(Instant);
-
-impl LearningWindow {
-    fn deadline(self) -> Instant {
-        self.0 + OBSERVATION_WINDOW
-    }
-
-    fn slot(self, index: u32) -> Instant {
-        self.0 + (OBSERVATION_WINDOW / (MAX_OBSERVATIONS + 1)) * (index + 1)
-    }
-
-    fn allows(self, now: Instant) -> bool {
-        now < self.deadline()
     }
 }
 

@@ -41,7 +41,7 @@ impl Runtime {
     pub(super) fn credit_delivery(&self, receipt: Option<&DictationReceipt>, fallback: bool) {
         let Some(receipt) = receipt else { return };
         let result = receipt.credit(|counts| {
-            lock(&self.store)?.record_usage(
+            lock(&self.data.store)?.record_usage(
                 &onda_platform::local_date(),
                 counts.words,
                 counts.audio_ms,

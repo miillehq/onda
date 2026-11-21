@@ -92,8 +92,8 @@ pub(super) fn validate_provider_settings(settings: &Settings) -> AppResult<()> {
     Ok(())
 }
 
-impl Runtime {
-    fn provider_client(&self) -> AppResult<&onda_cloud::ProviderClient> {
+impl ProviderAccess {
+    pub(super) fn provider_client(&self) -> AppResult<&onda_cloud::ProviderClient> {
         self.providers.as_ref().ok_or_else(|| {
             AppError::new(
                 ErrorCode::Cloud,
@@ -112,7 +112,7 @@ impl Runtime {
     }
 
     /// Keystore calls can block on the desktop keyring (and its unlock prompt).
-    async fn load_key(&self, provider: AiProvider) -> AppResult<Option<ApiKey>> {
+    pub(super) async fn load_key(&self, provider: AiProvider) -> AppResult<Option<ApiKey>> {
         let Some(slot) = key_slot(provider) else {
             return Ok(None);
         };
@@ -161,9 +161,10 @@ impl Runtime {
     /// check, so an error names what to start.
     pub(super) async fn provider_models(
         &self,
+        host: &Runtime,
         provider: AiProvider,
     ) -> AppResult<Vec<ProviderModel>> {
-        let settings = self.settings()?;
+        let settings = host.settings()?;
         let endpoint = endpoint(&settings, provider)?;
         if let Some(cached) = lock(&self.provider_models)?.as_ref().filter(|cached| {
             cached.endpoint == endpoint && cached.fetched.elapsed() < PROVIDER_MODELS_TTL
@@ -186,7 +187,8 @@ impl Runtime {
 
     /// One polish, rewrite or spoken edit through the configured provider.
     pub(super) async fn provider_text(
-        self: &Arc<Self>,
+        &self,
+        host: &Arc<Runtime>,
         active: &ActiveOperation,
         provider: AiProvider,
         source: &str,
@@ -202,8 +204,8 @@ impl Runtime {
                 true,
             ));
         }
-        lock(&self.state)?.mark_cloud(&active.id, route(provider));
-        self.emit_state();
+        lock(&host.operations.state)?.mark_cloud(&active.id, route(provider));
+        host.operations.emit_state(host);
         // Anthropic models that support it get low effort: cleanup needs little deliberation.
         let low_effort = provider == AiProvider::Anthropic
             && lock(&self.provider_models)?
@@ -219,7 +221,7 @@ impl Runtime {
             context_text: (!active.context.is_empty()).then(|| active.context.clone()),
             low_effort,
         };
-        let service = self.clone();
+        let service = host.clone();
         let id = active.id.clone();
         let started = Instant::now();
         let mut first_token = false;
@@ -232,7 +234,13 @@ impl Runtime {
                 active.cancellation.clone(),
                 move |delta| {
                     if !first_token {
-                        service.metric(&id, "providerFirstToken", started, true);
+                        service.performance.metric(
+                            &service,
+                            &id,
+                            "providerFirstToken",
+                            started,
+                            true,
+                        );
                         first_token = true;
                     }
                     service.domain(AppEvent::CloudDelta {
@@ -242,7 +250,13 @@ impl Runtime {
                 },
             )
             .await;
-        self.metric(&active.id, "providerCompletion", started, result.is_ok());
+        host.performance.metric(
+            host,
+            &active.id,
+            "providerCompletion",
+            started,
+            result.is_ok(),
+        );
         result
             .map(|response| response.text)
             .map_err(|error| errors::provider(provider, Some(&endpoint), error))

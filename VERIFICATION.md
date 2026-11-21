@@ -127,6 +127,8 @@ with an identical tree.
 | 2026-11-19 | L4 | The shared dialog assigns its initial focus before typing can begin in a second field. Escape uses the current close handler. | macos-arm64 diagnosis, Windows local | An [actual Mac Chromium run](https://github.com/miillehq/onda/actions/runs/44607484981/job/135857979835) saved the expansion at the end of the trigger. The focus lifecycle now runs before paint. |
 | 2026-11-19 | L1–L3 characterization | Native library suites preserve audio capture, verified worker and model policy, OAuth, storage and shortcut behavior after their owners were separated. | windows-x64, local | `cargo test --locked --workspace --exclude onda-app` passed 182 active cases in the refactored libraries. Conditional Windows, Linux and macOS paths also remain in the hosted jobs. |
 
+| 2026-11-19 | L1–L3, L6 characterization | The operation actor coordinates recording, recognition, provider choice, safe delivery, History and retry through their owning services. A retry preserves the original recipient and previews remain targetless. | windows-x64, local | The app crate passed 37 active tests, strict workspace Clippy passed, and all three WebView2 specification files passed after extraction. |
+
 ## Unverified
 
 - macOS: dictation into other apps on a real Mac. Accessibility paste is built and checked on the
