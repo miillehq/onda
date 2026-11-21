@@ -61,7 +61,14 @@ impl Runtime {
                     ));
                 }
                 self.selected_model(&settings)?;
-                let config = shortcut_config(&settings, &lock(&self.store)?.transforms()?)?;
+                let transforms = lock(&self.store)?.transforms()?;
+                if !transforms
+                    .iter()
+                    .any(|item| item.id == settings.default_transform_id)
+                {
+                    return Err(AppError::invalid("Choose an existing default rewrite."));
+                }
+                let config = shortcut_config(&settings, &transforms)?;
                 self.cancel().await?;
                 let current = lock(&self.store)?.settings()?;
                 if current.launch_at_login != settings.launch_at_login {

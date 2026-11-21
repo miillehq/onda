@@ -1514,8 +1514,6 @@ impl Runtime {
         instructions: &str,
         preferred: Option<&str>,
     ) -> AppResult<String> {
-        lock(&self.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
-        self.emit_state();
         let profiles = self.cloud()?.list_profiles().await.map_err(errors::cloud)?;
         let profile = profiles
             .iter()
@@ -1539,6 +1537,8 @@ impl Runtime {
             &profile.id,
             profile.preferred_model.as_deref(),
         )?;
+        lock(&self.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
+        self.emit_state();
         let models = self.account_models(&profile.id).await?;
         let selected_model = AccountModel::bind(
             &mut *lock(&account)?,
