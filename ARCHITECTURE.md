@@ -45,16 +45,16 @@ Each package bundles the shell and the sidecars named in `src-tauri/tauri.conf.j
 
 ## Boundaries
 
-| Module | Owns | May call |
-|---|---|---|
-| `ui/` (Preact, Vite) | screens, the store, the pill | `ui/src/api.ts` only |
-| `ui/src/api.ts` | the typed adapter: `application_call` and `onda://event` in the shell, the labelled mock in a browser | Tauri `invoke`/`listen`, or `ui/src/mock/backend.ts` |
-| `src-tauri/` (`onda-app`) | the contract (`ApiRequest`/`ApiResponse` in `src/api.rs`), dispatch, the runtime actor, tray and windows | every crate |
-| `crates/onda-core` | domain: state machine, settings, dictionary, text validation, stats, SQLite and migrations | nothing native |
-| `crates/onda-platform` | audio capture, target identity, insertion, at-rest protection, desktop integration, process reports | the OS |
-| `crates/onda-input` | the shortcut helper process (Windows hook, Linux portal) and its supervisor | `onda-platform` |
-| `crates/onda-asr` | model catalog, verified downloads, hardware routing, worker processes | the OS |
-| `crates/onda-cloud` | ChatGPT OAuth, AI providers, API key storage | `onda-platform` |
+| Module | Owns | May call | Outside its boundary |
+|---|---|---|---|
+| `ui/` | Views, interaction state and the pill | Typed renderer adapter | Database rows, native automation and credentials |
+| `ui/src/api.ts` | IPC and event translation | Tauri invoke/listen and the labelled development mock | Filesystem and provider policy |
+| `src-tauri/` | Typed dispatch and desktop operation coordination | Domain, persistence, platform, speech and provider services | Provider protocol internals and audio sample processing |
+| `onda-core` | Domain contracts, text rules and SQLite transactions | Its own domain and persistence modules | OS windows, microphones and network clients |
+| `onda-platform` | OS capture, target identity, clipboard and at-rest protection | Host OS APIs | Provider selection and rewrite prompts |
+| `onda-input` | Shortcut registration and helper supervision | Platform input integration | Audio, transcripts and account data |
+| `onda-asr` | Verified speech models and worker lifecycle | Model files, native workers and hardware APIs | UI state and provider accounts |
+| `onda-cloud` | Account lifecycle, provider transport and key slots | Protected storage and provider endpoints | Native target selection and microphone control |
 
 The UI never talks to a crate directly, and crates never import Tauri. `onda-core` stays free of
 microphone, network and window code so it runs in any test.
