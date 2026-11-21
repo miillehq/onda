@@ -5,9 +5,22 @@ const MAX_HISTORY_ENTRIES: usize = 2_000;
 const DAY_MS: i64 = 86_400_000;
 const IDLE_EXPIRY_INTERVAL: Duration = Duration::from_secs(60);
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum HistoryStage {
+    Result,
+    CompletedPreview,
+}
+
+/// Usage credits live exactly as long as the in-memory entry and are shared with paste retries.
+#[derive(Clone)]
+pub(super) struct RetainedEntry {
+    pub(super) value: Arc<HistoryEntry>,
+    pub(super) usage: Option<DictationReceipt>,
+}
+
 pub(super) struct History {
     pub(super) days: u32,
-    entries: VecDeque<Arc<HistoryEntry>>,
+    entries: VecDeque<RetainedEntry>,
     unreadable: HashMap<String, i64>,
     notify_on_read: bool,
     storage_unavailable: bool,
@@ -50,7 +63,10 @@ impl History {
                 .and_then(|plain| serde_json::from_slice::<HistoryEntry>(&plain).ok())
                 .filter(|entry| entry.id == id && entry.created_at == timestamp as f64);
             if let Some(entry) = entry {
-                history.entries.push_back(Arc::new(entry));
+                history.entries.push_back(RetainedEntry {
+                    value: Arc::new(entry),
+                    usage: None,
+                });
             } else {
                 // A locked keyring and a damaged entry both fail to open. Only an explicit
                 // deletion or the retention policy may discard these encrypted bytes.
@@ -75,21 +91,34 @@ impl History {
     fn retain_recent(&mut self, now: i64) {
         if self.days != 0 {
             let cutoff = self.cutoff(now) as f64;
-            self.entries.retain(|entry| entry.created_at >= cutoff);
+            self.entries
+                .retain(|entry| entry.value.created_at >= cutoff);
             self.unreadable
                 .retain(|_, timestamp| *timestamp as f64 >= cutoff);
         }
         self.entries.truncate(MAX_HISTORY_ENTRIES);
     }
 
-    fn entry(&self, id: &str) -> Option<&Arc<HistoryEntry>> {
-        self.entries.iter().find(|entry| entry.id == id)
+    fn record(&self, id: &str) -> Option<&RetainedEntry> {
+        self.entries.iter().find(|entry| entry.value.id == id)
     }
 
-    fn put(&mut self, entry: HistoryEntry, now: i64) -> Arc<HistoryEntry> {
+    fn entry(&self, id: &str) -> Option<&Arc<HistoryEntry>> {
+        self.record(id).map(|entry| &entry.value)
+    }
+
+    fn put(
+        &mut self,
+        entry: HistoryEntry,
+        usage: Option<DictationReceipt>,
+        now: i64,
+    ) -> Arc<HistoryEntry> {
         let entry = Arc::new(entry);
-        self.entries.retain(|prior| prior.id != entry.id);
-        self.entries.push_front(Arc::clone(&entry));
+        self.entries.retain(|prior| prior.value.id != entry.id);
+        self.entries.push_front(RetainedEntry {
+            value: Arc::clone(&entry),
+            usage,
+        });
         self.retain_recent(now);
         entry
     }
@@ -100,7 +129,7 @@ impl History {
             || (self
                 .entries
                 .iter()
-                .all(|entry| entry.created_at >= cutoff as f64)
+                .all(|entry| entry.value.created_at >= cutoff as f64)
                 && self
                     .unreadable
                     .values()
@@ -140,7 +169,7 @@ impl History {
     fn delete(&mut self, store: &mut Store, id: Option<&str>) -> AppResult<()> {
         if let Some(id) = id {
             store.delete_history(id)?;
-            self.entries.retain(|entry| entry.id != id);
+            self.entries.retain(|entry| entry.value.id != id);
             self.unreadable.remove(id);
         } else {
             store.clear_history()?;
@@ -185,11 +214,9 @@ impl Runtime {
         active: &ActiveOperation,
         result: &OperationResult,
         route: DataRoute,
+        stage: HistoryStage,
     ) {
-        let unchanged_edit = active.mode == OperationMode::Transform
-            && result.output == result.original
-            && result.suggestion.is_none();
-        if !active.history || unchanged_edit || result.output.trim().is_empty() {
+        if !recordable(active.history, &active.mode, stage, result) {
             return;
         }
         let (entry, persist) = {
@@ -212,10 +239,14 @@ impl Runtime {
                     inserted: result.inserted,
                     fallback_used: result.fallback_used,
                     error_code: None,
-                    app: Some(active.target.executable_name.clone())
+                    app: active
+                        .target
+                        .as_ref()
+                        .map(|target| target.executable_name.clone())
                         .filter(|name| !name.is_empty()),
                     suggestion: result.suggestion.clone(),
                 },
+                active.usage.clone(),
                 now,
             );
             self.event(RuntimeEvent::HistoryUpdated {
@@ -233,7 +264,12 @@ impl Runtime {
             let Ok(mut history) = lock(&self.history) else {
                 return;
             };
-            let Some(entry) = history.entries.iter_mut().find(|entry| entry.id == id) else {
+            let Some(entry) = history
+                .entries
+                .iter_mut()
+                .find(|entry| entry.value.id == id)
+                .map(|record| &mut record.value)
+            else {
                 return;
             };
             change(Arc::make_mut(entry));
@@ -299,7 +335,7 @@ impl Runtime {
             }
         };
         for entry in to_persist.iter().rev() {
-            self.persist_history(entry);
+            self.persist_history(&entry.value);
         }
         self.event(RuntimeEvent::HistoryReset);
         Ok(())
@@ -328,13 +364,13 @@ impl Runtime {
         Ok(history
             .entries
             .iter()
-            .map(|entry| entry.as_ref().clone())
+            .map(|entry| entry.value.as_ref().clone())
             .collect())
     }
 
-    pub(super) fn history_entry(&self, id: &str) -> AppResult<Arc<HistoryEntry>> {
+    pub(super) fn history_entry(&self, id: &str) -> AppResult<RetainedEntry> {
         self.visible_history()?
-            .entry(id)
+            .record(id)
             .cloned()
             .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))
     }
@@ -342,6 +378,21 @@ impl Runtime {
     pub(super) fn delete_retained_history(&self, id: Option<&str>) -> AppResult<()> {
         lock(&self.history)?.delete(&mut *lock(&self.store)?, id)
     }
+}
+
+/// An unchanged selected-text draft is provisional. A completed preview has no selection
+/// and is a result the user can revisit even when the provider kept their wording.
+fn recordable(
+    keep: bool,
+    mode: &OperationMode,
+    stage: HistoryStage,
+    result: &OperationResult,
+) -> bool {
+    keep && !result.output.trim().is_empty()
+        && (*mode != OperationMode::Transform
+            || stage == HistoryStage::CompletedPreview
+            || result.output != result.original
+            || result.suggestion.is_some())
 }
 
 #[cfg(test)]

@@ -367,11 +367,12 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::CopyResult => {
-                let saved = lock(&self.result)?
+                let (saved, usage) = lock(&self.result)?
                     .as_ref()
-                    .map(|result| result.result.clone())
+                    .map(|result| (result.result.clone(), result.usage.clone()))
                     .ok_or_else(|| AppError::invalid("No result is available to copy."))?;
                 copy_text(saved.output.clone()).await?;
+                self.credit_delivery(usage.as_ref(), saved.fallback_used);
                 if let Some(current) = lock(&self.result)?.as_mut() {
                     if current.result.operation_id == saved.operation_id
                         && current.result.output == saved.output
@@ -448,18 +449,22 @@ impl Runtime {
             }
             R::GetHistory => Ok(O::History(self.history_entries()?)),
             R::CopyHistorySuggestion { id } => {
-                let text =
-                    self.history_entry(&id)?.suggestion.clone().ok_or_else(|| {
-                        AppError::invalid("That history entry is no longer kept.")
-                    })?;
+                let text = self
+                    .history_entry(&id)?
+                    .value
+                    .suggestion
+                    .clone()
+                    .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
                 copy_text(text).await?;
                 Ok(O::Unit)
             }
             R::CopyHistoryEntry { id } => {
-                let text = self.history_entry(&id)?.output.clone();
+                let record = self.history_entry(&id)?;
+                let text = &record.value.output;
                 copy_text(text.clone()).await?;
+                self.credit_delivery(record.usage.as_ref(), record.value.fallback_used);
                 if let Some(current) = lock(&self.result)?.as_mut() {
-                    if current.result.operation_id == id && current.result.output == text {
+                    if current.result.operation_id == id && &current.result.output == text {
                         current.copied = true;
                     }
                 }
@@ -951,16 +956,7 @@ impl Runtime {
         let cancellation = CancellationToken::new();
         let active = ActiveOperation {
             id: id.clone(),
-            target: TargetSnapshot {
-                window_handle: 0,
-                process_id: 0,
-                process_created_at: 0,
-                executable_name: String::new(),
-                focused_runtime_id: Vec::new(),
-                is_password: false,
-                integrity_level: 0,
-                focused_control: Default::default(),
-            },
+            target: None,
             mode: OperationMode::Transform,
             selection: None,
             context: String::new(),
@@ -968,6 +964,7 @@ impl Runtime {
             cancellation,
             // Home shows a tried rewrite as the last result, so History keeps it too.
             history: true,
+            usage: None,
         };
         self.set_active(active.clone())?;
         let original = OperationResult {
@@ -990,6 +987,7 @@ impl Runtime {
                 ));
             }
             *lock(&self.result)? = Some(SavedResult {
+                usage: None,
                 copied: false,
                 failed: false,
                 retry: None,
@@ -1045,6 +1043,7 @@ impl Runtime {
                     .as_ref()
                     .and_then(|saved| saved.retry.clone());
                 *lock(&self.result)? = Some(SavedResult {
+                    usage: None,
                     copied: false,
                     failed: false,
                     retry,
@@ -1059,7 +1058,7 @@ impl Runtime {
                 self.domain(AppEvent::ResultReady(result.clone()));
                 route
             };
-            self.record_history(&active, &result, route);
+            self.record_history(&active, &result, route, HistoryStage::CompletedPreview);
             self.emit_state();
             Ok(result)
         }
@@ -1084,16 +1083,7 @@ impl Runtime {
         })?;
         let settings = lock(&self.store)?.settings()?;
         let id = self.begin_operation(OperationMode::Transform)?;
-        let target = saved.target.clone().unwrap_or(TargetSnapshot {
-            window_handle: 0,
-            process_id: 0,
-            process_created_at: 0,
-            executable_name: String::new(),
-            focused_runtime_id: Vec::new(),
-            is_password: false,
-            integrity_level: 0,
-            focused_control: Default::default(),
-        });
+        let target = saved.target.clone();
         let active = ActiveOperation {
             id: id.clone(),
             target,
@@ -1104,6 +1094,7 @@ impl Runtime {
             cancellation: CancellationToken::new(),
             // A retry asks ChatGPT again, so its new text is kept like the first attempt's.
             history: true,
+            usage: saved.usage.clone(),
         };
         self.set_active(active.clone())?;
         self.save_result(
@@ -1143,15 +1134,8 @@ impl Runtime {
                 tokio::time::sleep(remaining).await;
                 self.transition(&id, Phase::Inserting)?;
                 self.insert(&active, &output, false).await?;
-            } else {
-                let state = lock(&self.state)?;
-                if state.matches(&id) {
-                    if let Some(saved) = lock(&self.result)?.as_mut() {
-                        saved.target = None;
-                    }
-                }
             }
-            let completed = {
+            let (completed, route) = {
                 let mut state = lock(&self.state)?;
                 if !state.matches(&id) {
                     return Err(AppError::new(
@@ -1166,8 +1150,11 @@ impl Runtime {
                     .map(|saved| saved.result.clone())
                     .ok_or_else(|| AppError::invalid("Transformation result expired."))?;
                 state.transition(&id, Phase::Completed)?;
-                result
+                (result, state.snapshot().route)
             };
+            if active.target.is_none() {
+                self.record_history(&active, &completed, route, HistoryStage::CompletedPreview);
+            }
             self.emit_state();
             Ok(completed)
         }
@@ -1225,7 +1212,7 @@ impl Runtime {
             let id = self.begin_operation(OperationMode::Dictation)?;
             let active = ActiveOperation {
                 id: id.clone(),
-                target,
+                target: Some(target),
                 mode: OperationMode::Dictation,
                 selection: None,
                 context: String::new(),
@@ -1233,6 +1220,7 @@ impl Runtime {
                 cancellation: CancellationToken::new(),
                 // A real dictation through the full pipeline, in the isolated smoke profile only.
                 history: true,
+                usage: None,
             };
             self.set_active(active.clone())?;
             self.transition(&id, Phase::FinalizingAudio)?;
