@@ -75,11 +75,15 @@ pub(crate) fn protected_ranges(source: &str) -> Vec<Range<usize>> {
 const OPENING_CHARACTERS: &str = "([{<“‘«„¿¡（［｛〈《「『【〔〖〘〚";
 /// Characters a dictation can start with that attach to the previous word.
 const ATTACHING_CHARACTERS: &str = ".,;:!?)]}>”’»%…。．、，；：！？）］｝〉》」』】〕〗〙〛％،؛؟۔";
+/// Full-width East Asian punctuation carries its own spacing: the next dictation follows it
+/// directly, as it does between two CJK characters.
+const FULL_WIDTH_CLOSING_CHARACTERS: &str = "。．、，；：！？）］｝〉》」』】〕〗〙〛";
 
 /// Text typed at the caret, with a separating space when it would otherwise run into the
 /// earlier text: after a sentence's final period, a word or a closing quote, but not after
-/// whitespace, an opening bracket or quote, or between CJK characters. `before` holds the
-/// characters just before the caret (oldest first); empty means the start of the field.
+/// whitespace, an opening bracket or quote, full-width punctuation, or between CJK characters.
+/// `before` holds the characters just before the caret (oldest first); empty means the start
+/// of the field.
 pub fn space_after_previous_text(before: &str, text: &str) -> String {
     let mut previous = before.chars().rev();
     let (Some(last), Some(first)) = (previous.next(), text.chars().next()) else {
@@ -89,6 +93,7 @@ pub fn space_after_previous_text(before: &str, text: &str) -> String {
         matches!(last, '"' | '\'') && previous.next().is_none_or(char::is_whitespace);
     let joins = last.is_whitespace()
         || OPENING_CHARACTERS.contains(last)
+        || FULL_WIDTH_CLOSING_CHARACTERS.contains(last)
         || straight_quote_opens
         || first.is_whitespace()
         || ATTACHING_CHARACTERS.contains(first)
@@ -423,6 +428,10 @@ mod tests {
             ("語", "，接著", "，接著"),
             ("「", "言葉", "言葉"),
             ("語", "」", "」"),
+            ("す。", "明日", "明日"),
+            ("了，", "然後", "然後"),
+            ("た」", "と言った", "と言った"),
+            ("好！", "Next", "Next"),
         ] {
             assert_eq!(
                 space_after_previous_text(before, text),

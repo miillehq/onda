@@ -61,7 +61,8 @@ case "$(uname -s)" in
     hdiutil detach "$mount" >/dev/null
     mounted=
     swiftc -parse-as-library "$repository/scripts/installer-launch-macos.swift" -o "$work/launch-check"
-    "$work/launch-check" "$installed"
+    mkdir "$work/home"
+    "$work/launch-check" "$installed" "$work/home"
     rm -rf -- "$installed"
     [[ ! -e "$installed" ]] || fail "the copied application survived removal"
     ;;
