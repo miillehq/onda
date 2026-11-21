@@ -199,9 +199,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Dependency policy failed' }
           npm audit --omit=dev --audit-level=high
           if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency advisory failed' }
-          # Test tooling never ships, so its advisories are reported, not gated (PLAN.md, slice 3).
           npm audit --audit-level=high
-          if ($LASTEXITCODE -ne 0) { '::warning::High advisories in test-only dependencies (PLAN.md slice 3)'; $global:LASTEXITCODE = 0 }
+          if ($LASTEXITCODE -ne 0) { throw 'Development dependency advisory failed' }
       - name: Build requested bundle without publishing
         env:
           BUILD_VULKAN: ${{ inputs.with_vulkan }}

@@ -53,11 +53,7 @@ Rulings:
 - Slice 3: Ruling: the first L6 journey uses settings and the dictionary, not dictation — hosted
   runners have no microphone or foreground rights — cost if wrong: dictation's real-shell path
   waits for the debug WAV replay fixture to be wired into L6.
-- Slice 3: Ruling: `npm audit` gates shipped dependencies only (`--omit=dev`) and reports the
-  rest — WebdriverIO 9, which `@wdio/tauri-service` 1.5.1 requires, carries high advisories in
-  test tooling (`basic-ftp`, `extract-zip`, `serialize-javascript`) that never ships and is never
-  fed FTP proxies, untrusted archives or serialized input — cost if wrong: a compromised test
-  tool on a CI runner with a read-only token.
+- Slice 3 originally gated shipped npm dependencies and reported development advisories. The November sweep keeps the Tauri service’s WebdriverIO 9 peer, pins the compatible browser-driver, glob and serialization packages and gates high advisories in both dependency sets. The release renderer excludes the test runner.
 - Slice 3: Ruling: the WebdriverIO plugins and their capability exist only in `--features e2e`
   debug builds, through a config overlay, and a release build with the feature fails to compile
   — the shipped app keeps its two-command IPC surface — cost if wrong: none for users; tests
