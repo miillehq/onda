@@ -15,13 +15,13 @@
     "ui": "npm run test:ui",
     "e2e": "npm run test:e2e",
     "build": "npm run build:e2e",
-    "package": "npm run release",
-    "installers": "scripts/installer-test.sh"
+    "package": "npm run package:desktop",
+    "installers": "npm run test:installers"
   },
   "paths": {
     "ui": "ui/",
     "native": "src-tauri/",
-    "contracts": "ui/src/generated/",
+    "contracts": "contracts/",
     "e2e": "tests/e2e/"
   }
 }
