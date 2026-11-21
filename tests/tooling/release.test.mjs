@@ -6,7 +6,7 @@ import { expectedBundles, verifyNames } from "../../scripts/release-files.mjs";
 
 const platforms = { tier1: ["windows-x64"], tier2: ["macos-arm64"] };
 const job = (name, step) => ({ name, conclusion: "success", steps: [{ name: step, conclusion: "success" }] });
-const report = (jobs) => ({ headSha: "fixture-sha", status: "completed", conclusion: "success", databaseId: 12, jobs });
+const report = (jobs) => ({ attempt: 1, headSha: "fixture-sha", status: "completed", conclusion: "success", databaseId: 12, jobs });
 
 test("splitting Intel verification still requires its real workers, account lifecycle and default app tests", () => {
   const intel = { tier1: [], tier2: ["macos-x64"] };
@@ -30,6 +30,9 @@ test("a release needs successful shell and installer steps on the tagged revisio
   const ci = report([job("tier1 windows-x64", "L6 real-shell journeys"), job("tier2 macos-arm64", "Real-shell journeys (L6)")]);
   assert.equal(requireReleaseEvidence("ci", "fixture-sha", ci, platforms), 12);
   assert.throws(() => requireReleaseEvidence("ci", "other-sha", ci, platforms), /other-sha/);
+  for (const attempt of [undefined, 2]) {
+    assert.throws(() => requireReleaseEvidence("ci", "fixture-sha", { ...ci, attempt }, platforms), /first attempt/);
+  }
   ci.jobs[1].steps[0].conclusion = "skipped";
   assert.throws(() => requireReleaseEvidence("ci", "fixture-sha", ci, platforms), /tier2 macos-arm64/);
   const installers = report([job("installers windows-x64", "Install, probe the workers, launch, observe and uninstall (L7)")]);
