@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const installerSteps = {
   windows: "Install, probe the workers, launch, observe and uninstall (L7)",
@@ -9,6 +10,7 @@ const installerSteps = {
 /** Check the named native step as well as its job, including advisory jobs and fresh attempts. */
 export function requireReleaseEvidence(kind, sha, run, platforms) {
   if (kind !== "ci" && kind !== "installers") throw new Error("Unknown release evidence type.");
+  if (run.attempt !== 1) throw new Error(`Release evidence must come from a complete first attempt of the ${kind} workflow.`);
   if (run.headSha !== sha || run.status !== "completed" || run.conclusion !== "success") {
     throw new Error(`Expected a completed, successful ${kind} run for ${sha}.`);
   }
@@ -26,7 +28,7 @@ export function requireReleaseEvidence(kind, sha, run, platforms) {
   return run.databaseId;
 }
 
-if (import.meta.main) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [kind, sha] = process.argv.slice(2);
   const manifest = JSON.parse(readFileSync(new URL("../keel.json", import.meta.url), "utf8"));
   console.log(requireReleaseEvidence(kind, sha, JSON.parse(readFileSync(0, "utf8")), manifest.platforms));

@@ -23,6 +23,32 @@ fn opening_a_newer_profile_preserves_its_bytes_and_journal_mode() {
 }
 
 #[test]
+fn refusing_a_newer_wal_profile_preserves_uncheckpointed_pages() {
+    use rusqlite::config::DbConfig;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("future.db");
+    let wal = directory.path().join("future.db-wal");
+    let writer = Connection::open(&path).unwrap();
+    writer
+        .set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true)
+        .unwrap();
+    writer
+        .execute_batch(
+            "PRAGMA journal_mode=WAL; CREATE TABLE future(value); PRAGMA user_version=999;",
+        )
+        .unwrap();
+    drop(writer);
+    let original = fs::read(&path).unwrap();
+    let pending = fs::read(&wal).unwrap();
+    assert!(Store::open(&path).is_err());
+    assert!(
+        fs::read(&path).unwrap() == original,
+        "refusal checkpointed a newer database"
+    );
+    assert!(fs::read(wal).unwrap() == pending);
+}
+
+#[test]
 fn a_failed_history_clear_rolls_back_the_retention_preference() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("profile.db");

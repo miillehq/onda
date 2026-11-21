@@ -18,7 +18,14 @@ pub(super) async fn update_settings(
         ));
     }
     service.recognition.selected_model(&settings)?;
-    let config = shortcut_config(&settings, &lock(&service.data.store)?.transforms()?)?;
+    let transforms = lock(&service.data.store)?.transforms()?;
+    if !transforms
+        .iter()
+        .any(|item| item.id == settings.default_transform_id)
+    {
+        return Err(AppError::invalid("Choose an existing default rewrite."));
+    }
+    let config = shortcut_config(&settings, &transforms)?;
     service.operations.cancel(service).await?;
     let current = lock(&service.data.store)?.settings()?;
     if current.launch_at_login != settings.launch_at_login {

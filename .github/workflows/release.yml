@@ -65,7 +65,7 @@ jobs:
           for workflow in ci installers; do
             run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow.yml" --branch master --commit "$GITHUB_SHA" --limit 1 --json databaseId -q '.[0].databaseId')
             [ -n "$run" ] || { echo "::error::no $workflow evidence for $GITHUB_SHA"; exit 1; }
-            gh run view "$run" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha,databaseId,jobs |
+            gh run view "$run" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha,databaseId,attempt,jobs |
               node scripts/release-evidence.mjs "$workflow" "$GITHUB_SHA"
             echo "$workflow=$run" >> "$GITHUB_OUTPUT"
           done

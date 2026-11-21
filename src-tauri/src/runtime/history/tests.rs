@@ -57,7 +57,6 @@ fn unavailable_protection_preserves_unexpired_history_bytes() {
     let sealed = b"synthetic encrypted record";
     store.save_history(&entry.id, now, sealed).unwrap();
     assert!(History::load(&mut store, 3, now, |_| None)
-        .unwrap()
         .entries
         .is_empty());
     assert_eq!(
@@ -65,7 +64,7 @@ fn unavailable_protection_preserves_unexpired_history_bytes() {
         vec![(entry.id.clone(), now, sealed.to_vec())],
         "a temporary unlock failure removed stored history"
     );
-    let opened = History::load(&mut store, 3, now, |_| serde_json::to_vec(&entry).ok()).unwrap();
+    let opened = History::load(&mut store, 3, now, |_| serde_json::to_vec(&entry).ok());
     assert_eq!(opened.entry(&entry.id).unwrap().output, entry.output);
 }
 
@@ -73,9 +72,9 @@ fn unavailable_protection_preserves_unexpired_history_bytes() {
 fn late_writes_cannot_restore_deleted_replaced_or_session_only_history() {
     let mut store = Store::in_memory().unwrap();
     let now = now_ms();
-    let mut history = History::load(&mut store, 3, now, |_| None).unwrap();
-    let old = history.put(fixture(now), now);
-    let current = history.put(fixture(now), now);
+    let mut history = History::load(&mut store, 3, now, |_| None);
+    let old = history.put(fixture(now), None, now);
+    let current = history.put(fixture(now), None, now);
     history
         .save_if_current(&mut store, &current, b"current", now)
         .unwrap();
@@ -88,13 +87,13 @@ fn late_writes_cannot_restore_deleted_replaced_or_session_only_history() {
         .save_if_current(&mut store, &current, b"deleted", now)
         .unwrap();
     assert!(store.history_since(0).unwrap().is_empty());
-    let current = history.put(fixture(now), now);
+    let current = history.put(fixture(now), None, now);
     history.delete(&mut store, None).unwrap();
     history
         .save_if_current(&mut store, &current, b"cleared", now)
         .unwrap();
     assert!(store.history_since(0).unwrap().is_empty());
-    let current = history.put(fixture(now), now);
+    let current = history.put(fixture(now), None, now);
     history.days = 0;
     history
         .save_if_current(&mut store, &current, b"session only", now)
@@ -106,8 +105,8 @@ fn late_writes_cannot_restore_deleted_replaced_or_session_only_history() {
 fn reading_history_after_an_idle_period_expires_memory_and_disk_together() {
     let mut store = Store::in_memory().unwrap();
     let now = now_ms();
-    let mut history = History::load(&mut store, 1, now, |_| None).unwrap();
-    let current = history.put(fixture(now), now);
+    let mut history = History::load(&mut store, 1, now, |_| None);
+    let current = history.put(fixture(now), None, now);
     history
         .save_if_current(&mut store, &current, b"retained", now)
         .unwrap();
@@ -116,4 +115,52 @@ fn reading_history_after_an_idle_period_expires_memory_and_disk_together() {
     history.expire(&mut store, now + DAY_MS + 1).unwrap();
     assert!(history.entry(&current.id).is_none());
     assert!(store.history_since(0).unwrap().is_empty());
+}
+
+#[test]
+fn a_history_read_failure_leaves_dictation_available_and_durable_rows_intact() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("profile.db");
+    let mut store = Store::open(&path).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let now = now_ms();
+    db.execute(
+        "INSERT INTO history (id,created_at,payload) VALUES ('legacy',?1,'invalid storage type')",
+        [now],
+    )
+    .unwrap();
+    let mut history = History::load(&mut store, 3, now, |_| None);
+    let entry = history.put(fixture(now), None, now);
+    assert_eq!(history.entry(&entry.id).unwrap().output, "Test entry");
+    history
+        .save_if_current(&mut store, &entry, b"sealed", now)
+        .unwrap();
+    assert_eq!(
+        db.query_row("SELECT count(*) FROM history", [], |row| row
+            .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    assert!(history.notify_on_read);
+}
+
+#[test]
+fn history_keeps_the_original_delivery_credit_across_later_results() {
+    let mut store = Store::in_memory().unwrap();
+    let now = now_ms();
+    let mut history = History::load(&mut store, 3, now, |_| None);
+    let receipt =
+        DictationReceipt::for_transcript(&OperationMode::Dictation, true, "test", 1000, 10);
+    history.put(fixture(now), receipt, now);
+    let later = HistoryEntry {
+        id: "later".into(),
+        ..fixture(now)
+    };
+    history.put(later, None, now);
+    assert!(
+        history.record("synthetic").unwrap().usage.is_some(),
+        "history lost the pending delivery credit"
+    );
+    history.delete(&mut store, Some("synthetic")).unwrap();
+    assert!(history.record("synthetic").is_none());
 }

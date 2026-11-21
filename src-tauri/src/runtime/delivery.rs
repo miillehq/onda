@@ -74,7 +74,7 @@ impl TargetDelivery {
             let target = active.insertion_target()?.clone();
             let typeable = tokio::task::spawn_blocking(move || targets.can_type(&target))
                 .await
-                .unwrap_or(false);
+                .map_err(|_| AppError::new(ErrorCode::Internal, "Target check stopped.", true))?;
             if !typeable {
                 return self
                     .hand_off_to_clipboard(host, active, output, fallback)
@@ -134,15 +134,17 @@ impl TargetDelivery {
         output: &str,
         fallback: bool,
     ) -> AppResult<()> {
-        if active.selection.is_some() {
-            return Err(errors::platform(
-                onda_platform::PlatformError::UnsupportedPlatform,
-            ));
-        }
+        let targets = self.target_service;
+        let target = active.insertion_target()?.clone();
+        let replacing_selection = active.selection.is_some();
         let text = output.to_owned();
         let started = Instant::now();
         let cancellation = active.cancellation.clone();
         let copied = tokio::task::spawn_blocking(move || {
+            targets.check_clipboard_handoff(&target)?;
+            if replacing_selection {
+                return Err(onda_platform::PlatformError::SelectionUnavailable);
+            }
             copy_while_active(&cancellation, || {
                 onda_platform::copy_text_to_clipboard(&text)
             })
@@ -187,14 +189,14 @@ async fn deliver_to_target(
     let observe_document = selection.is_some() || active.settings.learning_enabled;
     let shortcut = paste_shortcut(&active.settings, &target.executable_name);
     let cancellation = active.cancellation.clone();
-    let native = tokio::task::spawn_blocking(move || {
-        if cancellation.is_cancelled() {
-            return Err((
-                AppError::new(ErrorCode::Cancelled, "Operation cancelled.", false),
-                false,
-            ));
-        }
-        let typed = (|| {
+    let native =
+        tokio::task::spawn_blocking(move || {
+            if cancellation.is_cancelled() {
+                return Err((
+                    AppError::new(ErrorCode::Cancelled, "Operation cancelled.", false),
+                    false,
+                ));
+            }
             let outcome = if let Some(original) = &selection {
                 targets.replace_selection_guarded(&target, original, &text, shortcut, || {
                     cancellation.is_cancelled()
@@ -208,26 +210,30 @@ async fn deliver_to_target(
                 let spaced = onda_core::text::space_after_previous_text(&before, &text);
                 targets.paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
             }
-            .map_err(errors::platform)?;
+            .map_err(errors::platform)
+            .map_err(|error| {
+                if selection.is_some() {
+                    (error, false)
+                } else {
+                    copy_untyped(error, &text, &cancellation)
+                }
+            })?;
             if !outcome.input_injected || !outcome.clipboard_read_observed {
-                return Err(AppError::new(
+                return Err((AppError::new(
                     ErrorCode::Insertion,
-                    "The target did not acknowledge the paste. Copy your result or retry.",
+                    "Onda could not confirm the paste. Check the field before copying or retrying.",
                     true,
-                ));
+                ), false));
             }
-            Ok(())
-        })();
-        typed.map_err(|error| copy_untyped(error, &text, &cancellation))?;
-        let document = if observe_document {
-            targets.field_text(&target, LEARNING_CHARACTERS).ok()
-        } else {
-            None
-        };
-        Ok(document)
-    })
-    .await
-    .map_err(|_| AppError::new(ErrorCode::Internal, "Insertion worker stopped.", true))?;
+            let document = if observe_document {
+                targets.field_text(&target, LEARNING_CHARACTERS).ok()
+            } else {
+                None
+            };
+            Ok(document)
+        })
+        .await
+        .map_err(|_| AppError::new(ErrorCode::Internal, "Insertion worker stopped.", true))?;
     Ok(native)
 }
 
