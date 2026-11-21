@@ -73,9 +73,36 @@ impl PreviousText {
     }
 }
 
+/// A rich clipboard stays with its owner while the original field handles an in-place edit.
+pub(super) fn edit_without_clipboard<T>(
+    cancelled: &dyn Fn() -> bool,
+    edit: impl FnOnce() -> Result<T, PlatformError>,
+) -> Result<T, PlatformError> {
+    if cancelled() {
+        return Err(PlatformError::Cancelled);
+    }
+    edit().map_err(|error| match error {
+        PlatformError::Cancelled | PlatformError::SecureField => error,
+        // Other delivery errors normally trigger an automatic clipboard copy.
+        _ => PlatformError::ClipboardNotPreservable,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_rich_clipboard_allows_an_in_place_edit_but_never_a_late_edit_or_overwrite() {
+        assert_eq!(edit_without_clipboard(&|| false, || Ok(7)).unwrap(), 7);
+        assert!(matches!(
+            edit_without_clipboard::<()>(&|| true, || panic!("late edit")),
+            Err(PlatformError::Cancelled)
+        ));
+        assert!(matches!(
+            edit_without_clipboard::<()>(&|| false, || Err(PlatformError::SelectionNeedsPaste)),
+            Err(PlatformError::ClipboardNotPreservable)
+        ));
+    }
 
     #[test]
     fn rich_unreadable_and_multi_item_clipboards_are_left_to_their_owner() {
