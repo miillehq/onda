@@ -128,6 +128,7 @@ with an identical tree.
 | 2026-11-19 | L0 | Every target-conditioned Rust module and the renderer fit the documented source limits. A planted orphan Rust module and unused TypeScript file were detected. | windows-x64, local | `npm run lint` and `npm run test:tooling`. The initial structural read counted 3,566 lines for Runtime. The extracted root measures 371. |
 
 | 2026-11-19 | L0 | Qualified implementations attach to the correct same-named Rust type. A test-only method does not increase its production member count, and a module accessible only from tests is reported. Normal and production Knip checks cover the renderer exports independently. | windows-x64, local | The original checker reported zero members for both homonyms and accepted a test-only module. The corrected checker and both Knip modes pass across 181 production files. Dedicated ownership, configuration and Cargo-root fixtures cover the regressions in `tests/tooling/source-quality.test.mjs`. |
+| 2026-11-19 | L4, L6 | Appearance and tray samples fill each card at compact desktop widths. Native screenshots wait for fonts and finite animations and return the content to its top. | windows-x64, local; prior six-platform screenshot review | The [six-platform run](https://github.com/miillehq/onda/actions/runs/44604289499) showed narrow samples on Intel macOS and Windows x64. A simulated 20 px sample failed the new geometry assertion. Chromium, WebKit and the real Windows WebView2 suite passed with explicit card widths. |
 
 ## Unverified
 
