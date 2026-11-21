@@ -2,17 +2,23 @@
 use crate::PlatformError;
 
 pub(super) struct InsertSize {
-    pub bytes: i32,
-    pub characters: i32,
+    pub insertion_length: i32,
+    pub offset_length: i32,
 }
 
 impl InsertSize {
-    /// AT-SPI takes the insertion length in UTF-8 bytes and the caret offset in characters.
-    pub(super) fn measure(text: &str) -> Result<Self, PlatformError> {
+    /// Qt resizes a QString and indexes UTF-16. Other AT-SPI adaptors take UTF-8 bytes and character offsets.
+    pub(super) fn measure(text: &str, toolkit: &str) -> Result<Self, PlatformError> {
         let bytes = i32::try_from(text.len()).map_err(|_| PlatformError::TextLimit)?;
+        let (insertion_length, offset_length) = if toolkit.eq_ignore_ascii_case("qt") {
+            let units = text.encode_utf16().count() as i32;
+            (units, units)
+        } else {
+            (bytes, text.chars().count() as i32)
+        };
         Ok(Self {
-            bytes,
-            characters: text.chars().count() as i32,
+            insertion_length,
+            offset_length,
         })
     }
 }
@@ -54,9 +60,15 @@ mod tests {
     use super::*;
     #[test]
     fn unicode_insert_length_and_caret_use_their_native_units() {
-        let size = InsertSize::measure("é🙂").unwrap();
-        assert_eq!(size.bytes, 6);
-        assert_eq!(size.characters, 2);
+        let size = InsertSize::measure("é🙂", "gtk").unwrap();
+        assert_eq!(size.insertion_length, 6);
+        assert_eq!(size.offset_length, 2);
+        let qt = InsertSize::measure("é🙂", "Qt").unwrap();
+        assert_eq!(
+            (qt.insertion_length, qt.offset_length),
+            (3, 3),
+            "Qt uses UTF-16 for both arguments"
+        );
     }
     #[test]
     fn direct_edits_never_delete_an_existing_selection() {

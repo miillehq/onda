@@ -11,11 +11,19 @@ pub(super) enum HistoryStage {
     CompletedPreview,
 }
 
+/// Usage credits live exactly as long as the in-memory entry and are shared with paste retries.
+#[derive(Clone)]
+pub(super) struct RetainedEntry {
+    pub(super) value: Arc<HistoryEntry>,
+    pub(super) usage: Option<DictationReceipt>,
+}
+
 pub(super) struct History {
     pub(super) days: u32,
-    entries: VecDeque<Arc<HistoryEntry>>,
+    entries: VecDeque<RetainedEntry>,
     unreadable: HashMap<String, i64>,
     notify_on_read: bool,
+    storage_unavailable: bool,
 }
 
 impl History {
@@ -25,25 +33,40 @@ impl History {
         days: u32,
         now: i64,
         unseal: impl Fn(&[u8]) -> Option<Vec<u8>>,
-    ) -> AppResult<Self> {
+    ) -> Self {
         let mut history = Self {
             days,
             entries: VecDeque::new(),
             unreadable: HashMap::new(),
             notify_on_read: false,
+            storage_unavailable: false,
         };
-        if days == 0 {
-            store.clear_history()?;
-            return Ok(history);
-        }
         let cutoff = history.cutoff(now);
-        store.prune_history(cutoff)?;
-        for (id, timestamp, bytes) in store.history_since(cutoff)? {
+        let records = if days == 0 {
+            store.clear_history().map(|()| Vec::new())
+        } else {
+            store
+                .prune_history(cutoff)
+                .and_then(|()| store.history_since(cutoff))
+        };
+        let Ok(records) = records else {
+            tracing::warn!(
+                subsystem = "history",
+                "saved history unavailable; using session history"
+            );
+            history.storage_unavailable = true;
+            history.notify_on_read = true;
+            return history;
+        };
+        for (id, timestamp, bytes) in records {
             let entry = unseal(&bytes)
                 .and_then(|plain| serde_json::from_slice::<HistoryEntry>(&plain).ok())
                 .filter(|entry| entry.id == id && entry.created_at == timestamp as f64);
             if let Some(entry) = entry {
-                history.entries.push_back(Arc::new(entry));
+                history.entries.push_back(RetainedEntry {
+                    value: Arc::new(entry),
+                    usage: None,
+                });
             } else {
                 // A locked keyring and a damaged entry both fail to open. Only an explicit
                 // deletion or the retention policy may discard these encrypted bytes.
@@ -58,7 +81,7 @@ impl History {
                 "history entries could not be opened"
             );
         }
-        Ok(history)
+        history
     }
 
     fn cutoff(&self, now: i64) -> i64 {
@@ -68,21 +91,34 @@ impl History {
     fn retain_recent(&mut self, now: i64) {
         if self.days != 0 {
             let cutoff = self.cutoff(now) as f64;
-            self.entries.retain(|entry| entry.created_at >= cutoff);
+            self.entries
+                .retain(|entry| entry.value.created_at >= cutoff);
             self.unreadable
                 .retain(|_, timestamp| *timestamp as f64 >= cutoff);
         }
         self.entries.truncate(MAX_HISTORY_ENTRIES);
     }
 
-    fn entry(&self, id: &str) -> Option<&Arc<HistoryEntry>> {
-        self.entries.iter().find(|entry| entry.id == id)
+    fn record(&self, id: &str) -> Option<&RetainedEntry> {
+        self.entries.iter().find(|entry| entry.value.id == id)
     }
 
-    fn put(&mut self, entry: HistoryEntry, now: i64) -> Arc<HistoryEntry> {
+    fn entry(&self, id: &str) -> Option<&Arc<HistoryEntry>> {
+        self.record(id).map(|entry| &entry.value)
+    }
+
+    fn put(
+        &mut self,
+        entry: HistoryEntry,
+        usage: Option<DictationReceipt>,
+        now: i64,
+    ) -> Arc<HistoryEntry> {
         let entry = Arc::new(entry);
-        self.entries.retain(|prior| prior.id != entry.id);
-        self.entries.push_front(Arc::clone(&entry));
+        self.entries.retain(|prior| prior.value.id != entry.id);
+        self.entries.push_front(RetainedEntry {
+            value: Arc::clone(&entry),
+            usage,
+        });
         self.retain_recent(now);
         entry
     }
@@ -93,7 +129,7 @@ impl History {
             || (self
                 .entries
                 .iter()
-                .all(|entry| entry.created_at >= cutoff as f64)
+                .all(|entry| entry.value.created_at >= cutoff as f64)
                 && self
                     .unreadable
                     .values()
@@ -101,7 +137,9 @@ impl History {
         {
             return Ok(false);
         }
-        store.prune_history(cutoff)?;
+        if !self.storage_unavailable {
+            store.prune_history(cutoff)?;
+        }
         self.retain_recent(now);
         Ok(true)
     }
@@ -115,7 +153,8 @@ impl History {
         sealed: &[u8],
         now: i64,
     ) -> AppResult<()> {
-        if self.days == 0
+        if self.storage_unavailable
+            || self.days == 0
             || entry.created_at < self.cutoff(now) as f64
             || !self
                 .entry(&entry.id)
@@ -130,12 +169,14 @@ impl History {
     fn delete(&mut self, store: &mut Store, id: Option<&str>) -> AppResult<()> {
         if let Some(id) = id {
             store.delete_history(id)?;
-            self.entries.retain(|entry| entry.id != id);
+            self.entries.retain(|entry| entry.value.id != id);
             self.unreadable.remove(id);
         } else {
             store.clear_history()?;
             self.entries.clear();
             self.unreadable.clear();
+            self.storage_unavailable = false;
+            self.notify_on_read = false;
         }
         Ok(())
     }
@@ -205,12 +246,13 @@ impl Runtime {
                         .filter(|name| !name.is_empty()),
                     suggestion: result.suggestion.clone(),
                 },
+                active.usage.clone(),
                 now,
             );
             self.event(RuntimeEvent::HistoryUpdated {
                 entry: entry.as_ref().clone(),
             });
-            (entry, history.days != 0)
+            (entry, history.days != 0 && !history.storage_unavailable)
         };
         if persist {
             self.persist_history(&entry);
@@ -222,14 +264,22 @@ impl Runtime {
             let Ok(mut history) = lock(&self.history) else {
                 return;
             };
-            let Some(entry) = history.entries.iter_mut().find(|entry| entry.id == id) else {
+            let Some(entry) = history
+                .entries
+                .iter_mut()
+                .find(|entry| entry.value.id == id)
+                .map(|record| &mut record.value)
+            else {
                 return;
             };
             change(Arc::make_mut(entry));
             self.event(RuntimeEvent::HistoryUpdated {
                 entry: entry.as_ref().clone(),
             });
-            (Arc::clone(entry), history.days != 0)
+            (
+                Arc::clone(entry),
+                history.days != 0 && !history.storage_unavailable,
+            )
         };
         if persist {
             self.persist_history(&entry);
@@ -274,6 +324,7 @@ impl Runtime {
             history.days = settings.history_days;
             if history.days == 0 {
                 history.unreadable.clear();
+                history.storage_unavailable = false;
                 history.notify_on_read = false;
             }
             history.retain_recent(now_ms());
@@ -284,7 +335,7 @@ impl Runtime {
             }
         };
         for entry in to_persist.iter().rev() {
-            self.persist_history(entry);
+            self.persist_history(&entry.value);
         }
         self.event(RuntimeEvent::HistoryReset);
         Ok(())
@@ -298,20 +349,28 @@ impl Runtime {
 
     pub(super) fn history_entries(&self) -> AppResult<Vec<HistoryEntry>> {
         let mut history = self.visible_history()?;
-        if std::mem::take(&mut history.notify_on_read) && !history.unreadable.is_empty() {
-            self.domain(AppEvent::Error(AppError::new(ErrorCode::Storage,
-                "Some saved history could not be opened. Its encrypted records are retained. If your system key store was locked, unlock it and reopen Onda.", true)));
+        if std::mem::take(&mut history.notify_on_read) {
+            let message = if history.storage_unavailable {
+                "Saved history could not be opened. New entries are kept for this session. Reopen Onda to try again."
+            } else {
+                "Some saved history could not be opened. Its encrypted records are retained. If your system key store was locked, unlock it and reopen Onda."
+            };
+            self.domain(AppEvent::Error(AppError::new(
+                ErrorCode::Storage,
+                message,
+                true,
+            )));
         }
         Ok(history
             .entries
             .iter()
-            .map(|entry| entry.as_ref().clone())
+            .map(|entry| entry.value.as_ref().clone())
             .collect())
     }
 
-    pub(super) fn history_entry(&self, id: &str) -> AppResult<Arc<HistoryEntry>> {
+    pub(super) fn history_entry(&self, id: &str) -> AppResult<RetainedEntry> {
         self.visible_history()?
-            .entry(id)
+            .record(id)
             .cloned()
             .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))
     }
