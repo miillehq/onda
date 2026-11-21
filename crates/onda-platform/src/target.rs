@@ -104,6 +104,10 @@ impl WindowsTargetService {
             false
         }
     }
+    /// Validate the destination again inside a queued manual clipboard handoff.
+    pub fn check_clipboard_handoff(&self, target: &TargetSnapshot) -> Result<(), PlatformError> {
+        validate_handoff(target, &self.snapshot()?)
+    }
     /// Selected text requires a single UIA TextPattern range and refuses password controls.
     pub fn selected_text(
         &self,
@@ -443,6 +447,29 @@ mod tests {
             ));
         }
     }
+    #[test]
+    fn a_manual_handoff_still_checks_password_fields_and_changed_focus() {
+        let start = target();
+        let unknown = TargetSnapshot::unidentified();
+        let mut secure = start.clone();
+        secure.is_password = true;
+        assert!(matches!(
+            validate_handoff(&unknown, &secure),
+            Err(PlatformError::SecureField)
+        ));
+        assert!(matches!(
+            validate_handoff(&secure, &unknown),
+            Err(PlatformError::SecureField)
+        ));
+        let mut moved = start.clone();
+        moved.process_id += 1;
+        assert!(matches!(
+            validate_handoff(&start, &moved),
+            Err(PlatformError::TargetChanged)
+        ));
+        assert!(validate_handoff(&unknown, &unknown).is_ok());
+    }
+
     #[test]
     fn secure_or_unknown_control_is_rejected() {
         let expected = target();

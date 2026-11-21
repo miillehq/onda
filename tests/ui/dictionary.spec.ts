@@ -23,6 +23,27 @@ test("Escape closes the editor without saving", async ({ page }) => {
   await expect(words(page)).not.toContainText("Discarded");
 });
 
+test("Enter in a replacement saves it, and Shift+Enter adds a line", async ({ page }) => {
+  await page.getByRole("radio", { name: /Replacements/ }).click();
+  await page.locator(".page-actions").getByRole("button", { name: "Add replacement" }).click();
+  await page.getByLabel("When you say").fill("review address");
+  const write = page.getByLabel("Write", { exact: true });
+  await write.fill("First line");
+  await write.press("Shift+Enter");
+  await write.pressSequentially("Second line");
+  await write.press("Enter");
+  await expect(page.locator("form.entry-editor")).toHaveCount(0);
+  const saved = page.getByRole("list", { name: "Replacements" }).getByRole("listitem").filter({ hasText: "review address" });
+  await expect(saved.locator(".entry-phrase")).toHaveJSProperty("textContent", "First line\nSecond line");
+});
+
+test("a typed word is saved without the spaces around it", async ({ page }) => {
+  await page.locator(".page-actions").getByRole("button", { name: "Add word" }).click();
+  await page.getByPlaceholder("Kubernetes").fill("  Keelhaul  ");
+  await page.locator("form.entry-editor").getByRole("button", { name: "Add word" }).click();
+  await expect(words(page).getByRole("listitem").filter({ hasText: "Keelhaul" }).locator(".entry-phrase")).toHaveJSProperty("textContent", "Keelhaul");
+});
+
 test("a damaged UTF-8 backup explains the error and keeps the dictionary", async ({ page }) => {
   const buffer = Buffer.concat([
     Buffer.from('{"version":1,"entries":[{"id":"bad","kind":"vocabulary","phrase":"Broken'),

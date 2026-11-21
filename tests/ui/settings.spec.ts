@@ -12,6 +12,8 @@ test("a profile name can contain forty flag graphemes", async ({ page }) => {
   await page.keyboard.insertText(name);
   await field.press("Tab");
   await expect(field).toHaveValue(name);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(name);
 });
 
 test("choosing Dark applies it at once and Light switches back", async ({ page }) => {
