@@ -41,32 +41,34 @@ impl Runtime {
                 ));
             }
             let targets = WindowsTargetService::new();
-            let typed = (|| {
-                let outcome = if let Some(original) = &selection {
-                    targets.replace_selection_guarded(&target, original, &text, shortcut, || {
-                        cancellation.is_cancelled()
-                    })
+            let outcome = if let Some(original) = &selection {
+                targets.replace_selection_guarded(&target, original, &text, shortcut, || {
+                    cancellation.is_cancelled()
+                })
+            } else {
+                // Two characters tell a closing quote from an opening one; a field that
+                // exposes no caret simply gets the text as dictated.
+                let before = targets
+                    .preceding_text(&target, PRECEDING_CHARACTERS)
+                    .unwrap_or_default();
+                let spaced = onda_core::text::space_after_previous_text(&before, &text);
+                targets.paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
+            }
+            .map_err(errors::platform)
+            .map_err(|error| {
+                if selection.is_some() {
+                    (error, false)
                 } else {
-                    // Two characters tell a closing quote from an opening one; a field that
-                    // exposes no caret simply gets the text as dictated.
-                    let before = targets
-                        .preceding_text(&target, PRECEDING_CHARACTERS)
-                        .unwrap_or_default();
-                    let spaced = onda_core::text::space_after_previous_text(&before, &text);
-                    targets
-                        .paste_guarded(&target, &spaced, shortcut, || cancellation.is_cancelled())
+                    copy_untyped(error, &text, &cancellation)
                 }
-                .map_err(errors::platform)?;
-                if !outcome.input_injected || !outcome.clipboard_read_observed {
-                    return Err(AppError::new(
-                        ErrorCode::Insertion,
-                        "The target did not acknowledge the paste. Copy your result or retry.",
-                        true,
-                    ));
-                }
-                Ok(())
-            })();
-            typed.map_err(|error| copy_untyped(error, &text, &cancellation))?;
+            })?;
+            if !outcome.input_injected || !outcome.clipboard_read_observed {
+                return Err((AppError::new(
+                    ErrorCode::Insertion,
+                    "Onda could not confirm the paste. Check the field before copying or retrying.",
+                    true,
+                ), false));
+            }
             let document = if observe_document {
                 targets.field_text(&target, LEARNING_CHARACTERS).ok()
             } else {

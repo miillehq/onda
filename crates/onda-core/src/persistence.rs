@@ -68,12 +68,20 @@ impl Store {
         connection
             .busy_timeout(DATABASE_BUSY_TIMEOUT)
             .map_err(|_| AppError::storage())?;
+        // Closing the last writable handle normally checkpoints WAL, even if we only read.
+        let checkpoint = rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE;
+        connection
+            .set_db_config(checkpoint, true)
+            .map_err(|_| AppError::storage())?;
         let version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(|_| AppError::storage())?;
         if version > SCHEMA_VERSION {
             return Err(AppError::invalid(&format!("The database belongs to a newer application version. Upgrade {} before opening it.", crate::APP_NAME)));
         }
+        connection
+            .set_db_config(checkpoint, false)
+            .map_err(|_| AppError::storage())?;
         // Entering WAL mode changes the on-disk header even without a transaction.
         connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA secure_delete=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;").map_err(|_| AppError::storage())?;
         for (target, migration) in MIGRATIONS {
