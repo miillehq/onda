@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   gate:
-    name: gate (one version, on master, installers green)
+    name: gate (version, native journeys and installers on master)
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -32,12 +32,15 @@ jobs:
       contents: read
       actions: read
     outputs:
-      run: ${{ steps.installers.outputs.run }}
+      run: ${{ steps.installers.outputs.installers }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
       - name: The tag, the app and the crates carry one version
         id: version
         run: |
@@ -54,19 +57,18 @@ jobs:
       - name: The tagged commit is on master
         run: |
           git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "::error::$GITHUB_SHA is not on master"; exit 1; }
-      - name: Every installers job passed on this commit
+      - name: Every release platform passed its native journeys and installer
         id: installers
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow installers.yml --commit "$GITHUB_SHA" --status success --limit 1 --json databaseId -q '.[0].databaseId')
-          [ -n "$run" ] || { echo "::error::no successful installers run for $GITHUB_SHA"; exit 1; }
-          # Tier 2 legs report without failing their run, so each job is checked by name.
-          gh run view "$run" --repo "$GITHUB_REPOSITORY" --json jobs -q '.jobs[] | "\(.conclusion) \(.name)"' | tee jobs.txt
-          for platform in windows-x64 windows-arm64 linux-x64 linux-arm64 macos-arm64 macos-x64; do
-            grep -qx "success installers $platform" jobs.txt || { echo "::error::installers $platform did not pass in run $run"; exit 1; }
+          for workflow in ci installers; do
+            run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$workflow.yml" --branch master --commit "$GITHUB_SHA" --limit 1 --json databaseId -q '.[0].databaseId')
+            [ -n "$run" ] || { echo "::error::no $workflow evidence for $GITHUB_SHA"; exit 1; }
+            gh run view "$run" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha,databaseId,attempt,jobs |
+              node scripts/release-evidence.mjs "$workflow" "$GITHUB_SHA"
+            echo "$workflow=$run" >> "$GITHUB_OUTPUT"
           done
-          echo "run=$run" >> "$GITHUB_OUTPUT"
 
   publish:
     name: publish the release
@@ -78,18 +80,20 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
       - name: Collect the tested bundles and their checksums
         env:
           GH_TOKEN: ${{ github.token }}
           RUN: ${{ needs.gate.outputs.run }}
+          VERSION: ${{ needs.gate.outputs.version }}
         run: |
           mkdir -p downloads assets
           for platform in windows-x64 windows-arm64 linux-x64 linux-arm64 macos-arm64 macos-x64; do
             gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --name "onda-$platform-unsigned" --dir "downloads/$platform"
           done
-          find downloads -type f \( -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' \) -exec cp {} assets/ \;
-          count=$(ls assets | wc -l)
-          [ "$count" -eq 8 ] || { ls -la assets; echo "::error::expected 8 bundles, found $count"; exit 1; }
+          node scripts/release-files.mjs collect "$VERSION" downloads assets
           cp downloads/windows-x64/THIRD_PARTY_NOTICES.txt assets/
           # The reviewed, reproducible archive the Windows installer carries (scripts/collect-mpl-source.ps1).
           mpl=$(find downloads/windows-x64 -name MPL-source.zip | head -1)
@@ -118,6 +122,13 @@ jobs:
           prerelease=()
           case "$VERSION" in 0.*|*-*) prerelease=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Onda $VERSION" --notes-file notes.md "${prerelease[@]}" assets/*
+
+  verify-published:
+    needs: publish
+    uses: ./.github/workflows/published-installers.yml
+    permissions: { contents: read, actions: read }
+    with:
+      release_tag: ${{ github.ref_name }}
 
   candidate:
     if: github.event_name == 'workflow_dispatch'
