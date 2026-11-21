@@ -30,12 +30,15 @@ Audit commands:
 
 ```powershell
 cargo install cargo-deny --version 0.19.7 --locked
-cargo deny --locked check licenses advisories sources
-cargo audit
+cargo deny --locked --workspace check licenses advisories sources
+cargo install cargo-audit --version 0.22.2 --locked
+cargo audit --file Cargo.lock
 npm audit
 node scripts/generate-notices.mjs
 ```
 
-The `dependency policy` job checks Rust licenses, advisories and sources for the desktop targets in `deny.toml`. It runs `npm audit --omit=dev --audit-level=high` for shipped JavaScript and `npm audit --audit-level=high` for the complete tooling tree. High advisories in either set fail the job. CI fetches the current RustSec advisory database on each run, so results change as advisories are published. The deny policy fails unmaintained direct workspace dependencies; a local `cargo audit` over the whole lock file also lists transitive ones.
+The `dependency policy` job checks Rust licenses, advisories and sources for every workspace member on the six targets in `deny.toml`. A separate `cargo audit --file Cargo.lock` checks every resolved package, including target-specific packages outside the desktop builds. It runs `npm audit --omit=dev --audit-level=high` for shipped JavaScript and `npm audit --audit-level=high` for the complete tooling tree. The jobs fetch current advisory data. A Rust vulnerability or a high npm advisory fails the corresponding check.
 
 The Tauri WebdriverIO service declares a WebdriverIO 9 peer. Onda retains that peer and pins four transitive dependency selections in `package.json` for its Node 24 tooling. Updating the browser manager removes the affected archive extractor from the lockfile. The real embedded WebDriver journeys and a clean `npm ls --all` check the resolved versions.
+
+The full Rust audit on November 19 reported zero vulnerabilities, eight unmaintained transitive package records and one informational soundness warning. The Linux GTK 3 stack pins GLib 0.18, and the upstream iterator fix starts at 0.20. Onda uses GTK window APIs and has no direct calls to the affected iterator. The warning remains visible in the complete report. [RustSec GLib advisory](https://rustsec.org/advisories/RUSTSEC-2024-0429.html)
