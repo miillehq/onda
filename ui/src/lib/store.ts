@@ -358,7 +358,10 @@ export async function getResourceUsage(): Promise<ResourceUsage> {
 }
 
 export async function copyResult(): Promise<void> {
-  if (await run("Couldn't copy", { command: "copyResult" })) toast({ tone: "ok", title: "Copied" }, 2400);
+  if (await run("Couldn't copy", { command: "copyResult" })) {
+    toast({ tone: "ok", title: "Copied" }, 2400);
+    scheduleUsage();
+  }
 }
 /** Copy the polished version that Onda's checks kept out of the document. */
 export async function copySuggestion(): Promise<void> {
@@ -392,7 +395,10 @@ export async function retryPolish(): Promise<void> {
 /* ------------------------------------------------------------------ history */
 
 export async function copyHistoryEntry(id: string): Promise<void> {
-  if (await run("Couldn't copy", { command: "copyHistoryEntry", args: { id } })) toast({ tone: "ok", title: "Copied" }, 2400);
+  if (await run("Couldn't copy", { command: "copyHistoryEntry", args: { id } })) {
+    toast({ tone: "ok", title: "Copied" }, 2400);
+    scheduleUsage();
+  }
 }
 export async function copyHistorySuggestion(id: string): Promise<void> {
   if (await run("Couldn't copy", { command: "copyHistorySuggestion", args: { id } })) toast({ tone: "ok", title: "Copied the polished version" }, 2400);
@@ -515,7 +521,7 @@ function handleDomain(event: AppEvent): void {
         }
         snapshot.value = { ...current, state, result: newOperation && state.phase === "recording" ? null : current.result };
       });
-      if (state.phase === "completed") scheduleUsage();
+      if (state.phase === "completed" || state.phase === "error") scheduleUsage();
       break;
     }
     case "resultReady":

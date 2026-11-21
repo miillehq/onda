@@ -39,6 +39,7 @@ dispatcher by the contract suite before any test depends on it.
 | Edit and share | `tests/ui/dictionary.spec.ts` checks imported text, UTF-8 failures and editing focus. `tests/ui/rewrites.spec.ts` saves and clears a per-rewrite model. `tests/ui/stats.spec.ts` checks the encoded PNG dimensions. `tests/unit/dictionary-file.test.ts` checks the size before reading a file. |
 | Speech worker selection and punctuation | `crates/onda-asr/tests/worker_policy.rs` checks CPU and Metal selection. `crates/onda-asr/tests/golden.rs` drives the built workers using `scripts/asr-golden.mjs`. `crates/onda-core/src/text.rs` checks East Asian opening and closing punctuation at the caret. |
 | Native clipboard and accessible text | `crates/onda-platform/src/text_clipboard.rs` and `linux_edits.rs` cover the decision rules. `linux_clipboard.rs` uses a disposable Xvfb display in CI. `macos_clipboard.rs` uses a private system pasteboard. `src-tauri/src/runtime/delivery.rs` checks cancellation before writing. |
+| Delivered usage, late dates and correction observations | `src-tauri/src/runtime/dictation_usage.rs` covers one credit across recovery paths. `crates/onda-core/tests/usage_calendar.rs` uses a real SQLite store for streaks and invalid dates. `src-tauri/src/runtime/history/tests.rs` covers unchanged previews and `runtime/learning.rs` bounds observation time. |
 
 Coverage is tracked per journey in this table, never as a percentage. A change that removes a
 level from a journey needs a replacement that proves the same behaviour first.

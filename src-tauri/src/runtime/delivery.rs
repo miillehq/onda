@@ -17,7 +17,7 @@ impl Runtime {
         fallback: bool,
     ) -> AppResult<()> {
         if cfg!(not(windows)) {
-            let target = active.target.clone();
+            let target = active.insertion_target()?.clone();
             let typeable =
                 tokio::task::spawn_blocking(move || WindowsTargetService::new().can_type(&target))
                     .await
@@ -26,7 +26,7 @@ impl Runtime {
                 return self.hand_off_to_clipboard(active, output, fallback).await;
             }
         }
-        let target = active.target.clone();
+        let target = active.insertion_target()?.clone();
         let text = output.to_owned();
         let selection = active.selection.clone();
         let observe_document = selection.is_some() || active.settings.learning_enabled;
@@ -83,6 +83,7 @@ impl Runtime {
             Ok(document) => document,
             Err((error, copied)) => {
                 if copied {
+                    self.credit_delivery(active.usage.as_ref(), fallback);
                     if let Ok(mut saved) = lock(&self.result) {
                         if let Some(saved) = saved
                             .as_mut()
@@ -95,6 +96,7 @@ impl Runtime {
                 return Err(error);
             }
         };
+        self.credit_delivery(active.usage.as_ref(), fallback);
         let original = lock(&self.result)?
             .as_ref()
             .map(|result| result.result.original.clone())
@@ -134,6 +136,7 @@ impl Runtime {
         .map_err(|_| AppError::new(ErrorCode::Internal, "Clipboard worker stopped.", true))?;
         self.metric(&active.id, "clipboard", started, copied.is_ok());
         copied.map_err(errors::platform)?;
+        self.credit_delivery(active.usage.as_ref(), fallback);
         let original = lock(&self.result)?
             .as_ref()
             .map(|result| result.result.original.clone())

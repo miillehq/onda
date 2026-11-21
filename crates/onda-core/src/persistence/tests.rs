@@ -204,6 +204,42 @@ fn version_four_database_backfills_days_and_streaks() {
 }
 
 #[test]
+fn version_five_keeps_the_known_part_of_a_streak_before_the_daily_window() {
+    let connection = Connection::open_in_memory().unwrap();
+    for (_, migration) in &MIGRATIONS[..5] {
+        connection.execute_batch(migration).unwrap();
+    }
+    connection
+        .execute_batch(
+            "WITH RECURSIVE days(n) AS (VALUES(50) UNION ALL SELECT n+1 FROM days WHERE n<449)
+         INSERT INTO daily_usage SELECT date('2024-01-01', n || ' days'), 1, 1, 1000 FROM days;
+         UPDATE usage_lifetime SET since='2024-01-01', dictations=450, active_days=450,
+             last_day=date('2024-01-01','449 days'), current_run=450, longest_run=450 WHERE id=1;",
+        )
+        .unwrap();
+    let (latest, gap): (String, String) = connection
+        .query_row(
+            "SELECT date('2024-01-01','451 days'), date('2024-01-01','450 days')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    let mut store = Store::initialize(connection).unwrap();
+    for day in [&latest, &gap] {
+        store.record_usage(day, 1, 1000, 10, false).unwrap();
+    }
+    let summary = store.usage_summary(&latest).unwrap();
+    assert_eq!(
+        (
+            summary.current_streak,
+            summary.longest_streak,
+            summary.active_days
+        ),
+        (452, 452, 452)
+    );
+}
+
+#[test]
 fn lifetime_totals_start_on_the_first_dictation_and_outlive_pruned_days() {
     let mut store = Store::in_memory().unwrap();
     assert_eq!(store.lifetime_usage().unwrap(), LifetimeUsage::default());
