@@ -331,11 +331,18 @@ fn focus() -> Option<Focus> {
 pub(crate) fn snapshot() -> Result<TargetSnapshot, PlatformError> {
     Ok(focus()
         .map(|focus| focus.snapshot)
-        .unwrap_or_else(TargetSnapshot::unidentified))
+        .unwrap_or_else(|| TargetSnapshot {
+            is_password: unsafe { IsSecureEventInputEnabled() } != 0,
+            ..TargetSnapshot::unidentified()
+        }))
 }
 
-pub(crate) fn can_type(_target: &TargetSnapshot) -> bool {
-    macos_typing::trusted()
+pub(crate) fn can_type(target: &TargetSnapshot) -> bool {
+    !target.focused_runtime_id.is_empty()
+        && field(target)
+            .ok()
+            .and_then(|field| edit_state(&field))
+            .is_some()
 }
 
 /// The focused field, when it is still the one `target` describes.
@@ -415,15 +422,8 @@ pub(crate) fn paste(
     }
     wait_for_modifiers()?;
     // Checked again after the wait, right before the keys go down.
-    let focus = focus().ok_or(PlatformError::TargetChanged)?;
-    let field = if target.focused_runtime_id.is_empty() {
-        crate::target::validate_frontmost_app(target, &focus.snapshot)?;
-        None
-    } else {
-        crate::target::validate_identity(target, &focus.snapshot)?;
-        Some(focus.field.ok_or(PlatformError::TargetChanged)?)
-    };
-    let before = field.as_ref().and_then(edit_state);
+    let field = field(target)?;
+    let before = crate::text_clipboard::paste_baseline(edit_state(&field))?;
     let clipboard = match crate::macos_clipboard::BorrowedClipboard::borrow(text, should_cancel) {
         Err(PlatformError::ClipboardNotPreservable) => {
             return crate::text_clipboard::edit_without_clipboard(should_cancel, || {
@@ -467,16 +467,14 @@ pub(crate) fn paste(
     }
     // A field that reports its length or caret shows whether the paste landed; others cannot
     // be checked.
-    let mut observed = before.is_none();
-    if let (Some(field), Some(before)) = (&field, before) {
-        let deadline = Instant::now() + PASTE_SETTLE;
-        while Instant::now() < deadline {
-            if edit_state(field).is_some_and(|now| now != before) {
-                observed = true;
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(40));
+    let mut observed = false;
+    let deadline = Instant::now() + PASTE_SETTLE;
+    while Instant::now() < deadline {
+        if edit_state(&field).is_some_and(|now| now != before) {
+            observed = true;
+            break;
         }
+        std::thread::sleep(Duration::from_millis(40));
     }
     std::thread::sleep(CLIPBOARD_HOLD);
     let restored = clipboard.restore(text);
@@ -563,18 +561,18 @@ mod tests {
     fn the_permission_decides_what_a_snapshot_names() {
         let snapshot = snapshot().expect("snapshot");
         let trusted = macos_typing::trusted();
-        assert_eq!(
-            can_type(&snapshot),
-            trusted,
-            "typing follows the permission"
-        );
+        assert!(!can_type(&TargetSnapshot::unidentified()));
+        if can_type(&snapshot) {
+            assert!(trusted);
+        }
         assert_eq!(
             macos_typing::typing_access() == macos_typing::TypingAccess::Allowed,
             trusted,
             "typing access reports the permission"
         );
         if !trusted {
-            assert_eq!(snapshot, TargetSnapshot::unidentified());
+            assert!(snapshot.focused_runtime_id.is_empty());
+            assert_eq!(snapshot.process_id, 0);
         }
     }
 }

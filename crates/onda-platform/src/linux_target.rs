@@ -518,10 +518,13 @@ pub(crate) fn can_type(target: &TargetSnapshot) -> bool {
     if target.focused_runtime_id.is_empty() {
         return false;
     }
+    let Ok(object) = field(target) else {
+        return false;
+    };
     if linux_typing::typing_access() == linux_typing::TypingAccess::Allowed {
-        return true;
+        return integer(&object, TEXT, "CharacterCount").is_ok_and(|count| count >= 0);
     }
-    field(target).is_ok_and(|object| editable(&object))
+    editable(&object)
 }
 
 fn editable(object: &Object) -> bool {
@@ -574,7 +577,11 @@ fn paste_with_shortcut(
         ],
         PasteShortcut::ShiftInsert => &[linux_typing::KEY_SHIFT, linux_typing::KEY_INSERT],
     };
-    let before = integer(object, TEXT, "CharacterCount").ok();
+    let before = crate::text_clipboard::paste_baseline(
+        integer(object, TEXT, "CharacterCount")
+            .ok()
+            .filter(|count| *count >= 0),
+    )?;
     let replaced = selection(object).ok().flatten();
     let inserted =
         crate::linux_edits::InsertSize::measure(text, &target.focused_control.framework_id)?
@@ -609,27 +616,19 @@ fn paste_with_shortcut(
         return Err(error);
     }
     // A field that reports its text shows whether the paste landed; others cannot be checked.
-    let mut observed = before.is_none();
-    if let Some(before) = before {
-        let deadline = Instant::now() + PASTE_SETTLE;
-        while Instant::now() < deadline {
-            if integer(object, TEXT, "CharacterCount").is_ok_and(|after| {
-                crate::linux_edits::paste_observed(
-                    before,
-                    after,
-                    replaced,
-                    inserted,
-                    |start, end| {
-                        selection(object).is_ok_and(|selection| selection.is_none())
-                            && text_range(object, start, end).is_ok_and(|current| current == text)
-                    },
-                )
-            }) {
-                observed = true;
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(40));
+    let mut observed = false;
+    let deadline = Instant::now() + PASTE_SETTLE;
+    while Instant::now() < deadline {
+        if integer(object, TEXT, "CharacterCount").is_ok_and(|after| {
+            crate::linux_edits::paste_observed(before, after, replaced, inserted, |start, end| {
+                selection(object).is_ok_and(|selection| selection.is_none())
+                    && text_range(object, start, end).is_ok_and(|current| current == text)
+            })
+        }) {
+            observed = true;
+            break;
         }
+        std::thread::sleep(Duration::from_millis(40));
     }
     std::thread::sleep(CLIPBOARD_HOLD);
     let restored = clipboard.restore(text);

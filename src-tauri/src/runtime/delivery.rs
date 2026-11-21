@@ -21,7 +21,9 @@ impl Runtime {
             let typeable =
                 tokio::task::spawn_blocking(move || WindowsTargetService::new().can_type(&target))
                     .await
-                    .unwrap_or(false);
+                    .map_err(|_| {
+                        AppError::new(ErrorCode::Internal, "Target check stopped.", true)
+                    })?;
             if !typeable {
                 return self.hand_off_to_clipboard(active, output, fallback).await;
             }
@@ -119,15 +121,16 @@ impl Runtime {
         output: &str,
         fallback: bool,
     ) -> AppResult<()> {
-        if active.selection.is_some() {
-            return Err(errors::platform(
-                onda_platform::PlatformError::UnsupportedPlatform,
-            ));
-        }
+        let target = active.insertion_target()?.clone();
+        let replacing_selection = active.selection.is_some();
         let text = output.to_owned();
         let started = Instant::now();
         let cancellation = active.cancellation.clone();
         let copied = tokio::task::spawn_blocking(move || {
+            WindowsTargetService::new().check_clipboard_handoff(&target)?;
+            if replacing_selection {
+                return Err(onda_platform::PlatformError::SelectionUnavailable);
+            }
             copy_while_active(&cancellation, || {
                 onda_platform::copy_text_to_clipboard(&text)
             })
