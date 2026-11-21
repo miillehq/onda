@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { extname, join, relative, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { aggregateTypes, createParsers, measureSource } from "./source-metrics.mjs";
 import { orphanRust } from "./rust-modules.mjs";
 import { measureStyles, orphanMigrations, orphanStyles } from "./styles.mjs";
@@ -57,7 +57,7 @@ export function violations(files) {
   return findings.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line || a.kind.localeCompare(b.kind));
 }
 
-if (import.meta.main) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const parsers = await createParsers();
   const crates = (await readdir(join(root, "crates"), { withFileTypes: true })).filter((entry) => entry.isDirectory());
   const roots = ["ui/src", "src-tauri/src", ...crates.map(({ name }) => `crates/${name}/src`)];

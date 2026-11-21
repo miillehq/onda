@@ -1,5 +1,5 @@
 //! The focused field on a Mac, read through the Accessibility API: which app, window and field it
-//! is, its text, caret and selection, and pasting into it with ⌘V. All of it needs the
+//! is, its text, caret and selection, and pasting into it with âŒ˜V. All of it needs the
 //! Accessibility permission (`macos_typing`); without it the snapshot is unidentified and
 //! dictation stays on the clipboard. An app that shows no field (Electron and Chromium windows
 //! often don't) is still named with its window, and a paste checks that both stayed in front.
@@ -79,6 +79,11 @@ extern "C" {
         attribute: CFStringRef,
         parameter: CFTypeRef,
         result: *mut CFTypeRef,
+    ) -> AXError;
+    fn AXUIElementSetAttributeValue(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        value: CFTypeRef,
     ) -> AXError;
     fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut i32) -> AXError;
     fn AXUIElementSetMessagingTimeout(element: AXUIElementRef, seconds: f32) -> AXError;
@@ -328,7 +333,10 @@ fn focus() -> Option<Focus> {
 pub(crate) fn snapshot() -> Result<TargetSnapshot, PlatformError> {
     Ok(focus()
         .map(|focus| focus.snapshot)
-        .unwrap_or_else(TargetSnapshot::unidentified))
+        .unwrap_or_else(|| TargetSnapshot {
+            is_password: unsafe { IsSecureEventInputEnabled() } != 0,
+            ..TargetSnapshot::unidentified()
+        }))
 }
 
 pub(crate) fn can_type(target: &TargetSnapshot) -> bool {
@@ -440,7 +448,8 @@ mod tests {
             "typing access reports the permission"
         );
         if !trusted {
-            assert_eq!(snapshot, TargetSnapshot::unidentified());
+            assert!(snapshot.focused_runtime_id.is_empty());
+            assert_eq!(snapshot.process_id, 0);
         }
     }
 }
