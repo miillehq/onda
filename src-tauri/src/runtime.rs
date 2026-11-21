@@ -31,7 +31,9 @@ mod learning;
 use history::{History, HistoryStage};
 mod profile;
 mod providers;
+mod retry_route;
 mod stats_export;
+use retry_route::{AccountModel, RetryRoute};
 
 const ACTION_QUEUE_CAPACITY: usize = 64;
 const MAX_METRICS: usize = 512;
@@ -118,6 +120,7 @@ struct CachedModels {
 
 #[derive(Clone)]
 struct TransformRetry {
+    route: RetryRoute,
     instructions: String,
     preferred_model: Option<String>,
     preserve_tokens: bool,
@@ -1172,6 +1175,7 @@ impl Runtime {
             self.set_retry(
                 &active.id,
                 TransformRetry {
+                    route: RetryRoute::capture(&active.settings),
                     instructions: instructions.clone(),
                     preferred_model: None,
                     preserve_tokens: true,
@@ -1510,8 +1514,6 @@ impl Runtime {
         instructions: &str,
         preferred: Option<&str>,
     ) -> AppResult<String> {
-        lock(&self.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
-        self.emit_state();
         let profiles = self.cloud()?.list_profiles().await.map_err(errors::cloud)?;
         let profile = profiles
             .iter()
@@ -1523,20 +1525,27 @@ impl Runtime {
                     true,
                 )
             })?;
+        let account = lock(&self.result)?
+            .as_ref()
+            .filter(|saved| saved.result.operation_id == active.id)
+            .and_then(|saved| saved.retry.as_ref())
+            .map(|retry| retry.route.account.clone())
+            .unwrap_or_default();
+        // Bind before discovery so a failed refresh cannot retarget the next attempt.
+        AccountModel::bind(
+            &mut *lock(&account)?,
+            &profile.id,
+            profile.preferred_model.as_deref(),
+        )?;
+        lock(&self.state)?.mark_cloud(&active.id, DataRoute::ChatgptPlan);
+        self.emit_state();
         let models = self.account_models(&profile.id).await?;
-        let model = [preferred, profile.preferred_model.as_deref()]
-            .into_iter()
-            .flatten()
-            .find_map(|slug| models.iter().find(|model| model.slug == slug))
-            .or_else(|| recommended_model(&models))
-            .ok_or_else(|| {
-                AppError::new(
-                    ErrorCode::Cloud,
-                    "This account has no available text models.",
-                    true,
-                )
-            })?;
-        let selected_model = model.slug.clone();
+        let selected_model = AccountModel::bind(
+            &mut *lock(&account)?,
+            &profile.id,
+            profile.preferred_model.as_deref(),
+        )?
+        .choose(&models, preferred)?;
         tracing::info!(
             subsystem = "chatgpt",
             operation_id = active.id,
@@ -1637,6 +1646,7 @@ impl Runtime {
                 service.set_retry(
                     &id,
                     TransformRetry {
+                        route: RetryRoute::capture(&active.settings),
                         instructions: instruction.clone(),
                         preferred_model: transform.model_preference.clone(),
                         preserve_tokens: transform.preserve_protected_tokens,

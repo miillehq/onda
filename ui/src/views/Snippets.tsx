@@ -20,7 +20,7 @@ function SnippetDialog({ snippet, onClose }: { snippet: Snippet | null; onClose:
     }
     setSaving(true);
     try {
-      snippets.value = await ask({ command: "saveSnippet", args: { snippet: { id: snippet?.id ?? crypto.randomUUID(), trigger: trigger.trim(), expansion, enabled: snippet?.enabled ?? true } } }, "snippets");
+      snippets.value = await ask({ command: "saveSnippet", args: { snippet: { id: snippet?.id ?? crypto.randomUUID(), trigger, expansion, enabled: snippet?.enabled ?? true } } }, "snippets");
       toast({ tone: "ok", title: snippet ? "Snippet saved" : "Snippet created" }, 2400);
       onClose();
     } catch (failure) {

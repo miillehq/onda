@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useId, useRef } from "preact/hooks";
+import { useId, useLayoutEffect, useRef } from "preact/hooks";
 import { X } from "lucide-preact";
 
 export function Page({ title, lede, actions, children, wide = false }: { title: string; lede?: ComponentChildren; actions?: ComponentChildren; children: ComponentChildren; wide?: boolean }) {
@@ -88,7 +88,10 @@ const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:no
 export function Dialog({ title, description, open, onClose, children, footer, size = "md" }: { title: string; description?: ComponentChildren; open: boolean; onClose: () => void; children?: ComponentChildren; footer?: ComponentChildren; size?: "md" | "lg" }) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useEffect(() => {
+  const close = useRef(onClose);
+  close.current = onClose;
+  // Establish the initial focus before a user can type into another dialog field.
+  useLayoutEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     const node = panel.current;
@@ -97,7 +100,7 @@ export function Dialog({ title, description, open, onClose, children, footer, si
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        close.current();
       } else if (event.key === "Tab" && node) {
         const items = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)];
         const firstItem = items[0];

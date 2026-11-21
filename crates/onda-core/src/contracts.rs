@@ -184,7 +184,7 @@ impl Settings {
                 keys: vec![0xA2, 0xA4, 0x44],
             },
             toggle_enabled: false,
-            default_transform_id: "polish".into(),
+            default_transform_id: crate::transforms::DEFAULT_TRANSFORM_ID.into(),
             app_profiles: Vec::new(),
             theme: ThemePreference::System,
             launch_at_login: false,
