@@ -118,6 +118,8 @@ with an identical tree.
 
 | 2026-11-19 | L3 diagnosis | Both Apple Silicon and Intel refused to initialize the account store before reaching the Keychain. The existing encryption backend already supported Keychain. The store constructor excluded macOS. | macos-arm64, macos-x64 | Both real account lifecycle jobs reported `UnsupportedPlatform` in the [first cross-platform credential run](https://github.com/miillehq/onda/actions/runs/44602049735). |
 
+| 2026-11-19 | L1, L3 | Native paste needs an observable field before a key event can be sent. A failed permission-file replacement preserves the old bytes and removes the temporary file. | windows-x64, local, synthetic field and temporary directory | `cargo test --locked -p onda-platform --lib` covers missing versus zero-length fields and interrupted writes. The hosted OS uses the same preflight and file writer. Physical target behavior stays in the manual matrix. |
+
 ## Unverified
 
 - macOS: dictation into other apps on a real Mac. Accessibility paste is built and checked on the
@@ -169,3 +171,4 @@ with an identical tree.
 | 2026-11-21 | L1 | #46 An in-place edit can preserve a rich clipboard. Qt uses the correct length and caret for non-ASCII insertion. An unconfirmed shortcut asks the user to check the field before retrying. | windows-x64, local policy tests | cargo test --locked -p onda-platform --lib and cargo test --locked -p onda-app --lib runtime::delivery::tests passed. The new cases first reported ClipboardNotPreservable and Qt (6, 2) versus (3, 3). Physical target behavior requires a desktop session. |
 | 2026-11-21 | L1, L3 | #47 History copy retains its one-time usage credit during the session. Opening an upgraded profile repairs streaks from the retained calendar. | windows-x64, local | cargo test --locked -p onda-app --lib runtime::history::tests and cargo test --locked -p onda-core --test usage_calendar passed. The regressions first lost the pending delivery credit and reported streaks (1, 2) instead of (3, 3). |
 | 2026-11-21 | L1 | #48 Release evidence requires a complete first workflow attempt. The Mac installer launches with a private home and checks the database created there. | windows-x64, local release gate | node --test tests/tooling/release.test.mjs passed. Before the change a repeated attempt produced Missing expected exception. Mac Launch Services is exercised by hosted L7. |
+| 2026-11-21 | L1 | #51 Manual clipboard delivery checks the original and current targets, including secure input, immediately before the write. | windows-x64, local policy test | cargo test --locked -p onda-platform --lib a_manual_handoff passed after the unguarded path failed to return SecureField. |

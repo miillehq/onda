@@ -23,6 +23,8 @@ mod macos_target;
 mod macos_typing;
 #[cfg(target_os = "linux")]
 pub mod portal;
+#[cfg(any(target_os = "linux", test))]
+mod private_file;
 mod processes;
 mod protect;
 mod target;
