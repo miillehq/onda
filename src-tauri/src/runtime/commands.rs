@@ -98,8 +98,7 @@ impl Runtime {
                 } else {
                     None
                 };
-                lock(&self.store)?.save_settings(&settings)?;
-                self.set_history_days(settings.history_days)?;
+                self.save_preferences(&settings)?;
                 if let Some(manager) = migrated {
                     *lock(&self.models)? = manager;
                 }
@@ -447,22 +446,17 @@ impl Runtime {
                 }
                 Ok(O::Unit)
             }
-            R::GetHistory => Ok(O::History(lock(&self.history)?.iter().cloned().collect())),
+            R::GetHistory => Ok(O::History(self.history_entries()?)),
             R::CopyHistorySuggestion { id } => {
-                let text = lock(&self.history)?
-                    .iter()
-                    .find(|entry| entry.id == id)
-                    .and_then(|entry| entry.suggestion.clone())
-                    .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
+                let text =
+                    self.history_entry(&id)?.suggestion.clone().ok_or_else(|| {
+                        AppError::invalid("That history entry is no longer kept.")
+                    })?;
                 copy_text(text).await?;
                 Ok(O::Unit)
             }
             R::CopyHistoryEntry { id } => {
-                let text = lock(&self.history)?
-                    .iter()
-                    .find(|entry| entry.id == id)
-                    .map(|entry| entry.output.clone())
-                    .ok_or_else(|| AppError::invalid("That history entry is no longer kept."))?;
+                let text = self.history_entry(&id)?.output.clone();
                 copy_text(text.clone()).await?;
                 if let Some(current) = lock(&self.result)?.as_mut() {
                     if current.result.operation_id == id && current.result.output == text {
@@ -472,8 +466,7 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::DeleteHistoryEntry { id } => {
-                lock(&self.history)?.retain(|entry| entry.id != id);
-                lock(&self.store)?.delete_history(&id)?;
+                self.delete_retained_history(Some(&id))?;
                 self.forget_result(Some(&id))?;
                 self.event(RuntimeEvent::HistoryReset);
                 Ok(O::Unit)
@@ -484,7 +477,7 @@ impl Runtime {
             R::ChooseProfilePicture => Ok(O::Profile(self.choose_profile_picture().await?)),
             R::RemoveProfilePicture => Ok(O::Profile(self.remove_profile_picture()?)),
             R::SaveStatsImage { png_base64 } => Ok(O::SavedFile {
-                path: self.save_stats_image(&png_base64).await?,
+                path: self.save_stats_image(png_base64).await?,
             }),
             R::ListProviderModels { provider } => Ok(O::CloudModels(
                 self.provider_models(provider)
@@ -525,8 +518,7 @@ impl Runtime {
                 Ok(O::Unit)
             }
             R::ClearHistory => {
-                lock(&self.history)?.clear();
-                lock(&self.store)?.prune_history(i64::MAX)?;
+                self.delete_retained_history(None)?;
                 self.forget_result(None)?;
                 self.event(RuntimeEvent::HistoryReset);
                 Ok(O::Unit)
