@@ -32,7 +32,7 @@ dispatcher by the contract suite before any test depends on it.
 | AI polish with the chosen provider; any failure keeps the original text and calls no other provider | L1 validation, L2 error mapping, L3 localhost providers, L4 error display, quality fixtures |
 | ChatGPT sign-in, refresh and sign-out | L3 on every OS that stores accounts |
 | Download, verify and select a model | L3 resume, checksum and verification before use; L4 model page |
-| Dictionary, snippets and settings survive a restart | L1, L2 defaults and validation, L3 persistence, L4, L6 |
+| Dictionary, snippets and settings survive a restart | L3 storage in `crates/onda-core/src/persistence.rs`. L6 settings and dictionary in `tests/e2e/01-change.spec.ts` and `02-restart.spec.ts`. L1 settings replacement in `src-tauri/tests/settings_requests.rs`. L2/L6 malformed inputs in `contracts/settings-inputs.ts`, exercised by `tests/unit/contract.test.ts` and `tests/e2e/00-contract.spec.ts`. |
 | History kept N days, encrypted; stats and streaks | L3 persistence, pruning and protection; L4 History and Stats |
 | Install, upgrade, uninstall | L3 migrations, L7 on each OS family |
 
