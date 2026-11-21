@@ -1,0 +1,17 @@
+name: Verify native speech workers
+description: Transcribe the public-domain speech fixture using the pinned, verified model
+inputs:
+  workers:
+    description: Repository-relative directory containing the native workers
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: .artifacts/ci-models
+        key: whisper-tiny-en-${{ runner.os }}-921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f
+    - shell: bash
+      env:
+        WORKER_DIRECTORY: ${{ inputs.workers }}
+      run: node scripts/asr-golden.mjs "$WORKER_DIRECTORY"

@@ -84,8 +84,10 @@ leaves a CPU recovery budget. CUDA and DirectML were researched and are not used
 ([references.md](references.md)).
 
 Linux does not enumerate GPU adapters, so the engine does not try a Vulkan worker there today,
-even with GPU preferred; dictation runs on the CPU workers. On macOS the worker offers Metal to
-whisper.cpp, which uses the CPU when Metal is unavailable.
+even with GPU preferred; dictation runs on the CPU workers. On macOS, Auto and GPU preferred
+request Metal. CPU only and recovery explicitly disable the GPU in the bundled worker.
+The installer workflow transcribes the pinned public-domain fixture with each architecture's
+release workers. The Mac fixture reports whether Metal completed it or CPU recovery took over.
 
 ## Profiles and languages
 

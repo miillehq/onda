@@ -3,7 +3,7 @@ use crate::{ExecutionBackend, MAX_AUDIO_SECONDS, SAMPLE_RATE_HZ};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 pub const MAX_HEADER_BYTES: usize = 16 * 1024;
 pub const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 pub const MAX_INITIAL_PROMPT_BYTES: usize = 4096;
