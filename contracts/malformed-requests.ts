@@ -8,6 +8,9 @@ export const malformedRequests = [
   { command: "setProfileName", args: [null] },
   { command: "getSettings", unexpected: true },
   { command: "saveSnippet", args: { snippet: { id: "test", trigger: "test", expansion: "test", enabled: true, extra: true } } },
+  // serde's other spelling of a name. Both sides accept only the string.
+  { command: { getSettings: null } },
+  { command: "removeProviderKey", args: { provider: { anthropic: null } } },
 ] as unknown as readonly ApiRequest[];
 
 export const shapeError = { code: "invalidInput", message: "The desktop request has an invalid shape." } as const;
