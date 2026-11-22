@@ -252,6 +252,7 @@ try {
     $entries = @(Read-InstalledLogEntries -Directory $logDirectory -Checkpoint $logCheckpoint)
     $report.startupPhases = @(Select-InstalledStartupPhases -Entries $entries -ProcessId $shell.Id)
     $report.startupLogObserved = $true
+    $report.firstAction = & (Join-Path $PSScriptRoot 'startup-first-action.ps1') -Executable (Join-Path $installDirectory 'onda.exe') -OwnerProcessId $shell.Id
     Remember-OwnedDescendants -Parent $shell
     Start-Sleep -Milliseconds 1000
     $shell.Refresh(); $helper.Refresh()
