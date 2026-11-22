@@ -25,28 +25,29 @@ jobs:
             jq -e --arg repo "$GITHUB_REPOSITORY" '.head_repository.full_name == $repo and .path == ".github/workflows/installers.yml"'
 
   first-launch:
-    name: Windows first launch ${{ matrix.sample }}
+    name: ${{ matrix.variant }} Windows first launch ${{ matrix.sample }}
     needs: confirm
     runs-on: windows-2022
     timeout-minutes: 12
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 8
       matrix:
-        sample: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        sample: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        variant: [control, candidate]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with: { persist-credentials: false }
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: onda-windows-x64-unsigned
-          run-id: ${{ inputs.candidate_run }}
+          run-id: ${{ matrix.variant == 'control' && '44930122089' || inputs.candidate_run }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/onda-startup-candidate
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: installed-smoke-windows-x64
-          run-id: ${{ inputs.candidate_run }}
+          run-id: ${{ matrix.variant == 'control' && '44930122089' || inputs.candidate_run }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/onda-startup-reference
       - name: Fetch the pinned Microsoft disk measurement utility
@@ -60,6 +61,7 @@ jobs:
         shell: pwsh
         env:
           ONDA_STUDY_SAMPLE: ${{ matrix.sample }}
+          ONDA_STUDY_VARIANT: ${{ matrix.variant }}
         run: |
           $ErrorActionPreference = 'Stop'
           $candidates = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/onda-startup-candidate" -Recurse -File -Filter '*x64-setup.exe')
@@ -74,9 +76,25 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: startup-sample-${{ matrix.sample }}
+          name: startup-sample-${{ matrix.sample }}-${{ matrix.variant }}
           path: |
             .artifacts/installed-smoke/*.json
             .artifacts/startup-study/*.json
           if-no-files-found: error
+          retention-days: 7
+      - name: Measure the next launch of an ordinary idle profile
+        if: success() && contains(fromJSON('[6,12,18,24]'), matrix.sample)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/onda-startup-candidate" -Recurse -File -Filter '*x64-setup.exe' | Select-Object -First 1
+          $result = ./scripts/installer-smoke.ps1 -InstallerPath $installer.FullName
+          if ($result.existingApplicationDataFiles -eq 0) {throw 'Expected the existing profile.'}
+          $null = New-Item -ItemType Directory -Force -Path .artifacts/warm-profile
+          Copy-Item -LiteralPath $result.ReportPath -Destination .artifacts/warm-profile/result.json
+      - name: Preserve warm-profile measurements
+        if: success() && contains(fromJSON('[6,12,18,24]'), matrix.sample)
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: warm-profile-${{ matrix.sample }}-${{ matrix.variant }}
+          path: .artifacts/warm-profile/result.json
           retention-days: 7
