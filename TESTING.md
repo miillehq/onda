@@ -74,6 +74,8 @@ job. It returns only after a fix that is shown red without it. Retries are allow
 L7 jobs, once; below that a retry hides a bug. The WebView2 smoke uses its retry after a timeout
 only, and each retry is added to [issue #25](https://github.com/miillehq/onda/issues/25).
 
+On Windows x64, the background shell can hint files from the registered system WebView2 runtime when the default `EBWebView` directory is absent after profile migration. The worker admits at most 16 MiB per file and 32 MiB in total. A runtime with standalone ANGLE can also receive graphics hints. Volatile registry fixtures exercise the active root, Unicode paths and overrides. Temporary file fixtures cover fresh and migrated profiles, the image order, layouts without standalone ANGLE, and failed submissions that still consume the byte budget. [Registry tests](crates/onda-platform/src/windows_webview2/registration/tests.rs) and [read-ahead tests](crates/onda-platform/src/windows_webview2/tests.rs).
+
 The Windows installer check retains a 30-second monotonic startup deadline. It reads only log bytes appended by the launch and checks the emitting process when the package supplies a PID. Its first report is retained. One L7 retry is available for the specific startup observation timeout. A missing worker, installation error or second timeout fails. The separate first-launch sample uses one immutable installer on thirty fresh hosted Windows machines with one attempt each. [Windows L7 tracker](https://github.com/miillehq/onda/issues/63)
 
 ## Budgets

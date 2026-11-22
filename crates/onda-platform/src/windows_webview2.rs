@@ -1,8 +1,9 @@
-//! Best-effort disk read-ahead for the first Windows dictation indicator.
+//! Bounded disk read-ahead for the first indicator on a new Windows x64 WebView2 profile.
 use std::{
-    fs::File,
+    fs::{self, File},
+    io::ErrorKind,
     os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle},
-    path::Path,
+    path::{Path, PathBuf},
     ptr,
 };
 use windows_sys::Win32::System::{
@@ -15,24 +16,65 @@ use windows_sys::Win32::System::{
 
 mod registration;
 
-/// The x64 Evergreen host DLL in the cold-start trace was under 10 MiB. Skip larger future
-/// versions instead of growing startup I/O or evicting an unrelated application's pages.
-const MAX_LOADER_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_STARTUP_BYTES: u64 = 32 * 1024 * 1024;
+const HOST_AND_BROWSER_IMAGES: [&str; 3] = [
+    r"EBWebView\x64\EmbeddedBrowserWebView.dll",
+    "msedgewebview2.exe",
+    "msedge_elf.dll",
+];
+const ANGLE_IMAGE: &str = "libGLESv2.dll";
+const GRAPHICS_IMAGES: [&str; 4] = [
+    ANGLE_IMAGE,
+    "vk_swiftshader.dll",
+    "vulkan-1.dll",
+    "d3dcompiler_47.dll",
+];
 
-/// Submit one read-ahead hint while native services start. The worker runs independently of
-/// setup, dictation and shutdown. WebView2 creation still determines indicator readiness.
-pub fn prefetch_webview2_loader() {
+/// Overlap disk read-ahead with native setup on the first background launch. WebView2
+/// creates EBWebView inside Tauri's default user-data directory on first use.
+pub fn prefetch_webview2_for_new_profile(default_user_data: PathBuf) {
     let _ = std::thread::Builder::new()
         .name("onda-webview-read-ahead".into())
-        .spawn(|| {
-            if let Some(path) = registration::machine_loader() {
-                prefetch_file(&path);
+        .spawn(move || {
+            if !is_new_webview_profile(&default_user_data) {
+                return;
+            }
+            if let Some(runtime) = registration::machine_runtime() {
+                prefetch_images(&runtime, prefetch_mapping);
             }
         });
 }
 
-/// Offer a read-only data mapping to the Windows file cache. The OS decides which pages to read.
-fn prefetch_file(path: &Path) -> bool {
+fn is_new_webview_profile(data_directory: &Path) -> bool {
+    fs::symlink_metadata(data_directory.join("EBWebView"))
+        .is_err_and(|error| error.kind() == ErrorKind::NotFound)
+}
+
+/// Submit the images in observed startup order. Newer runtime layouts may integrate ANGLE
+/// differently, so its standalone image identifies the layout measured for the graphics set.
+fn prefetch_images(runtime: &Path, mut submit: impl FnMut(&File, u32) -> bool) {
+    let mut remaining = MAX_STARTUP_BYTES;
+    for image in HOST_AND_BROWSER_IMAGES {
+        prefetch_file(&runtime.join(image), &mut remaining, &mut submit);
+    }
+    if remaining > 0
+        && fs::symlink_metadata(runtime.join(ANGLE_IMAGE)).is_ok_and(|image| image.is_file())
+    {
+        for image in GRAPHICS_IMAGES {
+            prefetch_file(&runtime.join(image), &mut remaining, &mut submit);
+        }
+    }
+}
+
+fn prefetch_file(
+    path: &Path,
+    remaining: &mut u64,
+    submit: &mut impl FnMut(&File, u32) -> bool,
+) -> bool {
+    if *remaining == 0 {
+        return false;
+    }
     let Ok(file) = File::open(path) else {
         return false;
     };
@@ -40,17 +82,23 @@ fn prefetch_file(path: &Path) -> bool {
         return false;
     };
     let size = metadata.len();
-    if !metadata.is_file() || !(1..=MAX_LOADER_BYTES).contains(&size) {
+    if !metadata.is_file() || !(1..=MAX_IMAGE_BYTES.min(*remaining)).contains(&size) {
         return false;
     }
-    let Some(view) = ReadOnlyView::map(&file, size as u32) else {
+    // Windows can satisfy part of a hint even when it reports failure.
+    *remaining -= size;
+    submit(&file, size as u32)
+}
+
+/// Offer a read-only data mapping to the Windows file cache. The OS decides which pages to read.
+fn prefetch_mapping(file: &File, size: u32) -> bool {
+    let Some(view) = ReadOnlyView::map(file, size) else {
         return false;
     };
     let range = WIN32_MEMORY_RANGE_ENTRY {
         VirtualAddress: view.0.Value,
         NumberOfBytes: size as usize,
     };
-    // The kernel coalesces reads for missing pages and leaves cached pages out of our working set.
     unsafe { PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0) != 0 }
 }
 
@@ -86,45 +134,4 @@ impl Drop for ReadOnlyView {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::{self, File, OpenOptions};
-    use std::os::windows::fs::OpenOptionsExt;
-
-    #[test]
-    fn hint_releases_the_read_only_mapping_and_preserves_the_file() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("loader");
-        let original = [0x5a; 8193];
-        fs::write(&path, original).unwrap();
-        assert!(
-            prefetch_file(&path),
-            "no cache hint issued for a small regular file"
-        );
-        assert_eq!(fs::read(&path).unwrap(), original);
-        let exclusive = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .share_mode(0)
-            .open(&path)
-            .expect("read-ahead retained a file handle or mapping");
-        exclusive
-            .set_len(0)
-            .expect("read-ahead retained a mapped view");
-    }
-
-    #[test]
-    fn hint_skips_an_empty_missing_or_oversized_file() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("loader");
-        assert!(!prefetch_file(&path), "hinted a missing file");
-        let file = File::create(&path).unwrap();
-        assert!(!prefetch_file(&path), "hinted an empty file");
-        file.set_len(MAX_LOADER_BYTES + 1).unwrap();
-        drop(file);
-        assert!(
-            !prefetch_file(&path),
-            "read-ahead exceeded its one-file byte budget"
-        );
-    }
-}
+mod tests;

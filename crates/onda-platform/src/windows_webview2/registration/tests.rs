@@ -4,22 +4,22 @@ const PROGRAM_FILES: &str = r"C:\Program Files (x86)";
 const CURRENT: &str = "157.0.4341.60";
 
 #[test]
-fn selects_the_x64_loader_only_from_the_registered_evergreen_version() {
+fn selects_the_active_registered_evergreen_runtime_root() {
     let runtime = Path::new(PROGRAM_FILES)
         .join(r"Microsoft\EdgeWebView\Application")
         .join(CURRENT);
     assert_eq!(
-        registered_loader(Path::new(PROGRAM_FILES), CURRENT, &runtime),
-        Some(runtime.join(r"EBWebView\x64\EmbeddedBrowserWebView.dll"))
+        registered_runtime(Path::new(PROGRAM_FILES), CURRENT, &runtime),
+        Some(runtime.clone())
     );
     let stale = runtime.with_file_name("157.0.4341.59");
     assert!(
-        registered_loader(Path::new(PROGRAM_FILES), CURRENT, &stale).is_none(),
+        registered_runtime(Path::new(PROGRAM_FILES), CURRENT, &stale).is_none(),
         "selected a stale runtime"
     );
     let custom = Path::new(r"D:\custom\157.0.4341.60");
     assert!(
-        registered_loader(Path::new(PROGRAM_FILES), CURRENT, custom).is_none(),
+        registered_runtime(Path::new(PROGRAM_FILES), CURRENT, custom).is_none(),
         "selected an override location"
     );
 }
@@ -41,13 +41,12 @@ fn accepts_a_literal_localized_runtime_path_with_ascii_case_variations() {
         REG_SZ,
         registered.as_os_str(),
     );
-    let loader = programs
+    let expected = programs
         .join(r"Microsoft\EdgeWebView\Application")
-        .join(CURRENT)
-        .join(r"EBWebView\x64\EmbeddedBrowserWebView.dll");
+        .join(CURRENT);
     assert_eq!(
-        registered_machine_loader(machine),
-        Some(loader),
+        registered_machine_runtime(machine),
+        Some(expected),
         "skipped a literal localized runtime path"
     );
 }
@@ -69,7 +68,7 @@ fn refuses_nonversion_components_and_nonlocal_install_roots() {
             .join(r"Microsoft\EdgeWebView\Application")
             .join(version);
         assert!(
-            registered_loader(program_files, version, &runtime).is_none(),
+            registered_runtime(program_files, version, &runtime).is_none(),
             "accepted malformed version {version:?}"
         );
     }
@@ -83,7 +82,7 @@ fn refuses_nonversion_components_and_nonlocal_install_roots() {
             .join(r"Microsoft\EdgeWebView\Application")
             .join(CURRENT);
         assert!(
-            registered_loader(Path::new(root), CURRENT, &runtime).is_none(),
+            registered_runtime(Path::new(root), CURRENT, &runtime).is_none(),
             "accepted nonlocal or ambiguous root {root}"
         );
     }
@@ -134,14 +133,11 @@ fn the_active_loader_requires_a_literal_registered_path() {
     let state = TestKey::create(machine, EVERGREEN_STATE);
 
     state.set_string(w!("EBWebView"), REG_SZ, runtime.as_os_str());
-    assert_eq!(
-        registered_machine_loader(machine),
-        Some(runtime.join(r"EBWebView\x64\EmbeddedBrowserWebView.dll"))
-    );
+    assert_eq!(registered_machine_runtime(machine), Some(runtime.clone()));
     let expandable = Path::new("%ProgramFiles%").join(suffix);
     state.set_string(w!("EBWebView"), REG_EXPAND_SZ, expandable.as_os_str());
     assert!(
-        registered_machine_loader(machine).is_none(),
+        registered_machine_runtime(machine).is_none(),
         "accepted a REG_EXPAND_SZ path resolving to the registered loader"
     );
 

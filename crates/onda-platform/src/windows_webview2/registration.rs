@@ -37,7 +37,7 @@ const WEBVIEW_OVERRIDES: [&str; 6] = [
     "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
 ];
 
-pub(super) fn machine_loader() -> Option<PathBuf> {
+pub(super) fn machine_runtime() -> Option<PathBuf> {
     if WEBVIEW_OVERRIDES
         .iter()
         .any(|key| std::env::var_os(key).is_some())
@@ -45,10 +45,10 @@ pub(super) fn machine_loader() -> Option<PathBuf> {
     {
         return None;
     }
-    registered_machine_loader(HKEY_LOCAL_MACHINE)
+    registered_machine_runtime(HKEY_LOCAL_MACHINE)
 }
 
-fn registered_machine_loader(machine: HKEY) -> Option<PathBuf> {
+fn registered_machine_runtime(machine: HKEY) -> Option<PathBuf> {
     let program_files = registration_string(
         machine,
         w!(r"SOFTWARE\Microsoft\Windows\CurrentVersion"),
@@ -56,7 +56,7 @@ fn registered_machine_loader(machine: HKEY) -> Option<PathBuf> {
     )?;
     let version = registration_string(machine, EVERGREEN_CLIENT, w!("pv"))?;
     let active = registration_string(machine, EVERGREEN_STATE, w!("EBWebView"))?;
-    registered_loader(
+    registered_runtime(
         Path::new(&program_files),
         version.to_str()?,
         Path::new(&active),
@@ -134,8 +134,8 @@ fn registration_string(root: HKEY, key: PCWSTR, name: PCWSTR) -> Option<OsString
 }
 
 /// The active updater location must agree with the installed version in the standard
-/// system directory. This identifies one file even while EdgeUpdate keeps older releases.
-fn registered_loader(program_files: &Path, version: &str, runtime: &Path) -> Option<PathBuf> {
+/// system directory. This identifies the active root even while EdgeUpdate keeps older releases.
+fn registered_runtime(program_files: &Path, version: &str, runtime: &Path) -> Option<PathBuf> {
     let mut components = program_files.components();
     if !matches!(components.next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)))
         || components.next() != Some(Component::RootDir)
@@ -150,7 +150,7 @@ fn registered_loader(program_files: &Path, version: &str, runtime: &Path) -> Opt
     expected
         .as_os_str()
         .eq_ignore_ascii_case(runtime.as_os_str())
-        .then(|| expected.join(r"EBWebView\x64\EmbeddedBrowserWebView.dll"))
+        .then_some(expected)
 }
 
 /// Evergreen publishes four decimal 16-bit components.
