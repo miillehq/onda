@@ -32,9 +32,9 @@ mod target;
 mod text_clipboard;
 #[cfg(windows)]
 mod windows_target;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 mod windows_webview2;
-#[cfg(windows)]
+#[cfg(all(windows, target_arch = "x86_64"))]
 pub use windows_webview2::prefetch_webview2_loader;
 
 pub use audio::{

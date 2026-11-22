@@ -45,15 +45,10 @@ pub(super) fn machine_loader() -> Option<PathBuf> {
     {
         return None;
     }
-    let architecture = match std::env::consts::ARCH {
-        "x86_64" => "x64",
-        "aarch64" => "arm64",
-        _ => return None,
-    };
-    registered_machine_loader(HKEY_LOCAL_MACHINE, architecture)
+    registered_machine_loader(HKEY_LOCAL_MACHINE)
 }
 
-fn registered_machine_loader(machine: HKEY, architecture: &str) -> Option<PathBuf> {
+fn registered_machine_loader(machine: HKEY) -> Option<PathBuf> {
     let program_files = registration_string(
         machine,
         w!(r"SOFTWARE\Microsoft\Windows\CurrentVersion"),
@@ -65,7 +60,6 @@ fn registered_machine_loader(machine: HKEY, architecture: &str) -> Option<PathBu
         Path::new(&program_files),
         version.to_str()?,
         Path::new(&active),
-        architecture,
     )
 }
 
@@ -141,12 +135,7 @@ fn registration_string(root: HKEY, key: PCWSTR, name: PCWSTR) -> Option<OsString
 
 /// The active updater location must agree with the installed version in the standard
 /// system directory. This identifies one file even while EdgeUpdate keeps older releases.
-fn registered_loader(
-    program_files: &Path,
-    version: &str,
-    runtime: &Path,
-    architecture: &str,
-) -> Option<PathBuf> {
+fn registered_loader(program_files: &Path, version: &str, runtime: &Path) -> Option<PathBuf> {
     let mut components = program_files.components();
     if !matches!(components.next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)))
         || components.next() != Some(Component::RootDir)
@@ -161,12 +150,7 @@ fn registered_loader(
     expected
         .as_os_str()
         .eq_ignore_ascii_case(runtime.as_os_str())
-        .then(|| {
-            expected
-                .join("EBWebView")
-                .join(architecture)
-                .join("EmbeddedBrowserWebView.dll")
-        })
+        .then(|| expected.join(r"EBWebView\x64\EmbeddedBrowserWebView.dll"))
 }
 
 /// Evergreen publishes four decimal 16-bit components.

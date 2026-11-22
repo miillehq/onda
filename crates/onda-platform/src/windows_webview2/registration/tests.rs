@@ -4,30 +4,51 @@ const PROGRAM_FILES: &str = r"C:\Program Files (x86)";
 const CURRENT: &str = "157.0.4341.60";
 
 #[test]
-fn selects_only_the_registered_evergreen_version_and_process_architecture() {
+fn selects_the_x64_loader_only_from_the_registered_evergreen_version() {
     let runtime = Path::new(PROGRAM_FILES)
         .join(r"Microsoft\EdgeWebView\Application")
         .join(CURRENT);
-    for architecture in ["x64", "arm64"] {
-        assert_eq!(
-            registered_loader(Path::new(PROGRAM_FILES), CURRENT, &runtime, architecture),
-            Some(
-                runtime
-                    .join("EBWebView")
-                    .join(architecture)
-                    .join("EmbeddedBrowserWebView.dll")
-            )
-        );
-    }
+    assert_eq!(
+        registered_loader(Path::new(PROGRAM_FILES), CURRENT, &runtime),
+        Some(runtime.join(r"EBWebView\x64\EmbeddedBrowserWebView.dll"))
+    );
     let stale = runtime.with_file_name("157.0.4341.59");
     assert!(
-        registered_loader(Path::new(PROGRAM_FILES), CURRENT, &stale, "x64").is_none(),
+        registered_loader(Path::new(PROGRAM_FILES), CURRENT, &stale).is_none(),
         "selected a stale runtime"
     );
     let custom = Path::new(r"D:\custom\157.0.4341.60");
     assert!(
-        registered_loader(Path::new(PROGRAM_FILES), CURRENT, custom, "x64").is_none(),
+        registered_loader(Path::new(PROGRAM_FILES), CURRENT, custom).is_none(),
         "selected an override location"
+    );
+}
+
+#[test]
+fn accepts_a_literal_localized_runtime_path_with_ascii_case_variations() {
+    use windows_sys::Win32::System::Registry::REG_SZ;
+
+    let scratch = ScratchRegistry::new();
+    let machine = scratch.key.0;
+    let programs = Path::new(r"D:\Aplicações\工具");
+    let registered =
+        Path::new(r"d:\Aplicações\工具\MICROSOFT\EdgeWebView\Application").join(CURRENT);
+    let directories = TestKey::create(machine, w!(r"SOFTWARE\Microsoft\Windows\CurrentVersion"));
+    directories.set_string(w!("ProgramFilesDir"), REG_SZ, programs.as_os_str());
+    TestKey::create(machine, EVERGREEN_CLIENT).set_string(w!("pv"), REG_SZ, CURRENT.as_ref());
+    TestKey::create(machine, EVERGREEN_STATE).set_string(
+        w!("EBWebView"),
+        REG_SZ,
+        registered.as_os_str(),
+    );
+    let loader = programs
+        .join(r"Microsoft\EdgeWebView\Application")
+        .join(CURRENT)
+        .join(r"EBWebView\x64\EmbeddedBrowserWebView.dll");
+    assert_eq!(
+        registered_machine_loader(machine),
+        Some(loader),
+        "skipped a literal localized runtime path"
     );
 }
 
@@ -48,7 +69,7 @@ fn refuses_nonversion_components_and_nonlocal_install_roots() {
             .join(r"Microsoft\EdgeWebView\Application")
             .join(version);
         assert!(
-            registered_loader(program_files, version, &runtime, "x64").is_none(),
+            registered_loader(program_files, version, &runtime).is_none(),
             "accepted malformed version {version:?}"
         );
     }
@@ -62,7 +83,7 @@ fn refuses_nonversion_components_and_nonlocal_install_roots() {
             .join(r"Microsoft\EdgeWebView\Application")
             .join(CURRENT);
         assert!(
-            registered_loader(Path::new(root), CURRENT, &runtime, "x64").is_none(),
+            registered_loader(Path::new(root), CURRENT, &runtime).is_none(),
             "accepted nonlocal or ambiguous root {root}"
         );
     }
@@ -114,13 +135,13 @@ fn the_active_loader_requires_a_literal_registered_path() {
 
     state.set_string(w!("EBWebView"), REG_SZ, runtime.as_os_str());
     assert_eq!(
-        registered_machine_loader(machine, "x64"),
+        registered_machine_loader(machine),
         Some(runtime.join(r"EBWebView\x64\EmbeddedBrowserWebView.dll"))
     );
     let expandable = Path::new("%ProgramFiles%").join(suffix);
     state.set_string(w!("EBWebView"), REG_EXPAND_SZ, expandable.as_os_str());
     assert!(
-        registered_machine_loader(machine, "x64").is_none(),
+        registered_machine_loader(machine).is_none(),
         "accepted a REG_EXPAND_SZ path resolving to the registered loader"
     );
 

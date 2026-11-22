@@ -159,7 +159,7 @@ pub(crate) fn apply_tray_icon(app: &tauri::AppHandle, style: TrayIconStyle) {
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let started = std::time::Instant::now();
     onda_platform::harden_dll_search()?;
-    #[cfg(windows)]
+    #[cfg(all(windows, target_arch = "x86_64"))]
     if !isolated() && std::env::args_os().any(|argument| argument == BACKGROUND_ARGUMENT) {
         onda_platform::prefetch_webview2_loader();
     }
