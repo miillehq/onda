@@ -237,6 +237,15 @@ try {
     if ($WithVulkan) { $report.vulkanWorker = Test-InstalledWorker -Name 'onda-asr-vulkan-worker.exe' -Optional }
     $logCheckpoint = Get-InstalledLogCheckpoint -Directory $logDirectory
     $report.launchUtc = [DateTime]::UtcNow.ToString('o')
+    if ($env:ONDA_TRACE_RAW) {
+        $providers = Join-Path $env:RUNNER_TEMP 'onda-trace-providers.txt'
+        @('{E16EC3D2-BB0F-4E8F-BDB8-DE0BEA82DC3D} 0x3F0000054404 5',
+          '{3A5F2396-5C8F-4F1F-9B67-6CCA6C990E61} 0x10000000202F 5',
+          'Microsoft-Windows-Kernel-Process 0x10 5','Microsoft-Windows-CAPI2 0xffffffffffffffff 5') |
+          Set-Content -Encoding ascii -LiteralPath $providers
+        logman.exe start OndaStudy -ets -o $env:ONDA_TRACE_RAW -bs 128 -nb 16 128 -pf $providers
+        if ($LASTEXITCODE) {throw 'Failed to start event observation.'}
+    }
     $startupClock = [Diagnostics.Stopwatch]::StartNew()
     $shell = Start-OwnedProcess -Path (Join-Path $installDirectory 'onda.exe') -Arguments '--background'
     Remember-OwnedDescendants -Parent $shell
@@ -282,6 +291,17 @@ try {
     $report.status = 'passed'
 } catch {
     $report.status = 'failed'
+    if ($env:ONDA_TRACE_RAW -and $_.FullyQualifiedErrorId.Split(',')[0] -eq 'Onda.InstalledStartupTimeout') {
+        $report.deadlineObservedSeconds = $startupClock.Elapsed.TotalSeconds
+        $lateMarker = $null
+        $end = $startupClock.Elapsed.TotalSeconds + 60
+        while (-not $shell.HasExited -and $startupClock.Elapsed.TotalSeconds -lt $end) {
+            $lateMarker = Get-InstalledStartupMarker -Directory $logDirectory -Checkpoint $logCheckpoint -ProcessId $shell.Id
+            if ($lateMarker) { break }
+            Start-Sleep -Milliseconds 250
+        }
+        $report.lateReadyMs = if ($lateMarker) { $lateMarker.setupMs } else { $null }
+    }
     $report.failure = $_.Exception.Message
     $report.failureId = $_.FullyQualifiedErrorId
     # What the installed app logged since launch (levels, subsystems and messages; never text or
@@ -298,6 +318,7 @@ try {
     }
     throw
 } finally {
+    if ($env:ONDA_TRACE_RAW -and $startupClock) { logman.exe stop OndaStudy -ets | Out-Null }
     if ($shell) { try { Remember-OwnedDescendants -Parent $shell } catch { $report.descendantInspectionFailure = $_.Exception.Message } }
     foreach ($process in $ownedProcesses) {
         try { if (-not $process.HasExited) { $process.Kill(); $null = $process.WaitForExit(5000) } } catch [System.InvalidOperationException] {}

@@ -31,9 +31,9 @@ jobs:
     timeout-minutes: 12
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 6
       matrix:
-        sample: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+        sample: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with: { persist-credentials: false }
@@ -59,13 +59,15 @@ jobs:
           $references = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/onda-startup-reference" -File -Filter '*.json' |
             ForEach-Object { (Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).installerSha256 })
           if ($digest -notin $references) { throw 'The candidate differs from the originally tested installer.' }
-          ./scripts/installer-smoke.ps1 -InstallerPath $candidates[0].FullName |
+          ./scripts/startup-study/run.ps1 $candidates[0].FullName |
             Select-Object status, startupSeconds, startupLogObserved | ConvertTo-Json
       - name: Preserve this first attempt
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: startup-sample-${{ matrix.sample }}
-          path: .artifacts/installed-smoke/*.json
+          path: |
+            .artifacts/installed-smoke/*.json
+            .artifacts/startup-study/*.json
           if-no-files-found: error
           retention-days: 7
