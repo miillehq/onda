@@ -3,7 +3,8 @@ if ($env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or $env:RUNNER_OS -ne 'Windows'
 $folder = Join-Path (Get-Location) '.artifacts/startup-study'
 $null = New-Item -ItemType Directory -Force -Path $folder
 $env:ONDA_TRACE_OUTPUT = $folder
-$env:ONDA_TRACE_RAW = Join-Path $env:RUNNER_TEMP 'onda-native-events.etl'
+$env:ONDA_TRACE_RAW = Join-Path $env:RUNNER_TEMP ($env:ONDA_STUDY_VARIANT + '-onda-native-events.etl')
+$env:ONDA_PAGE_ETL = Join-Path $env:RUNNER_TEMP ($env:ONDA_STUDY_VARIANT + '-onda-paging.etl')
 $env:ONDA_TRACE_PHASES = Join-Path $folder 'wry-stages.json'
 $webviewRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/EdgeWebView/Application'
 $versions = @(Get-ChildItem -LiteralPath $webviewRoot -Directory -ErrorAction SilentlyContinue | Where-Object Name -match '^\d+\.\d+\.\d+\.\d+$' | Select-Object -ExpandProperty Name)
@@ -28,8 +29,8 @@ try {
         python scripts/startup-study/events.py $decoded $folder
         if ($LASTEXITCODE) { throw 'Event summarization failed.' }
     }
-    if (Test-Path -LiteralPath "$env:RUNNER_TEMP/onda-paging.etl") {
-        tracerpt.exe "$env:RUNNER_TEMP/onda-paging.etl" -o "$env:RUNNER_TEMP/onda-paging.xml" -of XML -y | Out-Null
+    if (Test-Path -LiteralPath $env:ONDA_PAGE_ETL) {
+        tracerpt.exe $env:ONDA_PAGE_ETL -o "$env:RUNNER_TEMP/onda-paging.xml" -of XML -y | Out-Null
         if ($LASTEXITCODE) { throw 'Kernel trace decoding failed.' }
         python scripts/startup-study/paging.py "$env:RUNNER_TEMP/onda-paging.xml" $folder
         if ($LASTEXITCODE) { throw 'Kernel trace analysis failed.' }

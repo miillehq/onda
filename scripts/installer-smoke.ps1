@@ -326,7 +326,7 @@ try {
 } finally {
     if ($env:ONDA_TRACE_RAW -and $startupClock) { logman.exe stop OndaStudy -ets | Out-Null }
     if ($env:ONDA_TRACE_RAW -and $startupClock) {
-        wpr.exe -stop "$env:RUNNER_TEMP/onda-paging.etl" -skipPdbGen -instancename OndaPaging | Out-Null
+        wpr.exe -stop $env:ONDA_PAGE_ETL -skipPdbGen -instancename OndaPaging | Out-Null
     }
     if ($shell) { try { Remember-OwnedDescendants -Parent $shell } catch { $report.descendantInspectionFailure = $_.Exception.Message } }
     foreach ($process in $ownedProcesses) {
