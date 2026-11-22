@@ -37,7 +37,7 @@ for _, event in ET.iterparse(source, events=("end",)):
             role=re.search(r"--type=([A-Za-z0-9_.-]+)",fields.get("CommandLine",""))
             events.append([ms,pid,tid,"process",name,fields.get("ProcessID"),fields.get("ParentProcessID"),image,role[1] if role else "host/browser"])
     elif "edge" in provider_name.lower() or any(x in provider_name.lower() for x in ("e16ec3d2","3a5f2396")):
-        details={key:label(v) for key,v in fields.items() if key.lower() in ("name","eventname","task","category","function","functionname","result","hresult","status","duration","component","phase","classname","method","methodname") and label(v)}
+        details={key:label(v) for key,v in fields.items() if key.lower() in ("api","name","eventname","task","category","function","functionname","result","hresult","status","duration","component","phase","classname","method","methodname") and label(v)}
         if len(events)<60000:events.append([ms,pid,tid,"edge",label(name),opcode.text if opcode is not None else "",details])
     elif "capi" in provider_name.lower() and len(events)<60000:
         events.append([ms,pid,tid,"capi",name])

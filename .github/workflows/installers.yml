@@ -60,7 +60,6 @@ jobs:
       matrix:
         include:
           - { platform: windows-x64, os: windows-2022, advisory: false, cache: windows-msvc-release }
-          - { platform: windows-arm64, os: windows-11-arm, advisory: true, cache: windows-arm64-release }
     defaults:
       run:
         shell: pwsh
@@ -85,6 +84,8 @@ jobs:
         run: |
           npm ci
           if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+      - name: Measure the locked WebView2 calls in this diagnostic build
+        run: python scripts/startup-study/instrument.py
       - name: Build the unsigned per-user NSIS installer
         id: build_installer
         run: ./scripts/build.ps1
@@ -122,14 +123,16 @@ jobs:
           $installer = Get-ChildItem -LiteralPath 'target/release/bundle/nsis' -Filter '*setup.exe' | Select-Object -First 1
           . ./scripts/installed-log.ps1
           $appId = (Get-Content -Raw -LiteralPath src-tauri/tauri.conf.json | ConvertFrom-Json).identifier
-          $report = Invoke-InstalledAppCheck -ProfileParent $env:LOCALAPPDATA -ProfileName $appId -Attempt { ./scripts/installer-smoke.ps1 -InstallerPath $installer.FullName }
+          $report = ./scripts/startup-study/run.ps1 $installer.FullName
           $report | Select-Object status, cpuWorker, avx2Worker, startupSeconds, startupLogObserved, shell, helper, helperExitedOnParentClose, applicationDataPreserved, uninstallerExitCode | ConvertTo-Json -Depth 4
       - name: Upload the installed-app report
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: installed-smoke-${{ matrix.platform }}
-          path: .artifacts/installed-smoke/*.json
+            path: |
+              .artifacts/installed-smoke/*.json
+              .artifacts/startup-study/*.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload reviewable installer and notices
@@ -150,7 +153,7 @@ jobs:
             .artifacts/runtime/Microsoft-runtime-manifest.json
 
   linux:
-    if: inputs.windows_startup_run == ''
+    if: false
     name: installers ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -208,7 +211,7 @@ jobs:
             target/release/bundle/appimage/*.AppImage
 
   macos:
-    if: inputs.windows_startup_run == ''
+    if: false
     name: installers ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
