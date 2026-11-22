@@ -145,3 +145,17 @@ fn failed_hints_consume_the_shared_budget_and_oversized_files_are_skipped() {
         "failed hints or oversized files escaped the shared byte budget"
     );
 }
+
+#[test]
+fn a_file_that_exceeds_the_remaining_budget_leaves_room_for_a_smaller_image() {
+    const MIB: u32 = 1024 * 1024;
+    let runtime = tempfile::tempdir().unwrap();
+    for (index, size) in [15 * MIB, 16 * MIB, 2 * MIB, MIB].into_iter().enumerate() {
+        write_image(runtime.path(), index, u64::from(size));
+    }
+    assert_eq!(
+        submitted_images(runtime.path(), true),
+        [(0, 15 * MIB), (1, 16 * MIB), (3, MIB)],
+        "the final MiB must remain available to the next image that fits"
+    );
+}
