@@ -11,6 +11,16 @@ $versions = @(Get-ChildItem -LiteralPath $webviewRoot -Directory -ErrorAction Si
 try {
     ./scripts/installer-smoke.ps1 -InstallerPath $args[0] | Select-Object status,startupSeconds,nativeSetupMs
 } finally {
+    $product = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    $machine = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate'
+    $current = Get-ItemProperty -LiteralPath "$machine/Clients/$product" -ErrorAction SilentlyContinue
+    $state = Get-ItemProperty -LiteralPath "$machine/ClientState/$product" -ErrorAction SilentlyContinue
+    $expected = if ($current.pv) { Join-Path $webviewRoot $current.pv }
+    $loader = if ($expected) { Get-Item -LiteralPath (Join-Path $expected 'EBWebView/x64/EmbeddedBrowserWebView.dll') -ErrorAction SilentlyContinue }
+    @{ systemVersion = $current.pv; systemRegistrationMatches = ($expected -and $state.EBWebView -eq $expected);
+       loaderBytes = $loader.Length; userClient = (Test-Path -LiteralPath "HKCU:/Software/Microsoft/EdgeUpdate/Clients/$product");
+       overrideVariableNames = @(Get-ChildItem Env: | Where-Object Name -Like 'WEBVIEW2_*' | Select-Object -ExpandProperty Name) } |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $folder 'registry.json') -Encoding utf8
     if (Test-Path -LiteralPath $env:ONDA_TRACE_RAW) {
         $decoded = Join-Path $env:RUNNER_TEMP 'onda-native-events.xml'
         tracerpt.exe $env:ONDA_TRACE_RAW -o $decoded -of XML -y | Out-Null
