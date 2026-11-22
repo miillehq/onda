@@ -5,15 +5,20 @@ What changed in each Onda release, newest first. The format follows
 [Semantic Versioning](https://semver.org/); 0.x releases are pre-releases. What was tested, on
 which platform and by which run is recorded in [VERIFICATION.md](VERIFICATION.md).
 
-## [Unreleased]
+## Unreleased
+
+## [0.3.1]
+
+The Windows installer is unsigned. SmartScreen may display “Windows protected your PC” when you open it.
 
 ### Fixed
 
 - ChatGPT sign-in can use the macOS Keychain. CPU-only speech recognition also respects the chosen setting on a Metal-capable Mac.
-- A locked keyring preserves saved History. Opening a newer database, interrupting a statistics export or interrupting a Linux typing-permission save preserves the previous file.
-- Dictation checks that a field can acknowledge a paste on macOS and Linux. When the field cannot report an edit, ordinary dictation offers manual paste. A cancelled handoff leaves the clipboard alone.
+- A locked keyring preserves saved History. If History cannot be read at startup, new dictations are available for the session. Opening a newer database, interrupting a statistics export or interrupting a Linux typing-permission save preserves the previous file.
+- On macOS and Linux, supported fields can receive dictation while preserving a rich clipboard. When a field cannot report an edit, ordinary dictation offers manual paste. A secure field or cancelled handoff leaves the clipboard alone.
 - Dictionary backups restore the full supported vocabulary. Invalid bytes and malformed rows produce an error with the existing data preserved. Editing one entry, snippet or rewrite keeps the other fields exactly as saved.
-- Removing the default rewrite selects Polish. A retry keeps its original destination and model. Usage counts a delivered dictation once across recovery paths, including when local dates arrive out of order.
+- Removing the default rewrite selects Polish. Retrying at the same local, Anthropic or OpenAI-compatible endpoint uses the current model preference. ChatGPT retries keep the original account and previously selected model.
+- Usage counts a delivered dictation once across recovery paths and repairs streaks when local dates arrive out of order.
 - Shared statistics images use the selected privacy options and measure 1200×630 pixels. Profile names accept forty visible graphemes, including flags.
 - In the dictionary editor, Enter saves a replacement and Shift+Enter adds a line to it. A typed word or trigger is saved without the spaces around it.
 - A dictation that follows full-width East Asian punctuation starts without a space.
@@ -98,6 +103,6 @@ Windows, SmartScreen asks once (**More info › Run anyway**); on a Mac, allow O
 
 The first public source release, for Windows and Linux. No installers were published.
 
-[Unreleased]: https://github.com/miillehq/onda/compare/v0.3.0...HEAD
+[0.3.1]: https://github.com/miillehq/onda/compare/v0.3.0...3c825f24a013f6faa8cb9dc2fd4aec8963488939
 [0.3.0]: https://github.com/miillehq/onda/releases/tag/v0.3.0
 [0.2.0]: https://github.com/miillehq/onda/tree/eaecdfd
