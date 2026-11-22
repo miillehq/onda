@@ -14,8 +14,8 @@ use windows_sys::{
         Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS},
         System::Registry::{
             RegCloseKey, RegGetValueW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
-            KEY_QUERY_VALUE, KEY_WOW64_32KEY, KEY_WOW64_64KEY, RRF_RT_ANY, RRF_RT_REG_SZ,
-            RRF_SUBKEY_WOW6432KEY, RRF_SUBKEY_WOW6464KEY,
+            KEY_QUERY_VALUE, KEY_WOW64_32KEY, KEY_WOW64_64KEY, RRF_NOEXPAND, RRF_RT_ANY,
+            RRF_RT_REG_SZ, RRF_SUBKEY_WOW6432KEY, RRF_SUBKEY_WOW6464KEY,
         },
     },
 };
@@ -50,12 +50,17 @@ pub(super) fn machine_loader() -> Option<PathBuf> {
         "aarch64" => "arm64",
         _ => return None,
     };
-    let program_files = machine_string(
+    registered_machine_loader(HKEY_LOCAL_MACHINE, architecture)
+}
+
+fn registered_machine_loader(machine: HKEY, architecture: &str) -> Option<PathBuf> {
+    let program_files = registration_string(
+        machine,
         w!(r"SOFTWARE\Microsoft\Windows\CurrentVersion"),
         w!("ProgramFilesDir"),
     )?;
-    let version = machine_string(EVERGREEN_CLIENT, w!("pv"))?;
-    let active = machine_string(EVERGREEN_STATE, w!("EBWebView"))?;
+    let version = registration_string(machine, EVERGREEN_CLIENT, w!("pv"))?;
+    let active = registration_string(machine, EVERGREEN_STATE, w!("EBWebView"))?;
     registered_loader(
         Path::new(&program_files),
         version.to_str()?,
@@ -81,7 +86,7 @@ fn uses_default_registration(machine: HKEY, user: HKEY) -> bool {
                 user,
                 EVERGREEN_STATE,
                 w!("EBWebView"),
-                RRF_RT_ANY | value_view,
+                RRF_RT_ANY | RRF_NOEXPAND | value_view,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 &mut size,
@@ -110,18 +115,18 @@ fn key_missing(root: HKEY, key: PCWSTR, view: u32) -> bool {
     matches!(status, ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND)
 }
 
-/// EdgeUpdate registers Evergreen in the 32-bit view. A longer or non-string value is an
-/// unfamiliar layout, so a fixed-size buffer suffices.
-fn machine_string(key: PCWSTR, name: PCWSTR) -> Option<OsString> {
+/// EdgeUpdate registers literal REG_SZ values in the 32-bit view. Disabling expansion
+/// keeps environment-dependent REG_EXPAND_SZ paths outside that layout.
+fn registration_string(root: HKEY, key: PCWSTR, name: PCWSTR) -> Option<OsString> {
     const MAX_REGISTRY_CHARS: usize = 512;
     let mut buffer = [0u16; MAX_REGISTRY_CHARS];
     let mut bytes = size_of_val(&buffer) as u32;
     let status = unsafe {
         RegGetValueW(
-            HKEY_LOCAL_MACHINE,
+            root,
             key,
             name,
-            RRF_RT_REG_SZ | RRF_SUBKEY_WOW6432KEY,
+            RRF_RT_REG_SZ | RRF_NOEXPAND | RRF_SUBKEY_WOW6432KEY,
             ptr::null_mut(),
             buffer.as_mut_ptr().cast(),
             &mut bytes,

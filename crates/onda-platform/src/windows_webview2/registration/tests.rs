@@ -97,9 +97,62 @@ fn an_applicable_policy_or_user_runtime_suppresses_the_machine_hint() {
     );
 }
 
+#[test]
+fn the_active_loader_requires_a_literal_registered_path() {
+    use windows_sys::Win32::System::Registry::{REG_EXPAND_SZ, REG_SZ};
+
+    let scratch = ScratchRegistry::new();
+    let programs = PathBuf::from(std::env::var_os("ProgramFiles").unwrap());
+    let suffix = Path::new(r"Microsoft\EdgeWebView\Application").join(CURRENT);
+    let runtime = programs.join(&suffix);
+    let machine = scratch.key.0;
+    let directories = TestKey::create(machine, w!(r"SOFTWARE\Microsoft\Windows\CurrentVersion"));
+    directories.set_string(w!("ProgramFilesDir"), REG_SZ, programs.as_os_str());
+    let client = TestKey::create(machine, EVERGREEN_CLIENT);
+    client.set_string(w!("pv"), REG_SZ, CURRENT.as_ref());
+    let state = TestKey::create(machine, EVERGREEN_STATE);
+
+    state.set_string(w!("EBWebView"), REG_SZ, runtime.as_os_str());
+    assert_eq!(
+        registered_machine_loader(machine, "x64"),
+        Some(runtime.join(r"EBWebView\x64\EmbeddedBrowserWebView.dll"))
+    );
+    let expandable = Path::new("%ProgramFiles%").join(suffix);
+    state.set_string(w!("EBWebView"), REG_EXPAND_SZ, expandable.as_os_str());
+    assert!(
+        registered_machine_loader(machine, "x64").is_none(),
+        "accepted a REG_EXPAND_SZ path resolving to the registered loader"
+    );
+
+    let user = TestKey::create(machine, w!("user"));
+    let user_state = TestKey::create(user.0, EVERGREEN_STATE);
+    user_state.set_string(w!("EBWebView"), REG_EXPAND_SZ, expandable.as_os_str());
+    assert!(
+        !uses_default_registration(machine, user.0),
+        "ignored an expandable per-user runtime override"
+    );
+}
+
 struct TestKey(HKEY);
 
 impl TestKey {
+    fn set_string(&self, name: PCWSTR, kind: u32, value: &std::ffi::OsStr) {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::System::Registry::RegSetValueExW;
+        let encoded: Vec<u16> = value.encode_wide().chain([0]).collect();
+        let status = unsafe {
+            RegSetValueExW(
+                self.0,
+                name,
+                0,
+                kind,
+                encoded.as_ptr().cast(),
+                size_of_val(&encoded[..]) as u32,
+            )
+        };
+        assert_eq!(status, ERROR_SUCCESS);
+    }
+
     fn create(parent: HKEY, name: PCWSTR) -> Self {
         use windows_sys::Win32::System::Registry::{
             RegCreateKeyExW, KEY_ALL_ACCESS, REG_CREATED_NEW_KEY, REG_OPTION_VOLATILE,
