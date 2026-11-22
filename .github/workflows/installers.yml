@@ -130,9 +130,15 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: installed-smoke-${{ matrix.platform }}
-            path: |
-              .artifacts/installed-smoke/*.json
-              .artifacts/startup-study/*.json
+            path: .artifacts/installed-smoke/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload content-free diagnostic timings
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: windows-api-timings
+          path: .artifacts/startup-study/*.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload reviewable installer and notices
@@ -153,7 +159,7 @@ jobs:
             .artifacts/runtime/Microsoft-runtime-manifest.json
 
   linux:
-    if: false
+    if: ${{ false }}
     name: installers ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -211,7 +217,7 @@ jobs:
             target/release/bundle/appimage/*.AppImage
 
   macos:
-    if: false
+    if: ${{ false }}
     name: installers ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
