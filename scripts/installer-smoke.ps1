@@ -306,6 +306,7 @@ try {
             Start-Sleep -Milliseconds 250
         }
         $report.lateReadyMs = if ($lateMarker) { $lateMarker.setupMs } else { $null }
+        $report.lateReadyObservedSeconds = if ($lateMarker) { $startupClock.Elapsed.TotalSeconds } else { $null }
     }
     $report.failure = $_.Exception.Message
     $report.failureId = $_.FullyQualifiedErrorId
