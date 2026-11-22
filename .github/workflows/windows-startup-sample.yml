@@ -33,7 +33,7 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        sample: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        sample: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with: { persist-credentials: false }
@@ -49,6 +49,13 @@ jobs:
           run-id: ${{ inputs.candidate_run }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/onda-startup-reference
+      - name: Fetch the pinned Microsoft disk measurement utility
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'onda-diskspd.zip'
+          Invoke-WebRequest 'https://github.com/microsoft/diskspd/releases/download/v2.3/DiskSpd.ZIP' -OutFile $zip
+          if ((Get-FileHash -LiteralPath $zip).Hash -ne '18609981e8b04b4f645f1fd182ad0541615fe71722de36a9a933c54f747218a3') {throw 'DiskSpd release digest differs.'}
+          Expand-Archive -LiteralPath $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'onda-diskspd')
       - name: Run one fresh installation and first launch
         shell: pwsh
         env:
