@@ -32,6 +32,10 @@ mod target;
 mod text_clipboard;
 #[cfg(windows)]
 mod windows_target;
+#[cfg(windows)]
+mod windows_webview2;
+#[cfg(windows)]
+pub use windows_webview2::prefetch_webview2_loader;
 
 pub use audio::{
     resample_to_16khz, AudioCapture, AudioDiagnostics, CaptureCompletion, CaptureOptions,

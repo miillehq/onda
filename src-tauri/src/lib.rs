@@ -29,6 +29,7 @@ use tauri::{
 /// Data written by builds published under the provisional product identity.
 const LEGACY_IDENTIFIER: &str = "org.eagle.dictation";
 const MAIN_LABEL: &str = "main";
+const BACKGROUND_ARGUMENT: &str = "--background";
 /// Sidebar/title-bar surface and text colours, matching the frontend tokens.
 const LIGHT_CHROME: (u32, u32) = (0xF3F3F4, 0x0F0F10);
 const DARK_CHROME: (u32, u32) = (0x0B0B0C, 0xF4F4F5);
@@ -90,7 +91,10 @@ pub(crate) fn apply_launch_at_login(enabled: bool) -> AppResult<()> {
                     true,
                 )
             })?;
-        Some(format!("\"{}\" --background", executable.display()))
+        Some(format!(
+            "\"{}\" {BACKGROUND_ARGUMENT}",
+            executable.display()
+        ))
     } else {
         None
     };
@@ -155,6 +159,10 @@ pub(crate) fn apply_tray_icon(app: &tauri::AppHandle, style: TrayIconStyle) {
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let started = std::time::Instant::now();
     onda_platform::harden_dll_search()?;
+    #[cfg(windows)]
+    if !isolated() && std::env::args_os().any(|argument| argument == BACKGROUND_ARGUMENT) {
+        onda_platform::prefetch_webview2_loader();
+    }
     let smoke_directory = debug_smoke_directory();
     let data_directory = match smoke_directory.clone().or_else(debug_dev_profile) {
         Some(directory) => directory,
@@ -195,7 +203,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if smoke_directory.is_some() {
         build_main_window(app.handle(), None, false)?;
     } else if !std::env::args()
-        .any(|argument| argument == "--background" || argument == DICTATE_ARGUMENT)
+        .any(|argument| argument == BACKGROUND_ARGUMENT || argument == DICTATE_ARGUMENT)
     {
         build_main_window(app.handle(), None, true)?;
     }
