@@ -238,6 +238,10 @@ try {
     $logCheckpoint = Get-InstalledLogCheckpoint -Directory $logDirectory
     $report.launchUtc = [DateTime]::UtcNow.ToString('o')
     if ($env:ONDA_TRACE_RAW) {
+        . (Join-Path $PSScriptRoot 'startup-study/cache.ps1')
+        Invoke-CacheCondition $env:ONDA_TRACE_OUTPUT
+        wpr.exe -start "$PSScriptRoot/startup-study/paging.wprp!OndaPaging.Light" -filemode -instancename OndaPaging
+        if ($LASTEXITCODE) { throw 'Paging capture did not start.' }
         $providers = Join-Path $env:RUNNER_TEMP 'onda-trace-providers.txt'
         @('{E16EC3D2-BB0F-4E8F-BDB8-DE0BEA82DC3D} 0x3F0000054404 5',
           '{3A5F2396-5C8F-4F1F-9B67-6CCA6C990E61} 0x10000000202F 5',
@@ -246,6 +250,7 @@ try {
         logman.exe start OndaStudy -ets -o $env:ONDA_TRACE_RAW -bs 128 -nb 16 128 -pf $providers
         if ($LASTEXITCODE) {throw 'Failed to start event observation.'}
     }
+    $report.launchUtc = [DateTime]::UtcNow.ToString('o')
     $startupClock = [Diagnostics.Stopwatch]::StartNew()
     $shell = Start-OwnedProcess -Path (Join-Path $installDirectory 'onda.exe') -Arguments '--background'
     Remember-OwnedDescendants -Parent $shell
@@ -319,6 +324,9 @@ try {
     throw
 } finally {
     if ($env:ONDA_TRACE_RAW -and $startupClock) { logman.exe stop OndaStudy -ets | Out-Null }
+    if ($env:ONDA_TRACE_RAW -and $startupClock) {
+        wpr.exe -stop "$env:RUNNER_TEMP/onda-paging.etl" -skipPdbGen -instancename OndaPaging | Out-Null
+    }
     if ($shell) { try { Remember-OwnedDescendants -Parent $shell } catch { $report.descendantInspectionFailure = $_.Exception.Message } }
     foreach ($process in $ownedProcesses) {
         try { if (-not $process.HasExited) { $process.Kill(); $null = $process.WaitForExit(5000) } } catch [System.InvalidOperationException] {}

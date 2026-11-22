@@ -18,4 +18,10 @@ try {
         python scripts/startup-study/events.py $decoded $folder
         if ($LASTEXITCODE) { throw 'Event summarization failed.' }
     }
+    if (Test-Path -LiteralPath "$env:RUNNER_TEMP/onda-paging.etl") {
+        tracerpt.exe "$env:RUNNER_TEMP/onda-paging.etl" -o "$env:RUNNER_TEMP/onda-paging.xml" -of XML -y | Out-Null
+        if ($LASTEXITCODE) { throw 'Kernel trace decoding failed.' }
+        python scripts/startup-study/paging.py "$env:RUNNER_TEMP/onda-paging.xml" $folder
+        if ($LASTEXITCODE) { throw 'Kernel trace analysis failed.' }
+    }
 }

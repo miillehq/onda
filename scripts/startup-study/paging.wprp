@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0">
+  <Profiles>
+    <SystemCollector Id="SC" Name="Onda kernel paging"><BufferSize Value="256"/><Buffers Value="96"/></SystemCollector>
+    <SystemProvider Id="SP"><Keywords>
+      <Keyword Value="ProcessThread"/><Keyword Value="Loader"/><Keyword Value="DiskIO"/><Keyword Value="DiskIOInit"/><Keyword Value="HardFaults"/><Keyword Value="FileIO"/>
+    </Keywords></SystemProvider>
+    <Profile Id="OndaPaging.Light.File" Name="OndaPaging" Description="Storage and page-ins on a disposable Onda startup runner" DetailLevel="Light" LoggingMode="File">
+      <Collectors><SystemCollectorId Value="SC"><SystemProviderId Value="SP"/></SystemCollectorId></Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>
