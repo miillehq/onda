@@ -1,7 +1,7 @@
 function Invoke-CacheCondition {
     param([string]$OutputDirectory)
     $sample = [int]$env:ONDA_STUDY_SAMPLE
-    $arm = @('none','host','host-exe-elf','bounded-set')[$sample % 4]
+    $arm = @('none','host-angle','host-graphics','mixed')[$sample % 4]
     $folder = Join-Path $env:LOCALAPPDATA ('onda-storage-experiment-' + [guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $folder
     $target = Join-Path $folder 'local-read-fixture.bin'
@@ -16,13 +16,26 @@ function Invoke-CacheCondition {
     $root = $image.Directory.FullName
     Add-Type -Path (Join-Path $env:GITHUB_WORKSPACE 'scripts/startup-study/FileHint.cs') -ErrorAction Stop
     $candidates = [Collections.Generic.List[string]]::new()
-    if ($arm -ne 'none') { $candidates.Add((Join-Path $root 'EBWebView/x64/EmbeddedBrowserWebView.dll')) }
-    if ($arm -in @('host-exe-elf','bounded-set')) {
-        $candidates.Add((Join-Path $root 'msedgewebview2.exe')); $candidates.Add((Join-Path $root 'msedge_elf.dll'))
+    $names = [Collections.Generic.List[string]]::new()
+    if ($arm -ne 'none') { $names.Add('EBWebView/x64/EmbeddedBrowserWebView.dll') }
+    if ($arm -eq 'mixed') {
+        $names.Add('msedgewebview2.exe'); $names.Add('msedge_elf.dll')
     }
-    if ($arm -eq 'bounded-set') {
-        $candidates.Add((Join-Path $root 'icudtl.dat')); $candidates.Add((Join-Path $root 'msedge.dll'))
+    if ($arm -ne 'none') { $names.Add('libGLESv2.dll') }
+    if ($arm -in @('host-graphics','mixed')) {
+        $names.Add('vk_swiftshader.dll'); $names.Add('vulkan-1.dll'); $names.Add('d3dcompiler_47.dll')
     }
+    $bytesPlanned=0L
+    foreach ($name in $names) {
+        $path=Join-Path $root $name
+        $item=Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
+        if ($item -and $item.Length -gt 0 -and $item.Length -le 16MB -and $item.Length+$bytesPlanned -le 32MB) {
+            $bytesPlanned+=$item.Length
+            $candidates.Add($path)
+        }
+    }
+    $inventory = @(Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.Name -in @('libGLESv2.dll','vk_swiftshader.dll','vulkan-1.dll','d3dcompiler_47.dll','msedgewebview2.exe','msedge_elf.dll','EmbeddedBrowserWebView.dll') } | ForEach-Object { @{ file=[IO.Path]::GetRelativePath($root,$_.FullName); bytes=$_.Length } })
+    @{candidates=$inventory; hintBudgetBytes=$bytesPlanned} | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $env:ONDA_TRACE_OUTPUT 'runtime-files.json') -Encoding utf8
     $script:OndaStudyPaths = [string[]]$candidates.ToArray()
     $env:ONDA_ASYNC_STUDY = '1'
     $before = @(Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue).Count
