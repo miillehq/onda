@@ -130,7 +130,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: installed-smoke-${{ matrix.platform }}
-            path: .artifacts/installed-smoke/*.json
+          path: .artifacts/installed-smoke/*.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload content-free diagnostic timings
