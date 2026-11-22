@@ -45,7 +45,9 @@ try {
     [Windows.Forms.Application]::DoEvents()
     if ([FirstActionWindow]::GetForegroundWindow() -ne $fixture -or -not $field.Focused) {throw 'The indicator took focus from the synthetic field.'}
     if (-not $toggle.WaitForExit(5000) -or $toggle.ExitCode -ne 0) {throw 'The second instance failed to deliver its action.'}
-    return [pscustomobject]@{ initialPillHidden=$true; existingPillShown=$true; firstVisibleMs=$firstVisible; focusPreserved=$true; secondaryExit=$toggle.ExitCode }
+    $registration = 'HKLM:/SOFTWARE/WOW6432Node/Microsoft/EdgeUpdate/ClientState/{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    $runtime = (Get-ItemProperty -LiteralPath $registration -ErrorAction Stop).EBWebView
+    return [pscustomobject]@{ initialPillHidden=$true; existingPillShown=$true; firstVisibleMs=$firstVisible; focusPreserved=$true; secondaryExit=$toggle.ExitCode; systemImage=$env:ImageOS; runtimeVersion=(Split-Path -Leaf $runtime); standaloneAngle=(Test-Path -LiteralPath (Join-Path $runtime 'libGLESv2.dll')) }
 } finally {
     if ($toggle) { $toggle.Dispose() }
     $form.Dispose()
