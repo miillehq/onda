@@ -252,6 +252,7 @@ try {
     }
     $report.launchUtc = [DateTime]::UtcNow.ToString('o')
     $startupClock = [Diagnostics.Stopwatch]::StartNew()
+    if ($env:ONDA_ASYNC_STUDY) { [OndaFileHintStudy]::Start($script:OndaStudyPaths) }
     $shell = Start-OwnedProcess -Path (Join-Path $installDirectory 'onda.exe') -Arguments '--background'
     Remember-OwnedDescendants -Parent $shell
     $helper = Wait-OwnedHelper -Parent $shell
@@ -324,6 +325,9 @@ try {
     throw
 } finally {
     if ($env:ONDA_TRACE_RAW -and $startupClock) { logman.exe stop OndaStudy -ets | Out-Null }
+    if ($env:ONDA_ASYNC_STUDY -and $startupClock) {
+        @{ measurements=[OndaFileHintStudy]::Complete() } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:ONDA_TRACE_OUTPUT 'hint.json') -Encoding utf8
+    }
     if ($env:ONDA_TRACE_RAW -and $startupClock) {
         wpr.exe -stop "$env:RUNNER_TEMP/onda-paging.etl" -skipPdbGen -instancename OndaPaging | Out-Null
     }
