@@ -1379,7 +1379,7 @@
   {
     "ecosystem": "cargo",
     "name": "form_urlencoded",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "license": "MIT OR Apache-2.0",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "noticeFiles": [
@@ -5197,7 +5197,7 @@
   {
     "ecosystem": "cargo",
     "name": "url",
-    "version": "2.5.8",
+    "version": "2.5.9",
     "license": "MIT OR Apache-2.0",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "noticeFiles": [

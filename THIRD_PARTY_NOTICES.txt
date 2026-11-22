@@ -23243,7 +23243,7 @@ SOFTWARE.
 
 
 ========================================================================
-form_urlencoded 1.2.2
+form_urlencoded 1.2.3
 License: MIT OR Apache-2.0
 Source: registry+https://github.com/rust-lang/crates.io-index
 
@@ -78362,7 +78362,7 @@ Source: registry+https://github.com/rust-lang/crates.io-index
 
 
 ========================================================================
-url 2.5.8
+url 2.5.9
 License: MIT OR Apache-2.0
 Source: registry+https://github.com/rust-lang/crates.io-index
 
