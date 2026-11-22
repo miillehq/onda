@@ -37,14 +37,20 @@ foreach ($variant in $sequence) {
         if ($load -and -not $load.WaitForExit(60000)) {throw 'Local workload unexpectedly outlived its duration.'}
     }
     $bucket=Join-Path $root ('case-' + $variant)
-    $null=New-Item -ItemType Directory -Path $bucket -ErrorAction Stop
+    $bucketInfo=New-Item -ItemType Directory -Path $bucket -ErrorAction Stop
+    if ($bucketInfo.Parent.FullName -ne $root -or ($bucketInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)) {throw 'Unexpected output directory.'}
     foreach ($name in @('installed-smoke','startup-study')) {
         $path=Get-Item -LiteralPath (Join-Path $root $name)
         if ($path.Parent.FullName -ne $root -or ($path.Attributes -band [IO.FileAttributes]::ReparsePoint)) {throw 'Unexpected measurement directory.'}
-        Move-Item -LiteralPath $path.FullName -Destination (Join-Path $bucket $name) -ErrorAction Stop
+        $destination=[IO.Path]::GetFullPath((Join-Path $bucketInfo.FullName $name))
+        if ([IO.Path]::GetDirectoryName($destination) -ne $bucketInfo.FullName -or (Test-Path -LiteralPath $destination)) {throw 'Unexpected measurement target.'}
+        Move-Item -LiteralPath $path.FullName -Destination $destination -ErrorAction Stop
     }
     $profileInfo=Get-Item -LiteralPath $ownedProfile
     if ($profileInfo.Parent.FullName -ne $parent -or $profileInfo.Name -ne $profileName -or ($profileInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unexpected hosted profile ownership.' }
-    Rename-Item -LiteralPath $ownedProfile -NewName ($profileName+'.paired-'+$variant) -ErrorAction Stop
+    $savedName=$profileName+'.paired-'+$variant
+    $savedProfile=[IO.Path]::GetFullPath((Join-Path $parent $savedName))
+    if ([IO.Path]::GetDirectoryName($savedProfile) -ne $parent -or (Test-Path -LiteralPath $savedProfile)) {throw 'Unexpected profile target.'}
+    Rename-Item -LiteralPath $ownedProfile -NewName $savedName -ErrorAction Stop
 }
 if ($bad -gt 0) {throw "$bad cold launch(es) failed the original check."}
