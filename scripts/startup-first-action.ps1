@@ -7,7 +7,7 @@ using System;
 using System.Runtime.InteropServices;
 public static class FirstActionWindow {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)]
-    public static extern IntPtr FindWindow(string className, string title);
+    public static extern IntPtr FindWindow(IntPtr className, string title);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
@@ -25,10 +25,12 @@ try {
     [Windows.Forms.Application]::DoEvents()
     $fixture = $form.Handle
     if ([FirstActionWindow]::GetForegroundWindow() -ne $fixture -or -not $field.Focused) { throw 'No foreground synthetic edit field.' }
-    $pill = [FirstActionWindow]::FindWindow($null, 'Onda dictation')
+    $pill = [FirstActionWindow]::FindWindow([IntPtr]::Zero, 'Onda dictation')
     [uint32]$owner = 0
     $null = [FirstActionWindow]::GetWindowThreadProcessId($pill, [ref]$owner)
-    if ($pill -eq [IntPtr]::Zero -or $owner -ne $OwnerProcessId -or [FirstActionWindow]::IsWindowVisible($pill)) { throw 'The first action requires the installed shell to own a hidden indicator.' }
+    if ($pill -eq [IntPtr]::Zero) {throw 'Could not find the installed dictation indicator by title.'}
+    if ($owner -ne $OwnerProcessId) {throw 'A different process owns the indicator.'}
+    if ([FirstActionWindow]::IsWindowVisible($pill)) {throw 'The installed indicator was already visible.'}
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $toggle = Start-Process -FilePath $Executable -ArgumentList '--dictate' -WindowStyle Hidden -PassThru
     do {
