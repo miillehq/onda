@@ -32,6 +32,10 @@ mod target;
 mod text_clipboard;
 #[cfg(windows)]
 mod windows_target;
+#[cfg(all(windows, target_arch = "x86_64"))]
+mod windows_webview2;
+#[cfg(all(windows, target_arch = "x86_64"))]
+pub use windows_webview2::prefetch_webview2_for_new_profile;
 
 pub use audio::{
     resample_to_16khz, AudioCapture, AudioDiagnostics, CaptureCompletion, CaptureOptions,

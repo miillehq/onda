@@ -17,12 +17,12 @@ which platform and by which run is recorded in [VERIFICATION.md](VERIFICATION.md
 - Shared statistics images use the selected privacy options and measure 1200×630 pixels. Profile names accept forty visible graphemes, including flags.
 - In the dictionary editor, Enter saves a replacement and Shift+Enter adds a line to it. A typed word or trigger is saved without the spaces around it.
 - A dictation that follows full-width East Asian punctuation starts without a space.
+- On Windows x64, the dictation indicator starts faster on a fresh background launch when the system drive is busy. Onda reads ahead a bounded set of WebView2 files. [Windows startup investigation](https://github.com/miillehq/onda/issues/63)
 
 Dictionary imports retain one rule per normalized trigger. Repeated spellings in a single backup coalesce, and importing that backup a second time adds zero entries. [Audit details](docs/KEEL-AUDIT.md)
 
 ### Known defects
 
-- An occasional hosted Windows x64 first launch has missed the installer check’s 30-second readiness marker. Startup diagnostics now record the process and distinguish desktop service, indicator and tray initialization. [Windows startup investigation](https://github.com/miillehq/onda/issues/63)
 - The Linux desktop uses GTK 3 and GLib 0.18.5. RustSec reports an upstream soundness warning for GLib’s string-array iterator. Onda’s source has no direct calls to that iterator. GTK 3 currently requires the older GLib series. [Dependency audit](docs/third-party-licenses.md)
 
 ## [0.3.0] - 2026-11-14

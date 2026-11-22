@@ -16,7 +16,7 @@ use onda_core::{
 };
 use runtime::Runtime;
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 use tauri::{
@@ -29,6 +29,7 @@ use tauri::{
 /// Data written by builds published under the provisional product identity.
 const LEGACY_IDENTIFIER: &str = "org.eagle.dictation";
 const MAIN_LABEL: &str = "main";
+const BACKGROUND_ARGUMENT: &str = "--background";
 /// Sidebar/title-bar surface and text colours, matching the frontend tokens.
 const LIGHT_CHROME: (u32, u32) = (0xF3F3F4, 0x0F0F10);
 const DARK_CHROME: (u32, u32) = (0x0B0B0C, 0xF4F4F5);
@@ -90,7 +91,10 @@ pub(crate) fn apply_launch_at_login(enabled: bool) -> AppResult<()> {
                     true,
                 )
             })?;
-        Some(format!("\"{}\" --background", executable.display()))
+        Some(format!(
+            "\"{}\" {BACKGROUND_ARGUMENT}",
+            executable.display()
+        ))
     } else {
         None
     };
@@ -103,22 +107,14 @@ pub(crate) fn apply_launch_at_login(enabled: bool) -> AppResult<()> {
     })
 }
 
-/// Move data from the provisional identity once, so downloaded models, the dictionary and
-/// accounts survive the rename. Never overwrites existing data. If the old folder is still in
-/// use (an older build is running), use it in place and try again on a later launch.
-fn resolve_data_directory(app: &tauri::App) -> tauri::Result<PathBuf> {
-    let directory = app.path().app_local_data_dir()?;
-    if directory.exists() {
-        return Ok(directory);
+/// Migrate the provisional identity before checking whether WebView2 has a profile. If the
+/// old directory is still in use, return it for application data and try again on a later launch.
+fn migrate_legacy_data(app: &tauri::App, default_directory: &Path) -> Option<PathBuf> {
+    if default_directory.exists() {
+        return None;
     }
-    let Ok(local) = app.path().local_data_dir() else {
-        return Ok(directory);
-    };
-    let legacy = local.join(LEGACY_IDENTIFIER);
-    if legacy.is_dir() && std::fs::rename(&legacy, &directory).is_err() {
-        return Ok(legacy);
-    }
-    Ok(directory)
+    let legacy = app.path().local_data_dir().ok()?.join(LEGACY_IDENTIFIER);
+    (legacy.is_dir() && std::fs::rename(&legacy, default_directory).is_err()).then_some(legacy)
 }
 
 /// The flat mark below 32 px, following the brand guide. `Auto` is white on a dark taskbar and
@@ -158,7 +154,16 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let smoke_directory = debug_smoke_directory();
     let data_directory = match smoke_directory.clone().or_else(debug_dev_profile) {
         Some(directory) => directory,
-        None => resolve_data_directory(app)?,
+        None => {
+            let default_directory = app.path().app_local_data_dir()?;
+            let legacy_fallback = migrate_legacy_data(app, &default_directory);
+            #[cfg(all(windows, target_arch = "x86_64"))]
+            if std::env::args_os().any(|argument| argument == BACKGROUND_ARGUMENT) {
+                // Tauri still uses its default WebView2 directory when Onda's database stays in the old folder.
+                onda_platform::prefetch_webview2_for_new_profile(default_directory.clone());
+            }
+            legacy_fallback.unwrap_or(default_directory)
+        }
     };
     std::fs::create_dir_all(&data_directory)?;
     let logger = tracing_appender::rolling::Builder::new()
@@ -195,7 +200,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if smoke_directory.is_some() {
         build_main_window(app.handle(), None, false)?;
     } else if !std::env::args()
-        .any(|argument| argument == "--background" || argument == DICTATE_ARGUMENT)
+        .any(|argument| argument == BACKGROUND_ARGUMENT || argument == DICTATE_ARGUMENT)
     {
         build_main_window(app.handle(), None, true)?;
     }
